@@ -1,0 +1,28 @@
+{
+  "name": "shorts-project",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "preview": "remotion preview src/index.ts"
+  },
+  "dependencies": {
+    "@react-three/fiber": "^9.7.0",
+    "@react-three/postprocessing": "^3.0.4",
+    "@remotion/bundler": "^4.0.545",
+    "@remotion/cli": "^4.0.545",
+    "@remotion/renderer": "^4.0.545",
+    "@remotion/three": "^4.0.545",
+    "postprocessing": "^6.36.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "remotion": "^4.0.545",
+    "three": "^0.170.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/react": "^19.0.0",
+    "@types/three": "^0.170.0",
+    "typescript": "^5.7.0"
+  }
+}
