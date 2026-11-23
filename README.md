@@ -16,6 +16,7 @@ Bộ kỹ năng (AI Agent Skills) toàn diện để sản xuất video hoạt h
 | Đường dẫn | Mô tả chi tiết |
 |---|---|
 | `SKILL.md` | Kỹ năng chính `horror-3d-short`: quy trình 11 bước + luật đạo diễn No-Repeat-Angle, Action-to-Narration, Art Director Still Gate & Post-Render QA |
+| `companion-skills/horror-story/` | Thiết kế & kiểm định cốt truyện kinh dị 2 vòng (khung xương 4 mảng + 14 cổng kiểm định logic + bảng đạo cụ kể chuyện + báo cáo Story Bible HTML/Markdown) trước khi viết `SCRIPT.md` |
 | `companion-skills/horror-series-pipeline/` | Kiến trúc sản xuất series dài 8–10 phút chia thành các Part ~1 phút (`p01..p10`) chống tràn context và chống lệch tọa độ 3D (`CONTINUITY.json`) |
 | `companion-skills/horror-script-storyboard/` | Công thức kịch bản kinh dị 8 nhịp (`2.7–3.2 từ/giây`), nhịp lặng `[DEAD SILENCE]`, phân bổ cỡ cảnh (`WS/OTS/LOW/MCU/ECU/CU`) và chuyển cảnh `dipBlack`/`vignettePulse` |
 | `companion-skills/horror-world-lookdev/` | Dựng bối cảnh 3D Gothic phi-hộp, nguồn sáng `PointLight` thực, ánh sáng thể tích, tiền cảnh silhouette, nhân vật 3 góc nhìn (`front/side/back`) và decal `pushFlatDecal` |
@@ -24,7 +25,7 @@ Bộ kỹ năng (AI Agent Skills) toàn diện để sản xuất video hoạt h
 | `templates/mada/` | Dự án mẫu **"Ma Da" v2** (`story.ts`, `build.ts`, `toon.ts`, `cast.ts`, `world.ts`, `index.tsx`, `SCRIPT.md`, `build_audio.py`, `words.json`) |
 | `templates/horror-lab/` | Rig kiểm thử 5 preset ánh sáng kinh dị v2 trên cả hai khung hình `9:16` và `16:9` |
 | `templates/audio/` | Thư viện tổng hợp âm thanh kinh dị (`dsp.py`, `horror_instruments.py` với 23 nhạc cụ/Foley/SFX thủ tục + Dual-Space Convolution IR, `mix_base.py`) |
-| `templates/scripts/` | Bộ script đa nền tảng (Linux/macOS/Windows): `gen_horror_voice.py`, `render-stills.mjs`, `extract_shots.py`, `short_qa.py`, `stitch_parts.py`, `validate_continuity.py` |
+| `templates/scripts/` | Bộ script đa nền tảng (Linux/macOS/Windows): `horror_story.py`, `gen_horror_voice.py`, `render-stills.mjs`, `extract_shots.py`, `short_qa.py`, `stitch_parts.py`, `validate_continuity.py` |
 | `templates/project/` | Cấu hình gốc workspace (`package.json`, `tsconfig.json`, `requirements.txt`, `Root.tsx`, `index.ts`, `GEMINI.md`) |
 | `references/` | Tài liệu chuẩn kỹ thuật v2 (`HORROR_STYLE_BIBLE.md`, `READABILITY_AND_QA.md`, `HORROR_FORMULAS.md`, `LIGHTING_AND_PALETTE.md`, `SOUND_CUES_COOKBOOK.md`, `SERIES_ARCHITECTURE.md`) và ảnh still chuẩn trong `references/stills/` |
 
@@ -75,6 +76,8 @@ pip install -r requirements.txt
 ---
 
 ## Cách sử dụng (`Usage`)
+- **Xây dựng & duyệt cốt truyện kinh dị trước khi làm phim (standalone hoặc nhiều tập):**
+  `/horror-story lập khung cốt truyện kinh dị dân gian 1 tập (hoặc series 6 tập) về...`
 - **Làm video kinh dị ngắn độc lập (~1 phút):**
   `/horror-3d-short làm cho tôi 1 sản phẩm truyện ma da Việt Nam`
 - **Làm series kinh dị dài nhiều tập (8–10 phút chia thành các Part 1 phút):**

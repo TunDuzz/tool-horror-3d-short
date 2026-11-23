@@ -8,10 +8,11 @@ description: Use when creating a standalone 55-75s horror story video (vertical 
 Workspace: `shorts-project/` (30 fps; `9:16` `1080x1920` or `16:9` `1920x1080`; scale cleanly with integer-dimension multipliers `--scale 1`, `1.25`, or `1.5`).
 Neutral Horror Engine v2: `shorts-project/src/engine/` (imported via `../engine`).
 Procedural Horror Audio DSP: `shorts-project/audio/` (`dsp.py`, `horror_instruments.py`, `mix_base.py`).
-Automation & QA scripts: `shorts-project/scripts/` (`gen_horror_voice.py`, `render-stills.mjs`, `extract_shots.py`, `short_qa.py`, `stitch_parts.py`, `validate_continuity.py`).
+Automation & QA scripts: `shorts-project/scripts/` (`horror_story.py`, `gen_horror_voice.py`, `render-stills.mjs`, `extract_shots.py`, `short_qa.py`, `stitch_parts.py`, `validate_continuity.py`).
 
 ## Companion Skills (Activate as Needed)
 
+- **Story planning, 2-round outline approval, entity rules, character tiers & narrative props (before `SCRIPT.md`):** Activate `horror-story`.
 - **Multi-part 8–10 min series (split into ~1 min Parts):** Activate `horror-series-pipeline`.
 - **Script, voice pacing, shot scale planning & `story.ts` timing:** Activate `horror-script-storyboard`.
 - **Gothic Ink-Noir 3D worlds, real local PointLights, non-box props, outfits & FX:** Activate `horror-world-lookdev`.

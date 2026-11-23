@@ -1,0 +1,161 @@
+{
+  "title": "Ông Kẹ — Tiếng Gõ Lúc Nửa Đêm",
+  "lang": "vi",
+  "params": {
+    "mode": "standalone",
+    "parts": 1,
+    "secondsPerPart": 71,
+    "wordsPerSecond": 3.04,
+    "genre": "folklore",
+    "adaptMode": "folklore",
+    "thresholds": {
+      "maxLeads": 5,
+      "maxSupport": 10,
+      "maxFunctional": 10,
+      "maxProps": 8,
+      "maxBeatGap": 1,
+      "maxPrimaryScenes": 3
+    }
+  },
+  "premise": {
+    "core": "Một cậu bé ở nhà một mình đêm mưa phá vỡ điều cấm kỵ khi nghe ba tiếng gõ trong chiếc tủ gỗ cũ.",
+    "entityRule": "Nghe ba nhịp gõ trong tủ gỗ lúc nửa đêm tuyệt đối không mở ra xem, vì đó là lúc Ông Kẹ đi tìm đứa trẻ còn thức.",
+    "twistCore": "Chạy vào phòng ngủ khóa then gỗ không cứu được cậu bé: chiếc bao tải rách đã nằm sẵn trên giường và đôi mắt trắng dã đang chờ dưới gầm giường.",
+    "keep": [
+      {
+        "what": "Hình tượng Ông Kẹ vác bao tải bắt trẻ em và tập tục răn đe lúc nửa đêm",
+        "why": "Giữ đúng chất liệu dân gian Việt Nam quen thuộc",
+        "evidence": "Dân gian Việt Nam"
+      }
+    ],
+    "cut": [],
+    "risks": [
+      {
+        "what": "Lộ mặt Ông Kẹ quá sớm làm mất căng thẳng điều tra",
+        "plan": "Giấu mặt hoàn toàn đến sau nhịp Dead Silence tắt đèn dầu"
+      }
+    ]
+  },
+  "characters": [
+    {
+      "id": "C01",
+      "name": "Bé Minh",
+      "tier": "lead",
+      "role": "Đứa trẻ ở nhà một mình ban đêm",
+      "trait": "Nhỏ bé, đi rón rén cầm đèn dầu, tò mò nhưng dễ hoảng loạn",
+      "arc": "Cảnh giác dò xét -> tò mò soi khe tủ -> kinh hoàng tháo chạy cài then cửa -> chết lặng nhận ra nơi trú ẩn chính là bẫy",
+      "from": ["Dân gian Việt Nam"]
+    },
+    {
+      "id": "C02",
+      "name": "Ông Kẹ",
+      "tier": "lead",
+      "role": "Thực thể dân gian vác bao tải bắt trẻ",
+      "trait": "Cao lêu nghêu, cổ ngoẹo hẳn sang một bên, năm ngón tay dài xám ngoét, nhe răng mảnh",
+      "arc": "Ẩn mình gõ cửa dụ mồi -> vươn ngón tay mở rộng khe tủ -> lộ hình hài lao chộp -> đón lõng sẵn dưới gầm giường phòng trong",
+      "from": ["Dân gian Việt Nam"]
+    }
+  ],
+  "scenes": [
+    {
+      "id": "S01",
+      "name": "Gian nhà gỗ ba gian cũ ban đêm",
+      "primary": true,
+      "atmosphere": "Tối sâu chiaroscuro, mưa bão hắt qua cửa sổ chấn song, tủ gỗ cao cuối gian"
+    },
+    {
+      "id": "S02",
+      "name": "Phòng ngủ kín bên trong",
+      "primary": true,
+      "atmosphere": "Không gian hẹp ngột ngạt, cửa gỗ then cài, đèn dầu đầu giường và gầm giường tối đen"
+    }
+  ],
+  "beats": [
+    {
+      "id": "B01",
+      "part": 1,
+      "type": "hook",
+      "weight": "minor",
+      "setup": "Lời răn của người xưa về ba nhịp gõ trong tủ gỗ lúc nửa đêm",
+      "payoff": "Đặt luật sinh tử ngay 8 giây đầu khi bé Minh bước ngang tủ"
+    },
+    {
+      "id": "B02",
+      "part": 1,
+      "type": "omen",
+      "weight": "minor",
+      "setup": "Ba tiếng gõ khô khốc vang lên rồi cánh tủ tự hé lộ góc bao tải đẫm bùn",
+      "payoff": "Kéo bé Minh nghiêng đèn dầu soi sát khe tối"
+    },
+    {
+      "id": "B03",
+      "part": 1,
+      "type": "scare",
+      "weight": "minor",
+      "setup": "Năm ngón tay xám ngoét bấu mép tủ kéo rộng ra rồi đèn dầu tắt phụt vào khoảng lặng tuyệt đối",
+      "payoff": "Cắt mọi ánh sáng ngay trước tia chớp tiết lộ"
+    },
+    {
+      "id": "B04",
+      "part": 1,
+      "type": "reveal",
+      "weight": "major",
+      "setup": "Chớp lóe qua song cửa, cánh tủ bật tung để Ông Kẹ vác bao tải lao chộp",
+      "payoff": "Minh giằng thoát chạy sang phòng trong sập cửa cài chặt then gỗ"
+    },
+    {
+      "id": "B05",
+      "part": 1,
+      "type": "twist",
+      "weight": "major",
+      "setup": "Cậu thở dốc tưởng đã an toàn nhưng chậm rãi ngoái lại phía giường",
+      "payoff": "Bao tải rách nằm sẵn trên giường và hai mắt trắng dã trừng nhìn từ gầm giường"
+    }
+  ],
+  "props": [
+    {
+      "id": "P01",
+      "name": "Tủ gỗ cổ hai cánh",
+      "function": "Ngưỡng ranh giới phong ấn giữa đời thường và thực thể Ông Kẹ",
+      "states": ["Đóng kín", "Hé khe nhỏ", "Mở hé 5 ngón tay bấu", "Bật tung hai cánh"],
+      "beatIds": ["B01", "B02", "B03", "B04"]
+    },
+    {
+      "id": "P02",
+      "name": "Chiếc bao tải rách đẫm bùn",
+      "function": "Dấu hiệu vật lý nối liền từ tủ gỗ ngoài gian nhà sang thẳng giường ngủ ở cú lật cuối",
+      "states": ["Thò góc dưới chân tủ", "Vác sau lưng thực thể", "Nằm sẵn trên giường"],
+      "beatIds": ["B02", "B04", "B05"]
+    },
+    {
+      "id": "P03",
+      "name": "Đèn dầu cầm tay",
+      "function": "Nguồn sáng duy nhất dẫn mắt khán giả và ngắt phụt để tạo khoảng lặng tắt đèn",
+      "states": ["Sáng ấm di chuyển", "Chập chờn dưới cằm", "Tắt phụt vào Dead Silence"],
+      "beatIds": ["B01", "B02", "B03"]
+    }
+  ],
+  "parts": [
+    {
+      "part": 1,
+      "title": "Đừng mở tủ lúc nửa đêm",
+      "target_sec": 71,
+      "light": "candle",
+      "synopsis": "Đêm mưa mất điện, bé Minh cầm đèn dầu đi ngang chiếc tủ gỗ cũ cuối gian nhà đúng lúc ba tiếng gõ khô khốc vang lên. Cánh tủ khẽ hé để lộ góc chiếc bao tải rách đẫm bùn thò sát sàn nhà. Minh nghiêng đèn soi sát khe tối thì năm ngón tay dài xám ngoét từ từ bám lấy mép gỗ kéo rộng ra rồi ngọn đèn tắt phụt. Trong ánh chớp lóe qua song cửa, Ông Kẹ cổ ngoẹo vác bao tải bật tung cửa tủ lao tới. Cậu bé giằng thoát chạy sang buồng trong, sập cửa cài chặt then gỗ và thở dốc tưởng đã an toàn. Nhưng khi ngoái nhìn lại, chiếc bao tải đã nằm sẵn trên giường còn hai con mắt trắng dã đang mở trừng nhìn cậu từ gầm giường.",
+      "hook": "Lời dặn lúc nửa đêm về ba tiếng gõ trong tủ gỗ báo hiệu Ông Kẹ đi tìm đứa trẻ còn thức.",
+      "suspense": "Chiếc bao tải nằm sẵn trên giường và đôi mắt trắng dã đang mở trừng từ gầm giường tối đen.",
+      "sceneIds": ["S01", "S02"],
+      "characterIds": ["C01", "C02"],
+      "propIds": ["P01", "P02", "P03"],
+      "soundCues": [
+        "Ba tiếng mõ gỗ khô khốc",
+        "Đèn dầu tắt phụt vào 0.65s Dead Silence",
+        "Tiếng sấm nổ + cửa gỗ sập cài then"
+      ],
+      "warnings": [
+        "Giấu tạo hình Ông Kẹ đến sau Dead Silence",
+        "Mặt nạ bao tải đay & gầm giường tối phải đủ chi tiết rõ khi render"
+      ]
+    }
+  ]
+}
