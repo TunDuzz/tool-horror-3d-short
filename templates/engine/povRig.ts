@@ -180,10 +180,10 @@ export function createPhone3D(initial: PhoneScreenState = { clock: "00:58" }): P
   tex.colorSpace = THREE.SRGBColorSpace;
   tex.anisotropy = 4;
 
-  // HDR emissive screen (> 1.0 triggers realistic gentle Bloom around phone & gripping fingers!)
+  // Subtle HDR emissive screen (1.12-1.22 triggers gentle edge bloom while keeping lockscreen text razor-crisp!)
   const screenMat = new THREE.MeshBasicMaterial({
     map: tex,
-    color: new THREE.Color(1.42, 1.46, 1.56),
+    color: new THREE.Color(1.12, 1.15, 1.22),
     toneMapped: false,
   });
   const screenGeo = new THREE.PlaneGeometry(0.080, 0.160);
@@ -193,22 +193,22 @@ export function createPhone3D(initial: PhoneScreenState = { clock: "00:58" }): P
   screen.userData.noOutline = true;
   group.add(screen);
 
-  // Slender fingers curling neatly around left bezel edge (never obstructing lockscreen text!)
+  // Slender fingers curling neatly around outer left bezel edge (never covering notification icon or text!)
   const skinMat = stylizedShade(new THREE.MeshLambertMaterial({ color: "#ccb6a0" }));
   for (let i = 0; i < 4; i++) {
-    const fGeo = new THREE.CapsuleGeometry(0.0072, 0.015, 5, 8);
+    const fGeo = new THREE.CapsuleGeometry(0.0066, 0.011, 5, 8);
     fGeo.rotateZ(Math.PI * 0.5);
     const fm = new THREE.Mesh(fGeo, skinMat);
     fm.name = `phoneGripFinger_${i}`;
-    fm.position.set(-0.046, 0.018 - i * 0.020, 0.005);
+    fm.position.set(-0.049, 0.018 - i * 0.019, 0.002);
     group.add(fm);
   }
   // Slender right thumb resting cleanly on right bezel edge
-  const thumbGeo = new THREE.CapsuleGeometry(0.0085, 0.036, 5, 8);
+  const thumbGeo = new THREE.CapsuleGeometry(0.0080, 0.032, 5, 8);
   const thumb = new THREE.Mesh(thumbGeo, skinMat);
   thumb.name = "phoneGripThumb";
-  thumb.position.set(0.044, -0.042, 0.008);
-  thumb.rotation.set(0.10, -0.14, 0.56);
+  thumb.position.set(0.046, -0.042, 0.005);
+  thumb.rotation.set(0.08, -0.12, 0.54);
   group.add(thumb);
 
   attachOutlineRig(group, { pxWidth: 4.5, minWorld: 0.0009, maxWorld: 0.008, color: "#06060a" });
@@ -465,14 +465,14 @@ export function createPovRig3D(
   const seatedMeshGroup = new THREE.Group();
   seatedMeshGroup.name = "povSeated";
   for (const side of [-1, 1] as const) {
-    const thigh = new THREE.Mesh(new THREE.CapsuleGeometry(0.072, 0.34, 6, 10), pantsMat);
-    thigh.position.set(side * 0.16, 0.11, -0.20);
-    thigh.rotation.set(Math.PI * 0.48, side * -0.42, side * 0.18);
-    const shin = new THREE.Mesh(new THREE.CapsuleGeometry(0.056, 0.32, 6, 10), pantsMat);
-    shin.position.set(side * 0.14, 0.08, -0.34);
-    shin.rotation.set(Math.PI * 0.5, side * 1.15, 0);
-    const lapHem = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.08, 0.24), sleeveMat);
-    lapHem.position.set(0, 0.14, -0.10);
+    const thigh = new THREE.Mesh(new THREE.CapsuleGeometry(0.074, 0.38, 6, 10), pantsMat);
+    thigh.position.set(side * 0.18, 0.16, -0.30);
+    thigh.rotation.set(Math.PI * 0.44, side * -0.34, side * 0.14);
+    const shin = new THREE.Mesh(new THREE.CapsuleGeometry(0.058, 0.34, 6, 10), pantsMat);
+    shin.position.set(side * 0.14, 0.11, -0.48);
+    shin.rotation.set(Math.PI * 0.5, side * 1.12, 0);
+    const lapHem = new THREE.Mesh(new THREE.BoxGeometry(0.30, 0.08, 0.28), sleeveMat);
+    lapHem.position.set(0, 0.17, -0.18);
     seatedMeshGroup.add(thigh, shin, lapHem);
   }
   lowerBody.add(seatedMeshGroup);
@@ -502,17 +502,17 @@ export function createPovRig3D(
   const buildPovArm = (side: -1 | 1) => {
     const arm = new THREE.Group();
     arm.name = side < 0 ? "povLeftArm" : "povRightArm";
-    // Forearm & wrist sit behind the held prop (-Z is away from camera) and slope downward-outward toward shoulder
-    const forearm = new THREE.Mesh(new THREE.CapsuleGeometry(0.032, 0.34, 6, 10), sleeveMat);
-    forearm.position.set(side * 0.072, -0.21, -0.02);
-    forearm.rotation.set(-0.22, 0, side * 0.30);
-    const wrist = new THREE.Mesh(new THREE.CylinderGeometry(0.024, 0.028, 0.065, 10), skinMat);
-    wrist.position.set(side * 0.014, -0.068, -0.032);
-    wrist.rotation.set(-0.18, 0, side * 0.22);
+    // Forearm & wrist sit cleanly behind held props (-Z away from camera) sloping downward-outward toward shoulder
+    const forearm = new THREE.Mesh(new THREE.CapsuleGeometry(0.030, 0.34, 6, 10), sleeveMat);
+    forearm.position.set(side * 0.078, -0.23, -0.050);
+    forearm.rotation.set(-0.18, 0, side * 0.28);
+    const wrist = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.026, 0.062, 10), skinMat);
+    wrist.position.set(side * 0.018, -0.088, -0.054);
+    wrist.rotation.set(-0.14, 0, side * 0.20);
     const hand = new THREE.Group();
     hand.name = side < 0 ? "povLeftHand" : "povRightHand";
-    const palm = new THREE.Mesh(new THREE.BoxGeometry(0.044, 0.044, 0.018), skinMat);
-    palm.position.set(0, -0.024, -0.038);
+    const palm = new THREE.Mesh(new THREE.BoxGeometry(0.042, 0.042, 0.016), skinMat);
+    palm.position.set(0, -0.026, -0.052);
     hand.add(palm);
     arm.add(forearm, wrist, hand);
     armsRoot.add(arm);
@@ -545,24 +545,24 @@ export function createPovRig3D(
     left.arm.visible = lRaise > 0.02;
 
     if (pose.propMode === "phone") {
-      // Raised centered-right smartphone framing (unobstructed screen + wrist sloping cleanly to bottom-right!)
+      // Raised centered-right smartphone framing clearly above lower-third subtitles with zero wrist/bezel clipping
       const k = Math.max(0.001, rRaise);
       right.arm.visible = k > 0.02;
-      right.arm.position.set(0.035 + swayX, -0.34 + k * 0.26 + swayY, -0.34);
-      right.arm.rotation.set(0.12 * (1 - k), -0.06, 0.03);
-      // Keep left arm tucked out of phone screen unless explicitly raised separately
+      right.arm.position.set(0.032 + swayX, -0.34 + k * 0.33 + swayY, -0.35);
+      right.arm.rotation.set(0.10 * (1 - k), -0.05, 0.03);
       left.arm.visible = false;
     } else if (pose.propMode === "flashlight") {
+      // Positioned cleanly inside narrow 9:16 lower-right frustum so POV hand & metal torch barrel are clearly visible
       right.arm.visible = rRaise > 0.02;
-      right.arm.position.set(0.16 + swayX, -0.26 + rRaise * 0.14 + swayY, -0.33);
-      right.arm.rotation.set(0.04, -0.05, 0);
+      right.arm.position.set(0.082 + swayX, -0.22 + rRaise * 0.09 + swayY, -0.35);
+      right.arm.rotation.set(0.06, 0.06, -0.04);
     } else if (pose.propMode === "lamp") {
       right.arm.visible = rRaise > 0.02;
-      right.arm.position.set(0.19 + swayX, -0.34 + rRaise * 0.18 + swayY, -0.38);
-      right.arm.rotation.set(0.05, -0.12, 0);
+      right.arm.position.set(0.095 + swayX, -0.26 + rRaise * 0.14 + swayY, -0.38);
+      right.arm.rotation.set(0.05, -0.08, 0);
     } else if (pose.propMode === "paper") {
       right.arm.visible = rRaise > 0.02;
-      right.arm.position.set(0.0 + swayX, -0.36 + rRaise * 0.31 + swayY, -0.33);
+      right.arm.position.set(0.0 + swayX, -0.34 + rRaise * 0.32 + swayY, -0.33);
       right.arm.rotation.set(-0.08, 0, 0);
     } else {
       right.arm.visible = rRaise > 0.02;

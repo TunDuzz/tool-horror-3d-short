@@ -253,7 +253,7 @@ function drawEyebrow(
 
 function drawMouth(g: CanvasRenderingContext2D, mouth: MouthShape) {
   const cx = 256;
-  const cy = 370;
+  const cy = 406;
   g.strokeStyle = INK;
   g.lineCap = "round";
   g.lineJoin = "round";

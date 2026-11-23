@@ -146,6 +146,18 @@ export function createOutlineMaterial(opts: OutlineOpts = {}): THREE.ShaderMater
   });
 }
 
+/** Compute thin-part-safe maxWorld cap so distant slender fingers/ankles never extrude into thick black paddles. */
+function maxWorldForGeometry(geo: THREE.BufferGeometry, baseMax: number, override?: number): number {
+  if (typeof override === "number" && override > 0) return Math.min(baseMax, override);
+  if (!geo.boundingBox) geo.computeBoundingBox();
+  const bb = geo.boundingBox;
+  if (!bb) return baseMax;
+  const dims = [bb.max.x - bb.min.x, bb.max.y - bb.min.y, bb.max.z - bb.min.z].sort((a, b) => a - b);
+  const crossRadius = dims[1] * 0.5;
+  if (crossRadius <= 0) return baseMax;
+  return Math.min(baseMax, Math.max(0.0022, crossRadius * 0.34));
+}
+
 /**
  * Attach smooth-normal Inverted-Hull outline shells for every eligible Mesh inside `target`,
  * and move all meshes in `target` (plus the generated outlines) onto the `NOINK` layer so `InkPass`
@@ -155,14 +167,24 @@ export function createOutlineMaterial(opts: OutlineOpts = {}): THREE.ShaderMater
  * use `attachOutlineRig` so each outline mesh is parented directly to its own moving bone mesh.
  */
 export function attachOutline(target: THREE.Object3D, opts: OutlineOpts = {}): THREE.Group {
-  const mat = createOutlineMaterial(opts);
+  const o = { ...DEF_OPTS, ...opts };
+  const matCache = new Map<string, THREE.ShaderMaterial>();
+  const getMat = (maxW: number, pxW: number) => {
+    const key = `${pxW.toFixed(2)}:${maxW.toFixed(4)}`;
+    let m = matCache.get(key);
+    if (!m) {
+      m = createOutlineMaterial({ ...o, pxWidth: pxW, maxWorld: maxW, minWorld: Math.min(o.minWorld, maxW) });
+      matCache.set(key, m);
+    }
+    return m;
+  };
   const outlines = new THREE.Group();
   outlines.name = "InvertedHullOutlines";
   outlines.layers.set(NOINK);
 
   const meshes: THREE.Mesh[] = [];
-  target.traverse((o) => {
-    const m = o as THREE.Mesh;
+  target.traverse((obj) => {
+    const m = obj as THREE.Mesh;
     if (!m.isMesh) return;
     m.layers.set(NOINK);
     if (m.userData.noOutline || m.userData.isOutline) return;
@@ -175,7 +197,9 @@ export function attachOutline(target: THREE.Object3D, opts: OutlineOpts = {}): T
 
   for (const m of meshes) {
     const smoothGeo = computeSmoothNormals(m.geometry);
-    const ol = new THREE.Mesh(smoothGeo, mat);
+    const capMax = maxWorldForGeometry(m.geometry, o.maxWorld, m.userData.outlineMaxWorld);
+    const pxW = typeof m.userData.outlinePx === "number" ? m.userData.outlinePx : o.pxWidth;
+    const ol = new THREE.Mesh(smoothGeo, getMat(capMax, pxW));
     ol.userData.isOutline = true;
     ol.castShadow = false;
     ol.receiveShadow = false;
@@ -192,12 +216,23 @@ export function attachOutline(target: THREE.Object3D, opts: OutlineOpts = {}): T
 /**
  * Attach smooth-normal Inverted-Hull outlines directly as children of every animated bone Mesh in `root`.
  * Moves automatically with every hierarchical bone rotation without needing manual matrix sync.
+ * Automatically scales maxWorld down on thin sub-parts (e.g. fingers, ankles) to prevent distant paddle blowout.
  */
 export function attachOutlineRig(root: THREE.Object3D, opts: OutlineOpts = {}): THREE.Mesh[] {
-  const mat = createOutlineMaterial(opts);
+  const o = { ...DEF_OPTS, ...opts };
+  const matCache = new Map<string, THREE.ShaderMaterial>();
+  const getMat = (maxW: number, pxW: number) => {
+    const key = `${pxW.toFixed(2)}:${maxW.toFixed(4)}`;
+    let m = matCache.get(key);
+    if (!m) {
+      m = createOutlineMaterial({ ...o, pxWidth: pxW, maxWorld: maxW, minWorld: Math.min(o.minWorld, maxW) });
+      matCache.set(key, m);
+    }
+    return m;
+  };
   const meshes: THREE.Mesh[] = [];
-  root.traverse((o) => {
-    const m = o as THREE.Mesh;
+  root.traverse((obj) => {
+    const m = obj as THREE.Mesh;
     if (!m.isMesh) return;
     m.layers.set(NOINK);
     if (m.userData.noOutline || m.userData.isOutline) return;
@@ -206,7 +241,9 @@ export function attachOutlineRig(root: THREE.Object3D, opts: OutlineOpts = {}): 
 
   const created: THREE.Mesh[] = [];
   for (const m of meshes) {
-    const ol = new THREE.Mesh(computeSmoothNormals(m.geometry), mat);
+    const capMax = maxWorldForGeometry(m.geometry, o.maxWorld, m.userData.outlineMaxWorld);
+    const pxW = typeof m.userData.outlinePx === "number" ? m.userData.outlinePx : o.pxWidth;
+    const ol = new THREE.Mesh(computeSmoothNormals(m.geometry), getMat(capMax, pxW));
     ol.name = `${m.name || "mesh"}_outline`;
     ol.userData.isOutline = true;
     ol.castShadow = false;

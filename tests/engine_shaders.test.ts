@@ -58,6 +58,15 @@ test("attachOutline isolates actors on NOINK, creates BackSide shells, and skips
   assert.equal(olMesh.layers.mask, 1 << NOINK);
   assert.equal((olMesh.material as THREE.ShaderMaterial).side, THREE.BackSide);
   assert.ok(createOutlineMaterial().vertexShader.includes("aSmoothNormal"));
+
+  // Thin sub-parts (e.g. slender fingers) must receive a tightly capped uMaxWorld so distant hands never turn into black paddles
+  const thinRoot = new THREE.Group();
+  const finger = new THREE.Mesh(new THREE.CapsuleGeometry(0.006, 0.06, 4, 6), new THREE.MeshLambertMaterial());
+  thinRoot.add(finger);
+  const thinOutlines = attachOutline(thinRoot, { pxWidth: 6.0, maxWorld: 0.032 });
+  const thinOl = thinOutlines.children[0] as THREE.Mesh;
+  const thinMaxW = (thinOl.material as THREE.ShaderMaterial).uniforms.uMaxWorld.value as number;
+  assert.ok(thinMaxW <= 0.005, `Expected thin finger uMaxWorld <= 0.005, got ${thinMaxW}`);
 });
 
 test("shade.ts supports 6 PointLights, 1 SpotLight, and lightning flash", () => {

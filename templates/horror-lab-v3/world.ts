@@ -138,11 +138,11 @@ export class HorrorLabV3World implements ShortWorld {
     this.wardEntity = createCharacter3D({
       id: "wardEntity",
       height: 1.72,
-      skinCol: "#a2a8a4",
+      skinCol: "#6d7470",
       hairCol: "#111316",
       hairStyle: "longDraped",
-      topCol: "#566360",
-      bottomCol: "#262e30",
+      topCol: "#4a5552",
+      bottomCol: "#232a2c",
       garment: "hospitalGown",
       outlinePx: 6.0,
       entity: {
@@ -183,13 +183,13 @@ export class HorrorLabV3World implements ShortWorld {
     this.root.add(this.pov.group);
   }
 
-  getLightBlend(_shotId: number, frame: number): { to: LightKey; t: number } | null {
+  getLightBlend(_shotId: number, frame: number): { from?: LightKey; to: LightKey; t: number } | null {
     const beat = beatAt(MANIFEST, frame);
     const ls = beat.lightState;
     if (!ls.blendTo || !ls.blendRange) return null;
     const [f0, f1] = ls.blendRange;
     const t = clamp01((frame - f0) / Math.max(1, f1 - f0));
-    return { to: ls.blendTo, t };
+    return { from: ls.preset, to: ls.blendTo, t };
   }
 
   getMotionVelocity(shotId: number, frame: number, aspect: number, heightPx: number) {
@@ -264,7 +264,8 @@ export class HorrorLabV3World implements ShortWorld {
     this.alleySet.group.visible = beat.locationId === "foggyVillageAlley";
 
     // 2. Camera evaluation
-    const { cam: c } = evalShotMotion(CAMS, s, frame, cam.aspect, 1920, KICKS);
+    const heightPx = cam.aspect < 1 ? 1920 : 1080;
+    const { cam: c } = evalShotMotion(CAMS, s, frame, cam.aspect, heightPx, KICKS);
     cam.position.set(...c.pos);
     cam.up.set(0, 1, 0);
     cam.lookAt(...c.look);
@@ -369,7 +370,7 @@ export class HorrorLabV3World implements ShortWorld {
         carrier: "Viettel",
         battery: 23,
         notifications: det.notifBody
-          ? [{ sender: String(det.notifSender ?? "Tin nhắn"), time: "176 phút trước", body: String(det.notifBody) }]
+          ? [{ sender: String(det.notifSender ?? "Tin nhắn"), time: String(det.notifTime ?? det.notifFooter ?? ""), body: String(det.notifBody) }]
           : [],
       });
     }
@@ -382,8 +383,8 @@ export class HorrorLabV3World implements ShortWorld {
       const raisePhone = showPhone ? clamp01((frame - 58) / 10) : 0;
       this.pov.update(cam, {
         stance: isHosp ? "standing" : "seated",
-        anchor: isHosp ? ANCHORS.HOSP_POV_FEET : isDoorLook ? [-0.68, 0.0, 0.28] : ANCHORS.POV_SEAT,
-        bodyYaw: isDoorLook ? 0.20 : 0,
+        anchor: isHosp ? ANCHORS.HOSP_POV_FEET : isDoorLook ? [-0.68, 0.0, 0.56] : ANCHORS.POV_SEAT,
+        bodyYaw: isDoorLook ? 0.16 : 0,
         propMode: showPhone ? "phone" : showFlash ? "flashlight" : "none",
         rightArmRaise: showPhone ? raisePhone : showFlash ? 1 : 0,
         leftArmRaise: 0,

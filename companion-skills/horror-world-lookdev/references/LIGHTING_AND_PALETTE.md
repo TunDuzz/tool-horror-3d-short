@@ -1,42 +1,74 @@
-# Horror Lighting Presets, Local PointLights & Palette Reference (`src/engine/`)
+# Horror Lighting Presets, Practical Lights & Painterly Surfaces v3 (`src/engine/`)
 
-Calibrated for Horror Engine v2 ("Gothic Ink-Noir × Shadow-Depth") in `lights.ts`, `shade.ts`, `cardshade.ts`, and `grade.ts`.
+Calibrated for **Horror Engine v3 ("3D Stylized Dark-Horror POV")** in `lights.ts`, `shade.ts`, `grade.ts`, `paint.ts`, and `ShortPlayer.tsx`.
 
-## 1. Five Dedicated Horror Presets
+---
 
-| Preset | Mood & Use Case | Sun `(az, el)` | `charGain` & Rim | Fog Range (`m`) | Vignette `(k, r0)` | Sky / Atmosphere |
-|---|---|---|---|---|---|---|
-| `night` | Moonlit river, graveyard, forest road | `(28, 26)` | `0.68` / cool `[0.46,0.68,1.0]` @ `0.52` | `7 -> 68` (`#1d3152`) | `(0.40, 0.34)` | Deep ink-navy moonlight |
-| `candle` | Watchman's shack, ancestral hall, oil lamp | `(44, 22)` | `0.70` / amber `[1.0,0.52,0.18]` @ `0.55` | `6 -> 46` (`#24181f`) | `(0.46, 0.28)` | Warm amber key, deep plum shadows |
-| `storm` | Driving rain, wind, 3D lightning strikes | `(102, 34)` | `0.68` / steel `[0.68,0.82,0.98]` @ `0.42` | `6 -> 54` (`#243646`) | `(0.42, 0.32)` | Cold storm slate + high-contrast flash |
-| `eerie` | Liminal corridor, 3 AM apartment, dread peer | `(56, 46)` | `0.70` / jade `[0.36,0.90,0.72]` @ `0.48` | `6 -> 52` (`#193332`) | `(0.44, 0.30)` | Sickly fluorescent jade-teal |
-| `blood` | Climax struggle, curse trigger, haunting twist | `(18, 18)` | `0.68` / crimson `[1.0,0.26,0.22]` @ `0.70` | `6 -> 54` (`#3a1019`) | `(0.50, 0.26)` | Crimson mist & obsidian-plum shade |
+## 1. Five Physical Story-Driven Presets (`LightKey`)
 
-## 2. Real Dynamic Local PointLights (`setLocalLights`) & 3D Lightning (`setLightningFlash`)
+The legacy v2 `blood` crimson-wash preset is **permanently removed and rejected by `validate_manifest.py`**. Use only these 5 physical horror presets:
 
-Both world geometry (`twoTone`) and 2D character cards (`cardShade`) evaluate up to **3 real local point lights** every frame:
+| Preset | Mood & Story Use Case | Lit / Shade Contrast | Rim Light | Fog Range (`m`) | Sky / Atmosphere |
+|---|---|---|---|---|---|
+| `warmLamp` | Rural funeral room, candle/oil-lamp interior, warm vigil table | Amber `[0.68, 0.50, 0.36]` / plum-ink `[0.068, 0.052, 0.072]` | Warm `[0.95, 0.64, 0.34]` @ `0.34` | `7.5 → 44` (`#1d151d`) | Warm interior hearth framed by velvety plum shadows |
+| `coldMoon` | Post-blackout room, late-night bedroom, door-crack moonlight | Slate-blue `[0.46, 0.56, 0.76]` / deep navy `[0.044, 0.050, 0.076]` | Cool `[0.58, 0.72, 0.96]` @ `0.44` | `6.5 → 46` (`#161b29`) | Desaturated indigo-slate night dread |
+| `fluorescent` | Hospital corridor, old apartment hall, morgue, school | Pale jade-white `[0.70, 0.84, 0.78]` / teal-ink `[0.056, 0.076, 0.082]` | Mint `[0.68, 0.92, 0.84]` @ `0.30` | `6.0 → 38` (`#142224`) | Clinical cold institutional corridor glow |
+| `duskFog` | Foggy village alley, wet night road, rural exterior | Twilight blue `[0.56, 0.66, 0.84]` / night indigo `[0.055, 0.068, 0.102]` | Silver `[0.74, 0.84, 1.00]` @ `0.38` | `5.5 → 42` (`#1f2a3e`) | Misty blue twilight cut by warm sodium streetlamp pools |
+| `flashlight` | Pitch-dark basement, cave, unlit storage room | Low slate `[0.22, 0.26, 0.34]` / near-black `[0.026, 0.030, 0.044]` | Dim `[0.46, 0.56, 0.74]` @ `0.28` | `5.0 → 32` (`#0c1018`) | Near-black interior carved primarily by `Flashlight3D` SpotLight |
+
+### Smooth In-Shot Light Transitions (`lerpLights`, `lerpLook`, `getLightBlend`)
+When an oil lamp dies or a breaker trips mid-scene, declare `blendTo` and `blendRange` in `manifest.json` (`lightState`) and expose `getLightBlend(shotId, frame)` on your `ShortWorld`:
+- `ShortPlayer` automatically interpolates `gradeFor` + `applyLightUniforms` smoothly across the transition frames without a jarring filter pop.
+- In `world.syncLighting()`, extinguish practical local lights (`isLampLit(beat, "oilLamp")`) in lockstep with `beat.lightState.lampsOn`.
+
+---
+
+## 2. Real Dynamic Practical Lights (`setLocalLights` × 6 & `setSpotLight` × 1)
+
+`stylizedShade` evaluates **soft wrapped directional shading + real soft shadow maps + up to 6 dynamic `PointLight`s + 1 focused `SpotLight` cone + real 3D lightning flash** across all 3D geometry, characters, and POV props:
 
 ```ts
 setLocalLights([
-  // 1. Handheld storm lantern moving dynamically with character (warms face, coat, planks & water!)
-  { pos: [tuX + 0.32, tuY + 1.02, tuZ - 0.35], color: [2.15 * k, 1.18 * k, 0.42], radius: 5.2 },
-  // 2. Architectural oil lamp / hanging lantern post
-  { pos: [lx, ly, lz], color: [1.85 * k, 1.05 * k, 0.38], radius: 5.8 },
-  // 3. Distant glowing window beacon
-  { pos: [wx, wy, wz], color: [1.5, 0.85, 0.32], radius: 5.0 },
+  // 1. Table glass oil lamp with deterministic flicker
+  { pos: [tx - 0.18, 0.84, tz + 0.05], color: [2.45 * flk, 1.42 * flk, 0.56 * flk], radius: 5.8 },
+  // 2. Altar tall candle
+  { pos: [ax - 0.46, 1.32, az + 0.08], color: [1.85 * flk, 1.05 * flk, 0.42 * flk], radius: 4.5 },
+  // 3. Diegetic Phone3D screen lighting POV fingers and nearby chest
+  phone.getLight(1.45),
+  // 4. Cold moonlight bounce pouring under a bolted double door
+  { pos: [dx, 0.35, dz + 0.45], color: [0.58, 0.76, 1.12], radius: 3.4 },
 ]);
+
+// Optional handheld flashlight cone (automatically sets attenuation, outer cone angle & penumbra)
+setSpotLight(flashlight.getSpotLight()); // pass null when flashlight is off
 ```
 
-- **Rule:** Never fake a practical lamp with only a flat `fxFlickerGlow` sprite! Always pair every visible lantern, candle, flashlight, or glowing window with a real `setLocalLights()` entry so nearby characters and surfaces actually catch directional warmth/glow.
-- **Lightning:** `ShortPlayer` automatically feeds `lightningAt(overlays, frame)` into `setLightningFlash()`, blasting real cold-blue 3D light across meshes, water, and characters during `{ kind: "lightning", f }` strikes while keeping screen overlays subtle (`0.28` screen sheen).
+- **Rule:** Every visible practical light source (oil lamp, candle, phone screen, fluorescent tube, sodium streetlamp, door-crack moonlight) MUST have a matching `setLocalLights()` / `setSpotLight()` entry synced to `beat.lightState.lampsOn`.
+- **Anti-Blowout Calibration:** Keep `Flashlight3D` power around `0.85–1.05` and light-colored character garments (`hospitalGown`, white shirts) below `#68706e` under direct spotlights so Bloom highlights stay sculptural rather than turning torsos pure white.
 
-## 3. Albedo & Texture Guidelines for Gothic Inked Worlds
+---
 
-- **Never use pure `#000000` or pure `#ffffff` on lit 3D meshes:** `#000000` kills `#060409` `InkPass` edges; `#ffffff` blows out `Bloom`.
-- **Use Gothic HD Painters (`paint.ts`):** `darkPlanksHD()`, `mudBankHD()`, `crackedPlasterHD()`, `horrorCloudHD()` (streaky storm stratus — never bright cartoon `grass()` or puffy `cloudHD()`!).
-- **Safe albedos:** Stone/plaster `#565258`–`#7c7672`; damp timber `#3d3028`–`#6e5a4c`; night foliage/reeds `#243228`–`#3b463a`.
-- **HDR Emissives (`Bloom > 1.0`):** `new THREE.MeshBasicMaterial({ color: new THREE.Color(...), toneMapped: false })`:
-  - Oil lamp / storm lantern core: `(2.6, 1.65, 0.65)` × `(0.85 + 0.35 * flk)`
-  - Eerie tube / spirit glow: `(0.55, 1.85, 1.35)`
-  - Blood beacon: `(2.4, 0.55, 0.48)`
-- **Volumetric Shafts (`addVolumetricShaft`):** Place angled soft moonbeams or window shafts (`opacity: 0.10–0.16`) to carve depth through dark interiors and misty exteriors.
+## 3. HDR Emissives (`Bloom` Threshold `0.92`, `NEUTRAL` Tone Mapping)
+
+Use `new THREE.MeshBasicMaterial({ color: new THREE.Color(r, g, b), toneMapped: false })` on `NOINK` emissive cores:
+
+| Practical Source | Recommended Linear RGB `(r, g, b)` | Notes |
+|---|---|---|
+| Glass oil lamp / altar candle flame | `(3.4–3.6, 2.1–2.25, 0.72–0.78) × flk` | Warm golden halo through translucent chimney |
+| `Phone3D` lockscreen | `(1.42, 1.46, 1.56)` × Canvas2D map | Crisp readable clock + subtle luminous bezel glow |
+| Overhead `FluorescentTube3D` | `(1.9, 2.35, 2.15) × flk` | Clinical pale mint-white flicker |
+| Sodium `StreetLamp3D` bulb | `(2.9, 1.85, 0.72)` | Pair with soft `addVolumetricCone` (`opacity: 0.10–0.14`) |
+| Door-crack moonlight strips | `moonColor: "#a2b8dc"` scaled `~1.35×` | Crisp cool silver-blue beam on dark floor |
+| Silhouette entity `eyeGlow` | `(2.2, 2.35, 2.8)` | Piercing pinpoint cold glints in pitch dark |
+
+---
+
+## 4. Albedo Discipline & 16 Clean Painterly Textures (`paint.ts`)
+
+- **Never use pure `#000000` or pure `#ffffff` on lit 3D meshes:** `#000000` destroys `#06060a` outline contrast; `#ffffff` triggers unwanted Bloom blowout under practical lamps.
+- Choose surface textures matching your `LocationBlueprint` from the 16 clean painterly builders in `paint.ts`:
+  - **Ceilings & Roofs (4):** `thatchRoofTex`, `tileRoofTex`, `concreteCeilingTex`, `corrugatedTinTex`
+  - **Walls (5):** `mottledPlasterTex`, `brickWallTex`, `hospitalTileTex`, `paintedConcreteTex`, `darkTimberWallTex`
+  - **Floors & Ground (6):** `terracottaFloorTex`, `vintagePatternTileTex`, `reedMatTex`, `wetAsphaltTex`, `packedEarthTex`, `woodenFloorTex`
+  - **Fabric & Garments (1):** `garmentFoldTex` (plus automatic garment seams in `rig3d.ts`)
+- Every texture painter in `paint.ts` uses gentle painterly brushwork and realistic wear—zero harsh cross-hatching or muddy black noise.

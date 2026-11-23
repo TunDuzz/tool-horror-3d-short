@@ -123,17 +123,21 @@ const VERT_WORLD_POS = /* glsl */ `
 `;
 
 const STYLIZED_SHADE = /* glsl */ `
-#if NUM_DIR_LIGHTS > 0
 {
-  vec3 sunV = directionalLights[ 0 ].direction;
   vec3 upV = normalize( ( viewMatrix * vec4( 0.0, 1.0, 0.0, 0.0 ) ).xyz );
-  float ndl = dot( geometryNormal, sunV );
-  float softRamp = smoothstep( uWrapLo, uWrapHi, ndl );
-  float sunTerm = sunVis * softRamp;
-  float skyK = mix( uSideK, 1.0, 0.5 + 0.5 * dot( geometryNormal, upV ) );
-  vec3 lit = uLitCol * mix( 1.0, max( ndl, 0.0 ), uLambert );
   float facing = max( dot( geometryNormal, geometryViewDir ), 0.0 );
   vec3 alb = max( mix( vec3( dot( diffuseColor.rgb, vec3( 0.2126, 0.7152, 0.0722 ) ) ), diffuseColor.rgb, uSat ), 0.0 );
+  float skyK = mix( uSideK, 1.0, 0.5 + 0.5 * dot( geometryNormal, upV ) );
+
+  float sunTerm = 0.0;
+  vec3 lit = uLitCol;
+  #if NUM_DIR_LIGHTS > 0
+    vec3 sunV = directionalLights[ 0 ].direction;
+    float ndl = dot( geometryNormal, sunV );
+    sunTerm = sunVis * smoothstep( uWrapLo, uWrapHi, ndl );
+    lit = uLitCol * mix( 1.0, max( ndl, 0.0 ), uLambert );
+  #endif
+
   vec3 baseDiff = alb * ( mix( uShadeCol, lit, sunTerm ) * skyK + uBounce * facing * clamp( 1.0 - dot( geometryNormal, upV ), 0.0, 1.0 ) * ( 1.0 - sunTerm ) )
     + uShadeLift * LIFT_K * ( 1.0 - sunTerm );
 
@@ -178,7 +182,6 @@ const STYLIZED_SHADE = /* glsl */ `
   reflectedLight.directDiffuse = baseDiff + rimDiff + alb * ptSum + flashDiff;
   reflectedLight.indirectDiffuse = vec3( 0.0 );
 }
-#endif
 `;
 
 const DECL =

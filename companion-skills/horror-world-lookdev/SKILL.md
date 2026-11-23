@@ -16,7 +16,7 @@ All project environments, custom textures, character configurations, and story-s
 Before writing a single line of `build.ts`, define a unique `LocationBlueprint` inside `manifest.json` for every setting:
 1. **`archetype`:** Story-authentic environment class (e.g. `ruralThatchedHouse`, `hospitalMorgueWing`, `foggyVillageAlley`, `oldApartmentStairwell`, `boardingRoom`, `abandonedClassroom`, `nightBusInterior`, `mountainTemple`, `basementStorage`).
 2. **`dimensions` (`[width, depth, height]`):** Realistic proportions tailored to the space (`[2.8, 16.0, 2.95]` narrow hospital hall vs `[6.4, 7.6, 4.3]` A-frame thatch house vs `[4.2, 26.0, 9.0]` village alley).
-3. **`ceilingType`:** `"aFrameThatch" | "flatConcrete" | "pitchedTile" | "corrugatedTin" | "openSky" | "woodenBeams"`.
+3. **`ceilingType`:** `"aFrameThatch" | "aFrameTile" | "flatConcrete" | "dropCeiling" | "vaulted" | "openSky" | "vehicleCabin"`.
 4. **`materials` (`wall`, `floor`, `ceiling`):** Pick 3 cohesive clean painterly textures from `paint.ts` (`thatchRoofTex`, `tileRoofTex`, `concreteCeilingTex`, `corrugatedTinTex`, `mottledPlasterTex`, `brickWallTex`, `hospitalTileTex`, `paintedConcreteTex`, `darkTimberWallTex`, `terracottaFloorTex`, `vintagePatternTileTex`, `reedMatTex`, `wetAsphaltTex`, `packedEarthTex`, `woodenFloorTex`, `garmentFoldTex`).
 5. **`practicalLights` & `heroProps`:** 1–3 motivated practical light sources + 3–5 story-specific hero props that actually matter to the plot.
 6. **`signatureShadowBeat`:** One unforgettable lighting/shadow visual motif (e.g., *"cold moonlight under bolted double door blocked by 2 dark foot shadows"* or *"flickering fluorescent tube + flashlight beam revealing gaunt figure down hallway"*).
@@ -69,4 +69,4 @@ Compose unique sets cleanly from Engine v3's neutral builders (all lit with `sty
 - Implement `getLightBlend(shotId, frame)` using `beat.lightState.blendTo` / `blendRange` for smooth lights-out shifts (`warmLamp → coldMoon`).
 - Implement `getMotionVelocity(shotId, frame, aspect, heightPx)` delegating to `evalShotMotion(...)` so `WhipMotionBlurEffect` delivers deterministic 13-tap directional motion blur during `whipPan` bursts while remaining zero-overhead pass-through on calm shots.
 
-See [LIGHTING_AND_PALETTE.md](./references/LIGHTING_AND_PALETTE.md) and [HORROR_STYLE_BIBLE.md](./references/HORROR_STYLE_BIBLE.md) for calibrated values and verified benchmark stills.
+See [LIGHTING_AND_PALETTE.md](./references/LIGHTING_AND_PALETTE.md) and [HORROR_STYLE_BIBLE.md](../../references/HORROR_STYLE_BIBLE.md) for calibrated values and verified benchmark stills.

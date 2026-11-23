@@ -35,6 +35,32 @@ VALID_CEILINGS = {
     "openSky",
     "vehicleCabin",
 }
+VALID_POSES = {
+    "standIdle",
+    "sitCrossLegged",
+    "sitChair",
+    "walk",
+    "creep",
+    "peerForward",
+    "recoil",
+    "holdPhone",
+    "holdLantern",
+    "point",
+    "lunge",
+    "loomingStill",
+    "peekAroundDoor",
+    "turnHead",
+}
+VALID_EXPRS = {
+    "calm",
+    "wary",
+    "uneasy",
+    "dread",
+    "terrified",
+    "deadStare",
+    "unsettlingSmile",
+    "hollow",
+}
 FPS = 30.0
 
 
@@ -138,7 +164,9 @@ def main():
     for i in range(len(loc_list)):
         for j in range(i + 1, len(loc_list)):
             la, lb = loc_list[i], loc_list[j]
-            if la.get("sameLocationOf") or lb.get("sameLocationOf"):
+            ref_a, ref_b = la.get("sameLocationOf"), lb.get("sameLocationOf")
+            # Only skip intra-project pair if one explicitly declares revisit of the other
+            if ref_a in (lb["id"], f"{project_id}:{lb['id']}") or ref_b in (la["id"], f"{project_id}:{la['id']}"):
                 continue
             reason = check_location_similarity(la, lb)
             if reason:
@@ -152,9 +180,12 @@ def main():
     for loc in loc_list:
         same_ref = loc.get("sameLocationOf")
         if same_ref:
-            # Verify sameLocationOf references an existing registry entry (or intra-project id) when registry is provided
-            known_refs = {f"{r.get('projectId')}:{r.get('id')}" for r in registry} | set(loc_map.keys())
-            if registry and same_ref not in known_refs:
+            # Never allow self-referencing bypass of anti-repetition gate
+            if same_ref in (loc["id"], f"{project_id}:{loc['id']}"):
+                errors.append(f"ANTI_REPEAT_ERROR: location '{loc['id']}' cannot reference itself in sameLocationOf='{same_ref}'")
+                continue
+            known_refs = {f"{r.get('projectId')}:{r.get('id')}" for r in registry} | (set(loc_map.keys()) - {loc["id"]})
+            if args.registry and same_ref not in known_refs:
                 errors.append(f"Location '{loc['id']}' has sameLocationOf='{same_ref}' not found in registry")
             continue
         for prev in registry:
@@ -172,10 +203,12 @@ def main():
     if not beats:
         errors.append("Manifest must declare at least 1 ScriptBeat in `beats`")
 
-    script_norm = ""
+    script_norm = None
     if args.script:
         with open(args.script, encoding="utf-8") as fp:
             script_norm = norm_text(fp.read())
+        if not script_norm:
+            errors.append(f"SCRIPT.md '{args.script}' is empty")
 
     words_data = []
     if args.words:
@@ -186,6 +219,7 @@ def main():
 
     sorted_beats = sorted(beats, key=lambda b: b.get("a", 0))
     cursor = 0
+    word_cursor = 0
     still_entries = []
 
     for b in sorted_beats:
@@ -213,6 +247,20 @@ def main():
             errors.append(f"Beat '{bid}' invalid lightState.preset={preset!r} (allowed v3 lights: {sorted(VALID_LIGHTS)})")
         if ls.get("blendTo") and ls.get("blendTo") not in VALID_LIGHTS:
             errors.append(f"Beat '{bid}' invalid lightState.blendTo={ls.get('blendTo')!r}")
+        br = ls.get("blendRange")
+        if br is not None:
+            if not (isinstance(br, list) and len(br) == 2 and all(isinstance(v, int) for v in br) and a <= br[0] < br[1] <= bb):
+                errors.append(f"Beat '{bid}' invalid lightState.blendRange={br!r} (must satisfy {a} <= f0 < f1 <= {bb})")
+
+        for cid, cst in (b.get("castStates") or {}).items():
+            if not isinstance(cst, dict):
+                continue
+            pose = cst.get("pose")
+            if pose is not None and pose not in VALID_POSES:
+                errors.append(f"Beat '{bid}' cast '{cid}' invalid pose={pose!r}")
+            expr = cst.get("expr")
+            if expr is not None and expr not in VALID_EXPRS:
+                errors.append(f"Beat '{bid}' cast '{cid}' invalid expr={expr!r}")
 
         if not str(b.get("cameraIntent", "")).strip():
             errors.append(f"Beat '{bid}' missing non-empty `cameraIntent` for Still Gate audit")
@@ -227,28 +275,40 @@ def main():
             if clk and ntime and str(clk).strip() != str(ntime).strip():
                 errors.append(f"Beat '{bid}' phone clock mismatch: Phone3D clock='{clk}' != notifTime='{ntime}'")
 
-        # SCRIPT.md + words.json fidelity check
+        # SCRIPT.md + words.json fidelity check (monotonic cursor supports repeated dialogue motifs!)
         sl = b.get("spokenLine")
         if isinstance(sl, dict) and str(sl.get("text", "")).strip():
             line_txt = str(sl["text"]).strip()
             line_norm = norm_text(line_txt)
-            if script_norm and line_norm not in script_norm:
+            if script_norm is not None and line_norm not in script_norm:
                 errors.append(f"Beat '{bid}' spokenLine not found in SCRIPT.md: {line_txt!r}")
             if norm_words:
                 toks = [t for t in line_norm.split() if t]
                 if toks:
-                    matched_start = None
-                    for idx in range(len(norm_words) - len(toks) + 1):
+                    beat_start_s = a / FPS
+                    beat_end_s = bb / FPS
+                    matches = []
+                    for idx in range(word_cursor, len(norm_words) - len(toks) + 1):
                         if all(norm_words[idx + k][0] == toks[k] for k in range(len(toks))):
-                            matched_start = norm_words[idx][1]
-                            break
-                    if matched_start is None:
+                            matches.append((idx, norm_words[idx][1], norm_words[idx + len(toks) - 1][2]))
+                    if not matches:
+                        # Fallback full scan if beat ordering differs from transcript
+                        for idx in range(0, min(word_cursor, len(norm_words) - len(toks) + 1)):
+                            if all(norm_words[idx + k][0] == toks[k] for k in range(len(toks))):
+                                matches.append((idx, norm_words[idx][1], norm_words[idx + len(toks) - 1][2]))
+                    if not matches:
                         errors.append(f"Beat '{bid}' spokenLine tokens not found in words.json: {line_txt!r}")
                     else:
-                        beat_start_s = a / FPS
+                        best_idx, matched_start, matched_end = min(matches, key=lambda m: abs(m[1] - beat_start_s))
+                        if best_idx >= word_cursor:
+                            word_cursor = best_idx + len(toks)
                         if abs(matched_start - beat_start_s) > 0.35:
                             errors.append(
                                 f"Beat '{bid}' timing drift: beat starts at {beat_start_s:.2f}s vs words.json {matched_start:.2f}s (> 0.35s)"
+                            )
+                        if matched_end > beat_end_s + 0.35:
+                            errors.append(
+                                f"Beat '{bid}' timing overrun: spoken line ends at {matched_end:.2f}s > beat end {beat_end_s:.2f}s (+0.35s)"
                             )
 
         still_entries.append(

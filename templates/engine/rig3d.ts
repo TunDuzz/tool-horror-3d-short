@@ -438,7 +438,7 @@ export function createCharacter3D(cfg: CharacterConfig): Character3D {
   const headRx = 0.092 * hScale * (0.9 + 0.1 * gaunt);
   const headRy = 0.122 * hScale; // total head height = 0.244m
   const headRz = 0.104 * hScale;
-  const shoulderW = 0.164 * hScale * gaunt;
+  const shoulderW = 0.156 * hScale * gaunt;
   const upperArmLen = 0.285 * hScale * armS;
   const forearmLen = 0.265 * hScale * armS;
 
@@ -539,11 +539,11 @@ export function createCharacter3D(cfg: CharacterConfig): Character3D {
   head.add(mkMesh(headGeo, skinMat, "headMesh"));
 
   // Narrow tapered 3D nose bridge (NOT a chibi round sphere!)
-  const noseGeo = new THREE.ConeGeometry(0.016 * hScale, 0.056 * hScale, 4);
+  const noseGeo = new THREE.ConeGeometry(0.015 * hScale, 0.052 * hScale, 4);
   noseGeo.rotateY(Math.PI * 0.25);
-  noseGeo.scale(0.75, 1.0, 1.05);
+  noseGeo.scale(0.75, 1.0, 1.02);
   const noseMesh = mkMesh(noseGeo, skinMat, "noseMesh");
-  noseMesh.position.set(0, -0.008 * hScale, headRz * 0.96);
+  noseMesh.position.set(0, 0.004 * hScale, headRz * 0.96);
   noseMesh.rotation.x = 0.24;
   head.add(noseMesh);
 
@@ -616,23 +616,33 @@ export function createCharacter3D(cfg: CharacterConfig): Character3D {
     const pfx = side < 0 ? "left" : "right";
     const shoulder = mkGroup(`${pfx}Shoulder`);
     const skewY = (ent?.shoulderSkew ?? 0) * side * 0.06;
-    shoulder.position.set(side * shoulderW, chestLen * 0.72 + skewY, 0);
+    shoulder.position.set(side * shoulderW, chestLen * 0.64 + skewY, 0);
     chest.add(shoulder);
 
     const upperArm = mkGroup(`${pfx}UpperArm`);
     shoulder.add(upperArm);
-    const shCapGeo = new THREE.SphereGeometry(0.040 * hScale * gaunt, 10, 8);
-    shCapGeo.scale(1.05, 0.85, 0.95);
+    const shCapGeo = new THREE.SphereGeometry(0.034 * hScale * gaunt, 10, 8);
+    shCapGeo.scale(1.0, 0.80, 0.92);
     const shBall = mkMesh(shCapGeo, topMat, `${pfx}ShoulderCap`);
-    shBall.position.set(-side * 0.008 * hScale, -0.008 * hScale, 0);
+    shBall.position.set(-side * 0.012 * hScale, -0.010 * hScale, 0);
     upperArm.add(shBall);
-    upperArm.add(mkMesh(buildTaperedLimbGeo(0.040 * hScale * gaunt, 0.032 * hScale * gaunt, upperArmLen), topMat, `${pfx}UpperArmMesh`));
+    const shortSleeve = garment === "shirt" || garment === "hospitalGown";
+    upperArm.add(
+      mkMesh(
+        buildTaperedLimbGeo(0.039 * hScale * gaunt, (shortSleeve ? 0.036 : 0.033) * hScale * gaunt, upperArmLen),
+        topMat,
+        `${pfx}UpperArmMesh`,
+      ),
+    );
 
     const forearm = mkGroup(`${pfx}Forearm`);
     forearm.position.set(0, -upperArmLen, 0);
     upperArm.add(forearm);
-    const sleeveMat = garment === "shirt" || garment === "hospitalGown" ? skinMat : topMat;
-    forearm.add(mkMesh(buildTaperedLimbGeo(0.036 * hScale * gaunt, 0.028 * hScale * gaunt, forearmLen), sleeveMat, `${pfx}ForearmMesh`));
+    const sleeveMat = shortSleeve ? skinMat : topMat;
+    // Bare forearm radius sits cleanly inside short-sleeve cuff so elbow never z-fights!
+    const fTop = (shortSleeve ? 0.028 : 0.033) * hScale * gaunt;
+    const fBot = (shortSleeve ? 0.024 : 0.027) * hScale * gaunt;
+    forearm.add(mkMesh(buildTaperedLimbGeo(fTop, fBot, forearmLen), sleeveMat, `${pfx}ForearmMesh`));
 
     const hand = mkGroup(`${pfx}Hand`);
     hand.position.set(0, -forearmLen, 0);

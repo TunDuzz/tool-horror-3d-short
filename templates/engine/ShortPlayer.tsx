@@ -40,7 +40,7 @@ export interface ShortWorld {
   update(shotId: number, frame: number, camera: THREE.PerspectiveCamera, scene: THREE.Scene): THREE.Vector3;
   syncLighting?(shotId: number, frame: number): void;
   getMotionVelocity?(shotId: number, frame: number, aspect: number, heightPx: number): CamVelocity;
-  getLightBlend?(shotId: number, frame: number): { to: LightKey; t: number } | null;
+  getLightBlend?(shotId: number, frame: number): { from?: LightKey; to: LightKey; t: number } | null;
   dispose?(): void;
 }
 
@@ -270,7 +270,7 @@ function Inner<TAssets>({
   const shot = shots.find((s) => s.id === id) ?? shots[0];
   const blend = world.getLightBlend?.(id, f);
   const extraAb = aberrationAt(overlays, f) + lightningAt(overlays, f) * 0.45;
-  gradeFor(fx.grade, shot.light, f, extraAb, blend?.to, blend?.t ?? 0);
+  gradeFor(fx.grade, blend?.from ?? shot.light, f, extraAb, blend?.to, blend?.t ?? 0);
   fx.grain.seed = f;
 
   return <primitive object={world.root} dispose={null} />;

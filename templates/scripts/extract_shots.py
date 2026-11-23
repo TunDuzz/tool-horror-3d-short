@@ -159,15 +159,26 @@ cuts = [[int(f), int(f)] for f in re.findall(r"\{\s*f:\s*(\d+)\s*,\s*cut:\s*true
 
 # Extract planned Whip-Pan directional motion blur bursts (WHIP_PANS array or inline whipPan(..., { f0, dur }))
 whip_planned = []
-for obj in re.findall(r"whipPan\s*\([^)]*\{([^}]*)\}", src, re.DOTALL):
-    f0m = re.search(r"\bf0\s*:\s*([A-Za-z_]\w*|\d+)", obj)
-    dm = re.search(r"\bdur\s*:\s*([A-Za-z_]\w*|\d+)", obj)
-    if f0m:
-        f0 = resolve_num(f0m.group(1), consts)
-        dur = resolve_num(dm.group(1), consts) if dm else 7
-        whip_planned.append([max(0, f0 - 1), f0 + dur + 1])
+for m in re.finditer(r"\bwhipPan\s*\(", src):
+    depth = 1
+    pos = m.end()
+    while pos < len(src) and depth > 0:
+        ch = src[pos]
+        if ch == "(":
+            depth += 1
+        elif ch == ")":
+            depth -= 1
+        pos += 1
+    call_body = src[m.end():pos - 1]
+    for obj in re.findall(r"\{([^}]*)\}", call_body, re.DOTALL):
+        f0m = re.search(r"\bf0\s*:\s*([A-Za-z_]\w*|\d+)", obj)
+        dm = re.search(r"\bdur\s*:\s*([A-Za-z_]\w*|\d+)", obj)
+        if f0m:
+            f0 = resolve_num(f0m.group(1), consts)
+            dur = resolve_num(dm.group(1), consts) if dm else 7
+            whip_planned.append([max(0, f0 - 1), f0 + dur + 1])
 
-wp_arr = re.search(r"(?:export\s+)?const\s+WHIP_PANS[^=]*=\s*\[(.*?)\];", src, re.DOTALL)
+wp_arr = re.search(r"(?:export\s+)?const\s+WHIP_PANS[^=]*=\s*\[(.*?)\](?:\s+as\s+const)?\s*;", src, re.DOTALL)
 if wp_arr:
     for obj in re.findall(r"\{([^}]*)\}", wp_arr.group(1), re.DOTALL):
         f0m = re.search(r"\bf0\s*:\s*([A-Za-z_]\w*|\d+)", obj)
@@ -179,7 +190,7 @@ if wp_arr:
 
 # Extract planned foreground POV prop-raise intervals (e.g. bright Phone3D / Flashlight3D entering close to lens)
 pov_planned = []
-pm_arr = re.search(r"(?:export\s+)?const\s+POV_MOTIONS[^=]*=\s*\[(.*?)\];", src, re.DOTALL)
+pm_arr = re.search(r"(?:export\s+)?const\s+POV_MOTIONS[^=]*=\s*\[(.*?)\](?:\s+as\s+const)?\s*;", src, re.DOTALL)
 if pm_arr:
     for a_tok, b_tok in re.findall(r"\[\s*([A-Za-z_]\w*|\d+)\s*,\s*([A-Za-z_]\w*|\d+)\s*\]", pm_arr.group(1)):
         a0, b0 = resolve_num(a_tok, consts), resolve_num(b_tok, consts)

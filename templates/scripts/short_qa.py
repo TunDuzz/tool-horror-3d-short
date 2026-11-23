@@ -119,8 +119,10 @@ for idx in range(1, len(shots)):
         g_prev = (F[cut_f - 2].astype(np.float32) * (1.0 / 255.0)) @ w_luma
         g_cur = (F[cut_f + 2].astype(np.float32) * (1.0 / 255.0)) @ w_luma
         corr = float(np.corrcoef(g_prev.ravel(), g_cur.ravel())[0, 1])
-        # For continuous POV in-room lighting changes (e.g. lamp blowing out), only flag if non-POV hard cut
-        if np.isfinite(corr) and corr > 0.88 and not (ps in POV_SCALES and cs in POV_SCALES):
+        # Exempt continuous POV transitions across distinct POV sub-scales (e.g. POV -> POV_PROP / POV_DOWN -> POV_CU),
+        # while still catching frozen-camera identical-scale POV -> POV filter jump-cuts!
+        distinct_pov_transition = ps in POV_SCALES and cs in POV_SCALES and ps != cs
+        if np.isfinite(corr) and corr > 0.88 and not distinct_pov_transition:
             directing_warns.append(f"shot {prev_s['id']}->{cur_s['id']} @f{cut_f} near-identical layout corr={corr:.2f} (static-camera jump-cut)")
 if directing_warns:
     R.append("DIRECTING_WARNS " + "; ".join(directing_warns))

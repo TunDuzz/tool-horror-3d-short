@@ -147,9 +147,9 @@ export function buildRuralFuneralRoom(): FuneralRoomSet {
   // 3. Woven reed mats (chiếu cói) on the floor for vigil sitting
   b.add(boxGeo(V(-0.92, 0, -0.52), V(0.72, 0.022, 2.38), 0), matTex);
 
-  // 4. Low offering table holding oil lamp & incense burner right of protagonist
+  // 4. Low offering table holding oil lamp & incense burner visible on right side of vigil area
   const [tx, , tz] = ANCHORS.OIL_LAMP_TABLE;
-  addSimpleTable(b, tableMat, trussMat, [tx, 0, tz], 0.92, 0.62, 0.56);
+  addSimpleTable(b, tableMat, trussMat, [tx, 0, tz], 0.72, 0.50, 0.56);
 
   // 5. HERO PROP: Lacquered wooden coffin (linh cữu) with gold trim band on trestle legs
   const [cx, , cz] = ANCHORS.COFFIN;

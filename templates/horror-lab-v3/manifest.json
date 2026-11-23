@@ -69,7 +69,7 @@
       "lightState": {
         "preset": "warmLamp",
         "lampsOn": ["oilLamp", "altarCandle"],
-        "doorMoonlight": true,
+        "doorMoonlight": false,
         "feetShadow": false
       },
       "castStates": {
