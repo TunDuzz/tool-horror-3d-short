@@ -12,6 +12,9 @@ from dsp import SR, ns, rng, pan, place, fades, make_ir, convolve_st, dbg
 from horror_instruments import (
     sub_drone, bowed_metal, scary_musicbox, riser,
     stinger, heartbeat, horror_strings, ambience_night, whisper_ghost, m2f,
+    footsteps_wood, rope_strain, door_slam_bolt, wet_drip, nail_scrape, lantern_sputter,
+    reverse_suck, shepard_tension, tinnitus_ring, whoosh_dark, entity_rattle, lightning_close,
+    folk_wail, woodblock_omen,
 )
 from mix_base import load_voice, load_words, speech_spans, duck_db, master_mix, write_mix_and_stems, ffmpeg_ebur
 ```
@@ -71,10 +74,37 @@ place(sfx, ambience_night(dur=shot_dur, kind="rain", vel=0.28, r=r), t_shot_star
 place(sfx, ambience_night(dur=4.5, kind="thunder", vel=0.85, r=r), t_lightning)
 ```
 
-### E. Accelerating Heartbeat During Vertigo (`dollyZoom`)
+### E. Accelerating Heartbeat + Shepard Tension During Vertigo (`dollyZoom`)
 ```python
-hb = heartbeat(bpm=68.0, dur=6.0, vel=0.72, r=r, accel_to=124.0)
-place(sfx, pan(hb, 0.0), t_vertigo_start)
+place(sfx, pan(heartbeat(bpm=66.0, dur=8.0, vel=0.55, r=r, accel_to=128.0), 0.0), t_vertigo_start)
+place(music, shepard_tension(dur=8.0, vel=0.24, r=r, rate_oct_per_sec=0.09), t_vertigo_start)
+```
+
+### F. Vacuum Reverse Suck -> Dead Silence -> Close Lightning + Entity Rattle Climax
+```python
+# Breath-stealing reverse reverb cutting dead right into Dead Silence
+place(sfx, reverse_suck(dur=1.05, vel=0.60, r=r, f_base=310.0), t_silence_start - 1.05)
+# Two-stage close lightning + sub boom + wet inhuman entity vocalization
+place(sfx, lightning_close(dur=4.3, vel=0.90, r=r), t_climax)
+place(sfx, stinger("boom", vel=0.75, r=r, dur=2.6, f0=45.0), t_climax)
+place(sfx, entity_rattle(dur=2.1, vel=0.52, r=r, pan_from=-0.6, pan_to=0.6, kind="drowned"), t_climax + 0.35)
+```
+
+### G. Dual-Space Acoustic Occlusion (Exterior Storm -> Bolted Interior Shack)
+```python
+# Slam heavy door + wooden crossbar bolt, then low-pass outside rain behind wooden walls!
+place(sfx, door_slam_bolt(vel=0.90, r=r, bolt_delay=0.34), t_door_slam)
+rain_muffled = lp(ambience_night(dur=15.0, kind="rain", vel=0.18, r=r), 420.0, order=3)
+place(sfx, rain_muffled, t_interior_start)
+place(sfx, wet_drip([0.3, 1.6, 2.9, 4.1], vel=0.36, r=r), t_twist_start)
+place(sfx, nail_scrape(dur=1.4, vel=0.22, r=r, surface="glass", pan_pos=-0.7), t_window_hand)
+place(sfx, tinnitus_ring(dur=4.5, vel=0.16, f=4080.0, r=r), t_twist_reveal)
+```
+
+### H. Vietnamese Folk Horror Signature (Mõ gỗ + Đàn nhị + Final Voice Halo)
+```python
+place(music, woodblock_omen([0.2, 2.2, 4.3], vel=0.28, r=r, f=560.0), 0.0)
+place(music, folk_wail(f0=293.66, dur=4.4, vel=0.24, r=r, bend_semi=-2.4), 4.5)
 ```
 
 ## 3. Ducking & Mastering Template

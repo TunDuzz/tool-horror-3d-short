@@ -1,8 +1,7 @@
-# Frame-by-frame QA of a rendered vertical short (every frame at 30 fps): specs, loudness, per-frame luma / saturation /
-# motion, black-white-frozen-pop detection (ignoring planned flashes and crossfades), per-shot colour stats and 2 s
-# contact sheets (60 frames each, frame numbers burned in for the reviewer only).
+# Dark-Aware & Directing-Aware Frame-by-Frame QA for Horror 3D videos (9:16 & 16:9 @ 30 fps).
+# Checks: specs, loudness, silences, unplanned black/white/frozen/pops, dark readability (luma/p98),
+# consecutive shot-scale/angle repetition warnings, and 2 s contact sheets.
 # Usage: python scripts/short_qa.py <video.mp4> <outdir> [shots.json]
-#   shots.json: {"shots":[{"id":1,"a":0,"b":130}, ...], "flash":[130,134], "xfade":[[1131,1137], ...], "planned":[[...]]}
 import json
 import os
 import subprocess
@@ -31,13 +30,24 @@ os.makedirs(out, exist_ok=True)
 run = lambda *a: subprocess.run(a, capture_output=True, text=True)
 R = []
 
-pr = json.loads(run("ffprobe", "-v", "error", "-show_entries", "stream=codec_type,codec_name,width,height,r_frame_rate,nb_frames,sample_rate,channels:format=duration", "-of", "json", vid).stdout)
+pr = json.loads(
+    run(
+        "ffprobe",
+        "-v",
+        "error",
+        "-show_entries",
+        "stream=codec_type,codec_name,width,height,r_frame_rate,nb_frames,sample_rate,channels:format=duration",
+        "-of",
+        "json",
+        vid,
+    ).stdout
+)
 v = next(s for s in pr["streams"] if s["codec_type"] == "video")
 vw, vh = int(v["width"]), int(v["height"])
 is_wide = vw > vh
 au = [s for s in pr["streams"] if s["codec_type"] == "audio"]
-R.append(f"SPECS {vw}x{vh} {v['r_frame_rate']} fps, {v.get('nb_frames')} frames, {float(pr['format']['duration']):.3f} s; audio: "
-         + ", ".join(f"{s['codec_name']} {s['sample_rate']} Hz {s['channels']}ch" for s in au) if au else "NONE")
+audio_desc = ", ".join(f"{s['codec_name']} {s['sample_rate']} Hz {s['channels']}ch" for s in au) if au else "NONE"
+R.append(f"SPECS {vw}x{vh} {v['r_frame_rate']} fps, {v.get('nb_frames')} frames, {float(pr['format']['duration']):.3f} s; audio: {audio_desc}")
 if au:
     e = run("ffmpeg", "-i", vid, "-map", "0:a:0", "-af", "ebur128=peak=true", "-f", "null", "-").stderr
     tail = e[e.rfind("Summary:"):]
@@ -51,7 +61,7 @@ raw = subprocess.run(["ffmpeg", "-v", "error", "-i", vid, "-vf", f"scale={W}:{H}
 F = np.frombuffer(raw, np.uint8).reshape(-1, H, W, 3)
 n = len(F)
 f32 = F.astype(np.float32) / 255
-luma = (f32 @ np.array([0.2126, 0.7152, 0.0722], np.float32))
+luma = f32 @ np.array([0.2126, 0.7152, 0.0722], np.float32)
 mx, mn = f32.max(-1), f32.min(-1)
 sat = np.where(mx > 0.06, (mx - mn) / np.maximum(mx, 1e-6), 0)
 L = luma.reshape(n, -1)
@@ -59,8 +69,8 @@ stats = {"mean": L.mean(1), "std": L.std(1), "p2": np.percentile(L, 2, 1), "p98"
 diff = np.abs(np.diff(F.astype(np.int16), axis=0)).mean(axis=(1, 2, 3))
 med = np.array([np.median(diff[max(0, i - 8):i + 9]) for i in range(len(diff))])
 pops = [i + 1 for i in range(len(diff)) if diff[i] > 3 * med[i] + 1.0 and (i + 1) not in planned]
-black = [i for i in range(n) if stats["mean"][i] < 0.04 and i not in planned_black_set]
-planned_black_hits = [i for i in range(n) if stats["mean"][i] < 0.04 and i in planned_black_set]
+black = [i for i in range(n) if stats["mean"][i] < 0.035 and i not in planned_black_set]
+planned_black_hits = [i for i in range(n) if stats["mean"][i] < 0.035 and i in planned_black_set]
 white = [i for i in range(n) if stats["mean"][i] > 0.93 and i not in planned]
 frozen, run_start = [], None
 for i in range(len(diff)):
@@ -78,13 +88,40 @@ R.append(f"FRAMES {n}; unplanned black {black[:20]} (planned black {len(planned_
 R.append(f"POPS (unplanned frame-diff spikes > 3x local median): {pops[:40]}")
 R.append(f"MOTION mean diff {diff.mean():.2f}; frames with diff<0.3 (held): {int((diff < 0.3).sum())} ({(diff < 0.3).mean() * 100:.0f}%)")
 
+# Directing check: flag consecutive shots repeating the same scale or cutting with almost identical layout
+directing_warns = []
+for idx in range(1, len(shots)):
+    prev_s, cur_s = shots[idx - 1], shots[idx]
+    if prev_s.get("scale") and prev_s.get("scale") == cur_s.get("scale"):
+        directing_warns.append(f"shot {prev_s['id']}->{cur_s['id']} repeats scale '{cur_s['scale']}'")
+    cut_f = cur_s["a"]
+    if 2 <= cut_f < n - 2 and cut_f not in planned_black_set:
+        # Compare luminance structure (grayscale layout) across cut to catch static-angle filter jump-cuts
+        g_prev = luma[cut_f - 2]
+        g_cur = luma[cut_f + 2]
+        corr = float(np.corrcoef(g_prev.ravel(), g_cur.ravel())[0, 1])
+        if np.isfinite(corr) and corr > 0.88:
+            directing_warns.append(f"shot {prev_s['id']}->{cur_s['id']} @f{cut_f} near-identical layout corr={corr:.2f} (static-camera jump-cut)")
+if directing_warns:
+    R.append("DIRECTING_WARNS " + "; ".join(directing_warns))
+else:
+    R.append("DIRECTING_WARNS none")
+
 R.append("\nPER SHOT  (luma mean / std / p2 / p98 / saturation mean, medians over the shot)")
 for s in shots or [{"id": 0, "a": 0, "b": n}]:
     a, b = s["a"], min(s["b"], n)
     if a >= b:
         continue
-    warn = " [WARN: crushed darks p98<0.35]" if float(np.median(stats["p98"][a:b])) < 0.35 else ""
-    R.append(f"  shot {s['id']:>2} f{a}-{b - 1}: " + " / ".join(f"{np.median(stats[k][a:b]):.3f}" for k in ("mean", "std", "p2", "p98", "sat")) + warn)
+    med_mean = float(np.median(stats["mean"][a:b]))
+    med_p98 = float(np.median(stats["p98"][a:b]))
+    warns = []
+    if med_p98 < 0.38:
+        warns.append("crushed darks p98<0.38")
+    if med_mean < 0.08:
+        warns.append("too dark mean<0.08")
+    tag = f" [{s['scale']}]" if s.get("scale") else ""
+    warn_str = f" [WARN: {', '.join(warns)}]" if warns else ""
+    R.append(f"  shot {s['id']:>2}{tag:<6} f{a}-{b - 1}: " + " / ".join(f"{np.median(stats[k][a:b]):.3f}" for k in ("mean", "std", "p2", "p98", "sat")) + warn_str)
 np.savez(os.path.join(out, "perframe.npz"), diff=diff, **stats)
 
 cw, ch, cols, rows = (192, 108, 6, 10) if is_wide else (108, 192, 10, 6)

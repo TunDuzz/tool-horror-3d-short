@@ -6,7 +6,7 @@ import os
 import re
 import sys
 
-VALID_LIGHTS = {"day", "golden", "night", "candle", "storm", "eerie", "blood"}
+VALID_LIGHTS = {"night", "candle", "storm", "eerie", "blood"}
 VALID_ASPECTS = {"9:16", "16:9"}
 VALID_TRANSITION_PREFIXES = ("cut", "fade", "xfade", "blackout", "fadeblack", "match_cut")
 

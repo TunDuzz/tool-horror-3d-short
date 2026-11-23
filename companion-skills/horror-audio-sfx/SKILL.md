@@ -1,6 +1,6 @@
 ---
 name: horror-audio-sfx
-description: Synthesize copyright-free procedural horror sound design and music scores in Python (sub-bass drones, bowed waterphone metal, detuned music box, risers, stingers, heartbeats, tremolo strings, night ambience, and spectral whispers), aligned to words.json with Dead Silence pacing and -15 LUFS mastering. Use when creating audio stems or mixes for a horror short or multi-part horror series.
+description: Use when creating procedural copyright-free horror sound design, music stems, Dead Silence pacing, or -15 LUFS audio mixes in Python (numpy/scipy) aligned to words.json for a horror short or multi-part horror series.
 ---
 
 # Procedural Horror Audio & SFX (`shorts-project/audio/`)
@@ -17,16 +17,11 @@ Zero-copyright, 100% deterministic sound synthesis powered by `numpy` and `scipy
 ## Shared Modules
 
 - `shorts-project/audio/dsp.py`: `SR`, `ns`, `tt`, `rng`, `lp`, `hp`, `bp`, `peq`, `shelf`, `reson`, `resbank`, `colored`, `smooth_noise`, `ramp`, `fades`, `curve`, `shape`, `phase`, `modal`, `pan`, `st`, `place`, `widen`, `make_ir`, `convolve_st`.
-- `shorts-project/audio/horror_instruments.py`:
-  - `sub_drone(f, dur, vel, r, beat_hz, dark, att, rel)` -> stereo ominous sub rumble
-  - `bowed_metal(f, dur, vel, r, bend_semi, att, rel)` -> mono waterphone / bowed metal screech
-  - `scary_musicbox(f, vel, r, dur, detune_cents, wow_hz, wow_cents)` -> mono detuned warbling tine
-  - `riser(dur, f0, f1, vel, r, hard_cut)` -> stereo tension riser (with optional sharp dead-silence cutoff)
-  - `stinger(kind, vel, r, dur, f0)` -> `"boom" | "braam" | "shriek" | "cluster_stab"`
-  - `heartbeat(bpm, dur, vel, r, accel_to)` -> mono accelerating lub-dub thump
-  - `horror_strings(freqs, dur, vel, r, att, rel, trem_hz, sul_pont)` -> stereo dissonant tremolo bed
-  - `ambience_night(dur, kind, vel, r)` -> `"wind" | "rain" | "room_tone" | "creak" | "thunder" | "clock"`
-  - `whisper_ghost(dur, vel, r, pan_from, pan_to)` -> stereo sweeping breathy phantom whisper
+- `shorts-project/audio/horror_instruments.py` (23 procedural horror instruments & Foley SFX):
+  - **Core Score & Ambience (9):** `sub_drone`, `bowed_metal`, `scary_musicbox`, `riser`, `stinger` (`boom|braam|shriek|cluster_stab`), `heartbeat`, `horror_strings`, `ambience_night` (`wind|rain|room_tone|creak|thunder|clock`), `whisper_ghost`.
+  - **Action Foley Pack (6):** `footsteps_wood` (slow cautious or frantic fleeing pier/floorboard steps), `rope_strain` (taut hemp fiber creak), `door_slam_bolt` (heavy timber door slam + wooden crossbar drop), `wet_drip` (cold echoing liquid drops), `nail_scrape` (fingernails dragging on dark glass/wood), `lantern_sputter` (oil flame crackle & optional snuff puff).
+  - **Build-Up, Climax & Folk Horror Pack (8):** `reverse_suck` (vacuum reverse-reverb pre-scare inhale), `shepard_tension` (psychoacoustic endlessly rising pitch illusion), `tinnitus_ring` (post-shock high-frequency ear ringing), `whoosh_dark` (sub-air cut transition whoosh), `entity_rattle` (`drowned` wet throat croak / `shriek_gasp` distorted lunge screech), `lightning_close` (2-stage electric arc snap -> chest-shaking sub thunder), `folk_wail` (mourning microtonal Vietnamese bowed *đàn nhị*), `woodblock_omen` (hollow dry wooden *mõ* omen knocks).
+- **Dual-Space Acoustic IR & Occlusion:** Build 1 `make_ir()` per setting (`wharf_ir` wide `rt60 ~2.35s` vs. `shack_ir` tight `rt60 ~0.65s`), route wet sends per era, low-pass (`lp 380-420 Hz`) exterior storm/rain behind closed doors/walls on interior cuts, and optionally add a faint `-18 dB` pre-delayed reverb halo strictly on the chilling final twist sentence.
 - `shorts-project/audio/mix_base.py`: `cached`, `load_voice`, `load_words`, `speech_spans`, `duck_db`, `master_mix`, `write_mix_and_stems`, `ffmpeg_ebur`.
 
 ## Standard Mixing Pipeline (Per Video or Per Part)

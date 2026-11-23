@@ -1,5 +1,5 @@
-// Remotion Composition entry for the Vietnamese "Ma Da" horror short (MadaShort).
-// 9:16 vertical format (1080x1920 logical canvas, 2K export via --scale 1.3333).
+// Remotion Composition entry for the Vietnamese "Ma Da" horror short v2 (Gothic Ink-Noir x Shadow-Depth).
+// 9:16 vertical format (1080x1920 logical canvas; use integer scales --scale 1, 1.25, or 1.5).
 
 import React from "react";
 import { ShortPlayer } from "../engine";
@@ -14,8 +14,8 @@ export const MadaShort: React.FC = () => (
     dof={DOF}
     xfade={XFADE}
     overlays={OVERLAYS}
-    grainAmount={0.015}
-    background="#070b14"
+    grainAmount={0.018}
+    background="#06080f"
     createWorld={() => new MadaWorld()}
   />
 );

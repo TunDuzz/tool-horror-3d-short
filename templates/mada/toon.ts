@@ -1,350 +1,337 @@
-// Project-local outfits, character hooks, and 2D folklore FX for the Vietnamese "Ma Da" horror short.
-// Strictly outside src/engine/ — uses Outfit hooks and Pen canvas helpers.
+// Project-local Gothic Ink-Noir outfits, props, and drowned clawed hand FX for "Ma Da" v2.
+// Strictly outside src/engine/ via Outfit hooks and Pen helpers.
 
-import { BodyCtx, INK, Outfit, P2, Pen, SH_CLOTH, TorsoCtx, mul } from "../engine";
+import { BodyCtx, HeadCtx, INK, Outfit, P2, Pen, SH_CLOTH, TorsoCtx, mul } from "../engine";
 
+/** Tapered iron storm lantern hanging from Ông Tư's hand (matches 3D storm lantern silhouette). */
 const drawStormLantern = (p: Pen, hand: P2, ctx: BodyCtx) => {
   const { u, ow } = ctx;
   const hx = hand[0], hy = hand[1];
-  const lx = hx + 4 * u, ly = hy + 30 * u;
-  // Iron handle ring & bail
-  p.stroke(
-    [
-      [hx - 3 * u, hy + 2 * u],
-      [lx, ly - 17 * u],
-      [hx + 4 * u, hy + 2 * u],
-    ],
-    2.4 * u,
-    INK,
-  );
-  // Top chimney cap
-  p.poly(
-    [
-      [lx - 7 * u, ly - 17 * u],
-      [lx + 7 * u, ly - 17 * u],
-      [lx + 10 * u, ly - 12 * u],
-      [lx - 10 * u, ly - 12 * u],
-    ],
-    "#252932",
-    ow * 0.65,
-  );
-  // Outer protective cage / frame
-  p.poly(
-    [
-      [lx - 10 * u, ly - 12 * u],
-      [lx + 10 * u, ly - 12 * u],
-      [lx + 12 * u, ly + 8 * u],
-      [lx - 12 * u, ly + 8 * u],
-    ],
-    "#2b303a",
-    ow * 0.65,
-  );
-  // Warm glass globe
-  p.poly(
-    [
-      [lx - 7 * u, ly - 9 * u],
-      [lx + 7 * u, ly - 9 * u],
-      [lx + 8 * u, ly + 5 * u],
-      [lx - 8 * u, ly + 5 * u],
-    ],
-    "#ffcf70",
-    1.5 * u,
-  );
-  // Bright flame core
-  p.dot(lx, ly - 1.5 * u, 3.8 * u, "#fff7d6");
-  // Wire guard ribs
-  p.stroke([[lx - 8 * u, ly - 2 * u], [lx + 8 * u, ly - 2 * u]], 1.4 * u, INK);
-  // Bottom oil reservoir base
-  p.poly(
-    [
-      [lx - 11 * u, ly + 8 * u],
-      [lx + 11 * u, ly + 8 * u],
-      [lx + 9 * u, ly + 13 * u],
-      [lx - 9 * u, ly + 13 * u],
-    ],
-    "#20242c",
-    ow * 0.65,
-  );
+  const lx = hx + 5 * u, ly = hy + 38 * u;
+  // Iron bail ring
+  p.stroke([[hx - 4 * u, hy + 2 * u], [lx, ly - 20 * u], [hx + 5 * u, hy + 2 * u]], 2.2 * u, INK);
+  // Domed chimney & cap
+  p.poly([[lx - 6 * u, ly - 20 * u], [lx + 6 * u, ly - 20 * u], [lx + 11 * u, ly - 12 * u], [lx - 11 * u, ly - 12 * u]], "#1f232b", ow * 0.6);
+  // Tapered iron cage
+  p.poly([[lx - 11 * u, ly - 12 * u], [lx + 11 * u, ly - 12 * u], [lx + 8.5 * u, ly + 8 * u], [lx - 8.5 * u, ly + 8 * u]], "#1c2028", ow * 0.6);
+  // Warm amber glowing glass
+  p.poly([[lx - 7.5 * u, ly - 9.5 * u], [lx + 7.5 * u, ly - 9.5 * u], [lx + 6 * u, ly + 6 * u], [lx - 6 * u, ly + 6 * u]], "#f5b854", 1.5 * u);
+  p.dot(lx, ly - 2 * u, 3.8 * u, "#fff6d6");
+  p.stroke([[lx, ly - 12 * u], [lx, ly + 8 * u]], 1.4 * u, INK);
+  // Oil reservoir base
+  p.poly([[lx - 10 * u, ly + 8 * u], [lx + 10 * u, ly + 8 * u], [lx + 9 * u, ly + 13 * u], [lx - 9 * u, ly + 13 * u]], "#181b22", ow * 0.6);
 };
 
-const drawBaBaScarfAndButtons = (p: Pen, ctx: TorsoCtx) => {
-  const { tcx, chin, torsoBot, W, u, ow } = ctx;
-  // Traditional Vietnamese checkered khăn rằn draped around neck
-  const scarfL: P2[] = [
-    [tcx - 0.24 * W, chin + 2 * u],
-    [tcx - 0.12 * W, chin + 4 * u],
-    [tcx - 0.15 * W, chin + 34 * u],
-    [tcx - 0.28 * W, chin + 31 * u],
-  ];
-  const scarfR: P2[] = [
-    [tcx + 0.12 * W, chin + 4 * u],
-    [tcx + 0.24 * W, chin + 2 * u],
-    [tcx + 0.28 * W, chin + 29 * u],
-    [tcx + 0.15 * W, chin + 32 * u],
-  ];
-  p.poly(scarfL, "#d2cbc0", ow * 0.55);
-  p.poly(scarfR, "#d2cbc0", ow * 0.55);
-  for (const sy of [10, 18, 25]) {
-    p.stroke([[tcx - 0.26 * W, chin + sy * u], [tcx - 0.14 * W, chin + (sy + 2) * u]], 2.0 * u, "#23252a");
-    p.stroke([[tcx + 0.14 * W, chin + (sy + 1) * u], [tcx + 0.26 * W, chin + sy * u]], 2.0 * u, "#23252a");
+/** Authentic Vietnamese dark-checkered khăn rằn draped naturally around the neck + áo bà ba placket & buttons. */
+const drawBaBaAndKhanRan = (p: Pen, ctx: TorsoCtx) => {
+  const { tcx, chin, torsoBot, W, u, ow, side, back, time, wind } = ctx;
+  if (back) return;
+  const shY = chin + 20 * u;
+  const sway = Math.sin(time * 2.8) * (3 + 7 * wind) * u;
+  if (side) {
+    // Draped scarf around collar in profile
+    const wrap: P2[] = [
+      [tcx - 16 * u, shY - 6 * u],
+      [tcx + 22 * u, shY - 2 * u],
+      [tcx + 24 * u, shY + 18 * u],
+      [tcx - 14 * u, shY + 14 * u],
+    ];
+    p.poly(wrap, "#8f8a82", ow * 0.5);
+    for (const sx of [-6, 4, 14]) {
+      p.stroke([[tcx + sx * u, shY - 4 * u], [tcx + (sx - 2) * u, shY + 15 * u]], 1.8 * u, "#1e1f24");
+    }
+    return;
   }
-  // Áo bà ba center seam & wooden buttons
-  p.stroke([[tcx, chin + 6 * u], [tcx, torsoBot - 3 * u]], 1.8 * u, INK);
-  for (const f of [0.28, 0.50, 0.72]) {
-    const by = chin + (torsoBot - chin) * f;
-    p.dot(tcx + 3.5 * u, by, 2.1 * u, "#8f7a62");
+  // Collar wrap around gaunt neck + asymmetric hanging checkered scarf tail (NOT soldier epaulets!)
+  const collar: P2[] = [
+    [tcx - 28 * u, shY - 8 * u],
+    [tcx + 28 * u, shY - 8 * u],
+    [tcx + 32 * u, shY + 12 * u],
+    [tcx, shY + 20 * u],
+    [tcx - 32 * u, shY + 12 * u],
+  ];
+  const tail: P2[] = [
+    [tcx - 24 * u, shY + 8 * u],
+    [tcx - 4 * u, shY + 14 * u],
+    [tcx - 10 * u + sway, shY + 88 * u],
+    [tcx - 30 * u + sway, shY + 82 * u],
+  ];
+  p.poly(tail, "#8d8880", ow * 0.55);
+  p.clip(tail, () => {
+    for (let y = 16; y <= 84; y += 11) {
+      p.stroke([[tcx - 34 * u + sway, shY + y * u], [tcx, shY + (y + 3) * u]], 2.1 * u, "#1e2026");
+    }
+    p.stroke([[tcx - 16 * u, shY + 10 * u], [tcx - 20 * u + sway, shY + 86 * u]], 1.8 * u, "#1e2026");
+  });
+  p.poly(collar, "#9c968d", ow * 0.55);
+  for (const sx of [-18, -6, 6, 18]) {
+    p.stroke([[tcx + sx * u, shY - 8 * u], [tcx + sx * u, shY + 16 * u]], 1.8 * u, "#1e2026");
+  }
+  // Áo bà ba front seam & dark wooden buttons
+  p.stroke([[tcx + 2 * u, shY + 20 * u], [tcx + 2 * u, torsoBot - 6 * u]], 1.9 * u, INK);
+  for (const f of [0.34, 0.52, 0.70]) {
+    p.dot(tcx + 7 * u, chin + (torsoBot - chin) * f, 2.3 * u, "#786552");
   }
 };
 
-/** Ông Tư — elderly river watchman carrying a storm lantern on the wharf. */
+/** Weathered Vietnamese nón lá / frayed fisherman cap worn by Ông Tư (shadowing his brow for dark chiaroscuro!). */
+const drawFishermanHat = (p: Pen, ctx: HeadCtx) => {
+  const { cx, crown, W, HH, u, ow, light, side } = ctx;
+  const col = "#473c30";
+  const brimY = crown + 0.28 * HH;
+  if (side) {
+    const cap: P2[] = [
+      [cx - 0.54 * W, brimY + 2 * u],
+      [cx - 0.44 * W, crown - 0.04 * HH],
+      [cx + 0.14 * W, crown - 0.08 * HH],
+      [cx + 0.52 * W, brimY],
+    ];
+    p.gradFill(cap, col, mul(col, SH_CLOTH), light);
+    p.hatch(cap, light, 8, 1.3);
+    p.poly(cap, null, ow);
+    // Low shadowed brim shading eyes
+    p.poly([[cx + 0.28 * W, brimY - 3 * u], [cx + 0.84 * W, brimY + 8 * u], [cx + 0.34 * W, brimY + 11 * u]], "#2a231c", ow * 0.8);
+  } else {
+    const cap: P2[] = [
+      [cx - 0.54 * W, brimY],
+      [cx - 0.42 * W, crown - 0.05 * HH],
+      [cx, crown - 0.11 * HH],
+      [cx + 0.42 * W, crown - 0.05 * HH],
+      [cx + 0.54 * W, brimY],
+    ];
+    p.gradFill(cap, col, mul(col, SH_CLOTH), light);
+    p.hatch(cap, light, 8, 1.3);
+    p.poly(cap, null, ow);
+    p.poly([[cx - 0.58 * W, brimY], [cx, brimY - 4 * u], [cx + 0.58 * W, brimY], [cx + 0.44 * W, brimY + 12 * u], [cx - 0.44 * W, brimY + 12 * u]], "#2a231c", ow * 0.8);
+  }
+};
+
+/** Long sodden matted black hair & dripping water-weed curtains hanging over Ma Da's face and gaunt shoulders! */
+const drawMaDaWetHair = (p: Pen, ctx: HeadCtx) => {
+  const { cx, hc, crown, W, HH, u, ow, light, side, back, time, wind } = ctx;
+  const sway = Math.sin(time * 2.7 + 0.5) * (5 + 12 * wind) * u;
+  const col = "#10171a";
+  if (back) return;
+  if (side) {
+    // Matted dripping hair cascading forward over brow & down back
+    const backMass: P2[] = [
+      [cx + 0.48 * W, hc - 0.18 * HH],
+      [cx + 0.15 * W, crown - 0.08 * HH],
+      [cx - 0.44 * W, crown - 0.05 * HH],
+      [cx - 0.64 * W, hc + 0.05 * HH],
+      [cx - 0.72 * W + sway, hc + 1.35 * HH],
+      [cx - 0.36 * W + sway * 0.7, hc + 1.48 * HH],
+      [cx - 0.14 * W + sway * 0.4, hc + 0.72 * HH],
+      [cx + 0.08 * W, hc - 0.06 * HH],
+    ];
+    p.gradFill(backMass, col, "#070b0d", light);
+    p.poly(backMass, null, ow * 0.85);
+    // Clumped wet locks hanging over forehead & cheek
+    for (const [dx, len] of [[0.32, 0.52], [0.16, 0.82], [-0.04, 1.05]] as const) {
+      p.stroke(
+        [
+          [cx + dx * W, crown + 0.15 * HH],
+          [cx + (dx + 0.06) * W + sway * 0.3, hc + len * 0.5 * HH],
+          [cx + (dx - 0.02) * W + sway * 0.5, hc + len * HH],
+        ],
+        3.2 * u,
+        "#0b1114",
+      );
+    }
+    return;
+  }
+  // Front: long dripping curtains flanking pale skull + straggly wet strands across shadowed eyes
+  const mass: P2[] = [
+    [cx - 0.68 * W + sway, hc + 1.45 * HH],
+    [cx - 0.62 * W, hc - 0.12 * HH],
+    [cx - 0.42 * W, crown - 0.06 * HH],
+    [cx, crown - 0.12 * HH],
+    [cx + 0.42 * W, crown - 0.06 * HH],
+    [cx + 0.62 * W, hc - 0.12 * HH],
+    [cx + 0.68 * W + sway, hc + 1.42 * HH],
+    [cx + 0.46 * W + sway * 0.6, hc + 1.18 * HH],
+    [cx + 0.42 * W, hc - 0.05 * HH],
+    [cx + 0.24 * W, hc - 0.18 * HH],
+    [cx + 0.06 * W, hc - 0.04 * HH],
+    [cx - 0.14 * W, hc - 0.20 * HH],
+    [cx - 0.34 * W, hc - 0.05 * HH],
+    [cx - 0.46 * W + sway * 0.6, hc + 1.22 * HH],
+  ];
+  p.gradFill(mass, col, "#06090c", light);
+  p.poly(mass, null, ow * 0.85);
+  // Thin dripping mud-tangled strands falling past eye sockets + black river-ooze drips
+  for (const [fx, len] of [[-0.28, 0.68], [-0.05, 0.52], [0.22, 0.76], [0.36, 0.92]] as const) {
+    p.stroke(
+      [
+        [cx + fx * W, crown + 0.18 * HH],
+        [cx + fx * W + sway * 0.25, hc + len * HH],
+      ],
+      2.6 * u,
+      "#070b0d",
+    );
+    p.drip(cx + fx * W + sway * 0.25, hc + len * HH, 18 * u, 1.6 * u, "rgba(5,3,8,0.85)");
+  }
+};
+
+/** Ông Tư — gaunt weathered Mekong river watchman carrying a storm lantern. */
 export const ONG_TU: Outfit = {
-  jacket: "#483a30",
-  pants: "#22252e",
-  boots: "#1c1816",
-  hat: "cap",
-  cap: "#57483b",
-  hasBrim: true,
-  skin: "#deb798",
-  belt: null,
-  torsoDetail: drawBaBaScarfAndButtons,
+  build: "elder",
+  jacket: "#3c322a",
+  pants: "#1d2028",
+  boots: "#141114",
+  coatLen: 0.32,
+  skin: "#c4a38a",
+  ageLines: true,
+  hat: null,
+  hatOn: drawFishermanHat,
+  torsoDetail: drawBaBaAndKhanRan,
   inFrontHand: drawStormLantern,
 };
 
-/** Ông Tư after dropping his lantern during the escape into the watchman's shack. */
+/** Ông Tư inside the watchman's shack (lantern dropped outside during his escape). */
 export const ONG_TU_SHACK: Outfit = {
   ...ONG_TU,
   inFrontHand: undefined,
 };
 
-/** Ma Da — drowned water-spirit with sodden black hair, river weed strands, and mud-stained tattered garments. */
+/** Ma Da — gaunt drowned water-spirit with spindly clawed limbs, tattered sodden shroud, and dripping mud hair. */
 export const MA_DA_GHOST: Outfit = {
-  jacket: "#3a5054",
-  pants: "#27373a",
-  boots: "#1d292b",
-  dress: "#31464a",
-  skin: "#b2cad0",
-  hat: "hair",
-  hair: "#172224",
-  belt: null,
+  build: "gaunt",
+  uncanny: true,
+  jacket: "#243538",
+  pants: "#172225",
+  boots: "#0d1416",
+  dress: "#1d2d30",
+  tattered: true,
+  skin: "#9cb2b8",
+  eyeGlow: "#d8f6ff",
+  hat: null,
+  hatBehind: (p, ctx) => {
+    const { cx, hc, W, HH, u, time, wind } = ctx;
+    const sway = Math.sin(time * 2.5) * (6 + 14 * wind) * u;
+    const veil: P2[] = [
+      [cx - 0.52 * W, hc - 0.32 * HH],
+      [cx, hc - 0.56 * HH],
+      [cx + 0.52 * W, hc - 0.32 * HH],
+      [cx + 0.68 * W + sway * 0.3, hc + 0.45 * HH],
+      [cx + 0.76 * W + sway, hc + 1.55 * HH],
+      [cx + 0.44 * W + sway * 0.8, hc + 1.32 * HH],
+      [cx + 0.24 * W + sway * 0.9, hc + 1.82 * HH],
+      [cx + sway * 0.7, hc + 1.44 * HH],
+      [cx - 0.22 * W + sway * 0.9, hc + 1.86 * HH],
+      [cx - 0.46 * W + sway * 0.8, hc + 1.36 * HH],
+      [cx - 0.76 * W + sway, hc + 1.58 * HH],
+      [cx - 0.68 * W + sway * 0.3, hc + 0.45 * HH],
+    ];
+    p.gradFill(veil, "#111a1e", "#070b0d", ctx.light);
+    p.poly(veil, null, ctx.ow * 0.65);
+  },
+  hatOn: drawMaDaWetHair,
   torsoDetail: (p, ctx) => {
-    const { tcx, chin, torsoBot, W, u } = ctx;
-    // Dark river weeds & dripping water streaks down the soaked tunic
+    const { tcx, chin, torsoBot, u, time } = ctx;
+    // Wet clinging river-weed tendrils & dripping grime streaks
     for (const [dx, y0, y1, col] of [
-      [-20, 0.18, 0.92, "#203632"],
-      [-8, 0.25, 0.98, "#1b2c2e"],
-      [7, 0.15, 0.95, "#233b36"],
-      [19, 0.28, 0.90, "#1b2c2e"],
+      [-28, 0.16, 0.94, "#162926"],
+      [-10, 0.22, 0.98, "#101c1f"],
+      [9, 0.14, 0.96, "#182e2a"],
+      [26, 0.26, 0.92, "#101c1f"],
     ] as const) {
       const sy0 = chin + (torsoBot - chin) * y0;
       const sy1 = chin + (torsoBot - chin) * y1;
-      p.stroke(
-        [
-          [tcx + dx * u, sy0],
-          [tcx + (dx - 3) * u, (sy0 + sy1) * 0.5],
-          [tcx + (dx + 2) * u, sy1],
-        ],
-        2.8 * u,
-        col,
-      );
-    }
-    // Tattered hem notches
-    for (const dx of [-0.32, -0.14, 0.08, 0.28]) {
-      p.stroke([[tcx + dx * W, torsoBot - 14 * u], [tcx + (dx - 0.03) * W, torsoBot]], 2.4 * u, "#182426");
+      const w = Math.sin(time * 2.2 + dx) * 3 * u;
+      p.stroke([[tcx + dx * u, sy0], [tcx + (dx - 4) * u + w, (sy0 + sy1) * 0.5], [tcx + (dx + 2) * u + w, sy1]], 2.8 * u, col);
     }
   },
 };
 
-/** 2D FX: A battered Vietnamese conical hat (nón lá) drifting upstream with concentric ripples. */
-export function fxConicalHat(p: Pen, u: number) {
+/** High-craft Gothic inked drowned skeletal forearm & splayed grasping clawed hand emerging from dark water (Shot 5 ECU). */
+export function fxGothicDrownedHand(p: Pen, grab: number, time: number) {
   const { g } = p;
-  const cw = 420, ch = 300;
-  const cx = cw * 0.5, cy = ch * 0.55;
+  const cw = 440, ch = 520;
+  const cx = cw * 0.48, waterY = ch * 0.80;
+  const dy = (1 - grab) * 56;
+  const trem = Math.sin(time * 26) * 2.4 * grab;
+
   g.save();
-  // Water ripples around the floating hat
-  for (let i = 0; i < 2; i++) {
-    const ph = (u + i * 0.5) % 1;
-    const rx = cw * (0.24 + ph * 0.22);
-    const ry = ch * (0.10 + ph * 0.10);
-    g.strokeStyle = `rgba(175, 215, 235, ${(1 - ph) * 0.45})`;
-    g.lineWidth = 3.2;
-    g.beginPath();
-    g.ellipse(cx, cy + 16, rx, ry, 0, 0, Math.PI * 2);
-    g.stroke();
+  p.grit = 1.6;
+  // Gaunt corpse-pale wet forearm angled diagonally up out of dark water
+  const arm: P2[] = [
+    [cx - 46, waterY + 28],
+    [cx - 32 + trem, ch * 0.52 + dy],
+    [cx - 24 + trem, ch * 0.37 + dy],
+    [cx + 16 + trem, ch * 0.35 + dy],
+    [cx + 18 + trem, ch * 0.52 + dy],
+    [cx + 22, waterY + 28],
+  ];
+  p.gradFill(arm, "#8aa2a8", "#304248", -2.1);
+  p.hatch(arm, -2.1, 8, 1.6, "rgba(8,10,16,0.58)", true);
+  p.poly(arm, null, 5.2, INK);
+
+  // Tendons & wet dark river weeds draped around wrist
+  p.stroke([[cx - 10 + trem, ch * 0.42 + dy], [cx - 22, waterY + 8]], 2.2, "rgba(10,16,20,0.58)");
+  p.stroke([[cx + 3 + trem, ch * 0.42 + dy], [cx - 2, waterY + 8]], 2.0, "rgba(10,16,20,0.52)");
+  p.stroke([[cx - 32 + trem, ch * 0.50 + dy], [cx + 18 + trem, ch * 0.58 + dy], [cx - 36, ch * 0.70 + dy]], 8.5, "#152621");
+  p.stroke([[cx - 32 + trem, ch * 0.50 + dy], [cx + 18 + trem, ch * 0.58 + dy], [cx - 36, ch * 0.70 + dy]], 2.0, INK);
+
+  // Bony angular palm
+  const palm: P2[] = [
+    [cx - 25 + trem, ch * 0.38 + dy],
+    [cx - 34 + trem, ch * 0.25 + dy],
+    [cx - 6 + trem, ch * 0.20 + dy],
+    [cx + 26 + trem, ch * 0.23 + dy],
+    [cx + 18 + trem, ch * 0.36 + dy],
+  ];
+  p.gradFill(palm, "#9cb4ba", "#425860", -2.0);
+  p.hatch(palm, -2.0, 7, 1.4, "rgba(8,10,16,0.45)");
+  p.poly(palm, null, 4.8, INK);
+
+  // Four organic splayed, articulated gnarled clutching fingers wrapping forward with crooked knuckles & dark claws
+  const fingerSpecs: [number, number, number, number, number][] = [
+    [-26, 0.24, -0.52, 76, 12],
+    [-8, 0.21, -0.18, 90, 12],
+    [10, 0.22, 0.14, 86, 11],
+    [23, 0.25, 0.48, 70, 10],
+  ];
+  for (const [bx, byFrac, ang, len, w0] of fingerSpecs) {
+    const k0: P2 = [cx + bx + trem, ch * byFrac + dy];
+    const a1 = -Math.PI * 0.42 + ang;
+    const k1: P2 = [k0[0] + Math.cos(a1) * len * 0.52, k0[1] + Math.sin(a1) * len * 0.52];
+    const a2 = a1 + 0.58; // sharply hooked claw bend!
+    const k2: P2 = [k1[0] + Math.cos(a2) * len * 0.48, k1[1] + Math.sin(a2) * len * 0.48];
+    const drawBone = (pA: P2, pB: P2, wa: number, wb: number) => {
+      const dx = pB[0] - pA[0], dy2 = pB[1] - pA[1], L = Math.hypot(dx, dy2) || 1;
+      const nx = -dy2 / L, ny = dx / L;
+      const seg: P2[] = [
+        [pA[0] + nx * wa * 0.5, pA[1] + ny * wa * 0.5],
+        [pB[0] + nx * wb * 0.5, pB[1] + ny * wb * 0.5],
+        [pB[0] - nx * wb * 0.5, pB[1] - ny * wb * 0.5],
+        [pA[0] - nx * wa * 0.5, pA[1] - ny * wa * 0.5],
+      ];
+      p.gradFill(seg, "#a6bfc5", "#445a62", -2.0);
+      p.poly(seg, null, 3.8, INK);
+    };
+    drawBone(k0, k1, w0, w0 * 0.78);
+    drawBone(k1, k2, w0 * 0.76, w0 * 0.34);
+    // Swollen bony knuckle shadow + elongated jagged black claw nail + dripping black river ichor
+    p.dot(k1[0], k1[1], w0 * 0.44, "#4b6068");
+    const nailTip: P2 = [k2[0] + Math.cos(a2 + 0.28) * 20, k2[1] + Math.sin(a2 + 0.28) * 20];
+    p.poly([[k2[0] - 3.5, k2[1] - 3.5], nailTip, [k2[0] + 3.5, k2[1] + 3.5]], "#080b0e", 2.2);
+    p.drip(k1[0], k1[1] + 6, 36, 2.0, "rgba(5,3,8,0.82)");
   }
-  // Conical hat silhouette with bamboo ribs & dark river-rot patches
-  const brimW = cw * 0.34, brimH = ch * 0.11, peakY = cy - ch * 0.26;
-  const grad = g.createLinearGradient(cx - brimW, peakY, cx + brimW, cy + brimH);
-  grad.addColorStop(0, "#b89f74");
-  grad.addColorStop(0.55, "#8b734e");
-  grad.addColorStop(1, "#4e3e28");
-  g.fillStyle = grad;
-  g.strokeStyle = INK;
-  g.lineWidth = 5;
-  g.beginPath();
-  g.moveTo(cx, peakY);
-  g.lineTo(cx + brimW, cy);
-  g.ellipse(cx, cy, brimW, brimH, 0, 0, Math.PI, false);
-  g.closePath();
-  g.fill();
-  g.stroke();
 
-  // Concentric bamboo stitching rings
-  g.strokeStyle = "rgba(40, 28, 18, 0.55)";
-  g.lineWidth = 2.2;
-  for (const f of [0.35, 0.65, 0.88]) {
-    g.beginPath();
-    g.ellipse(cx, peakY + (cy - peakY) * f, brimW * f, brimH * f * 0.65, 0, 0.08 * Math.PI, 0.92 * Math.PI);
-    g.stroke();
-  }
-  // Dark tear/notch on the brim
-  g.fillStyle = "#15222e";
-  g.beginPath();
-  g.moveTo(cx + brimW * 0.35, cy + brimH * 0.65);
-  g.lineTo(cx + brimW * 0.48, cy - 12);
-  g.lineTo(cx + brimW * 0.60, cy + brimH * 0.45);
-  g.closePath();
-  g.fill();
-  g.restore();
-}
+  // Opposing gnarled thumb clamping inward from left
+  const t0: P2 = [cx - 26 + trem, ch * 0.35 + dy];
+  const t1: P2 = [cx - 58 + trem, ch * 0.28 + dy];
+  const t2: P2 = [cx - 44 + trem, ch * 0.19 + dy];
+  p.stroke([t0, t1, t2], 14, INK);
+  p.stroke([t0, t1, t2], 7.5, "#96aeb4");
 
-/** 2D FX: A pale drowned hand reaching out of the dark water to grip the boat's mooring rope. */
-export function fxPaleHand(p: Pen, u: number) {
-  const { g } = p;
-  const cw = 360, ch = 440;
-  const cx = cw * 0.5, baseY = ch * 0.76;
-  g.save();
-  // Eerie water rings at the wrist emergence point
-  for (const [rx, ry, al] of [
-    [cw * 0.34, ch * 0.08, 0.48],
-    [cw * 0.22, ch * 0.05, 0.68],
-  ] as const) {
-    g.strokeStyle = `rgba(140, 225, 200, ${al})`;
-    g.lineWidth = 3.5;
-    g.beginPath();
-    g.ellipse(cx, baseY, rx, ry, 0, 0, Math.PI * 2);
-    g.stroke();
-  }
-
-  // Mooring rope segment taut from top-left into the water
-  g.strokeStyle = "#8a6d46";
-  g.lineWidth = 10;
-  g.lineCap = "round";
-  g.beginPath();
-  g.moveTo(cx - cw * 0.22, ch * 0.06);
-  g.quadraticCurveTo(cx - cw * 0.04, ch * 0.42, cx + cw * 0.02, baseY + 10);
-  g.stroke();
-  g.strokeStyle = INK;
-  g.lineWidth = 3;
-  g.stroke();
-
-  // Pale bluish-grey forearm & fingers clutching the rope
-  const dy = (1 - u) * 28;
-  g.fillStyle = "#bdd6dc";
-  g.strokeStyle = INK;
-  g.lineWidth = 5;
-  g.lineJoin = "round";
-  // Forearm rising from water
-  g.beginPath();
-  g.moveTo(cx - 22, baseY + 6);
-  g.lineTo(cx - 16, ch * 0.42 + dy);
-  g.lineTo(cx + 18, ch * 0.40 + dy);
-  g.lineTo(cx + 24, baseY + 6);
-  g.closePath();
-  g.fill();
-  g.stroke();
-
-  // Four curled fingers + thumb gripping the rope
-  for (let i = 0; i < 4; i++) {
-    const fy = ch * (0.28 + i * 0.045) + dy;
-    const fw = 34 - i * 2;
-    g.beginPath();
-    g.roundRect(cx - 20, fy, fw, 14, 7);
-    g.fill();
-    g.stroke();
-  }
-  // Dark water cover below wrist line
-  const wgr = g.createLinearGradient(0, baseY - 6, 0, ch);
-  wgr.addColorStop(0, "rgba(10, 24, 32, 0.2)");
-  wgr.addColorStop(0.5, "rgba(10, 24, 32, 0.92)");
-  wgr.addColorStop(1, "rgba(10, 24, 32, 0)");
-  g.fillStyle = wgr;
-  g.fillRect(cx - cw * 0.4, baseY - 6, cw * 0.8, ch - baseY);
-  g.restore();
-}
-
-/** 2D FX: Wet black-mud footprints and a spreading puddle on dry floorboards behind Ông Tư. */
-export function fxWetFootprints(p: Pen, reveal: number) {
-  const { g } = p;
-  const cw = 420, ch = 420;
-  g.save();
-  g.globalAlpha = Math.max(0.08, Math.min(1, reveal));
-
-  // Perspective foreshortening so the footprints read as lying flat on the wooden floorboards
-  g.translate(cw * 0.5, ch * 0.62);
-  g.scale(1.0, 0.52);
-
-  // Spreading dark river-water puddle halo on the wood planks
-  const puddle = g.createRadialGradient(0, 0, 15, 0, 0, 175);
-  puddle.addColorStop(0, "rgba(12, 18, 24, 0.88)");
-  puddle.addColorStop(0.55, "rgba(25, 36, 44, 0.55)");
-  puddle.addColorStop(0.82, "rgba(180, 95, 85, 0.22)");
-  puddle.addColorStop(1, "rgba(18, 24, 30, 0)");
-  g.fillStyle = puddle;
-  g.beginPath();
-  g.ellipse(0, 0, 175, 135, 0, 0, Math.PI * 2);
-  g.fill();
-
-  const drawFoot = (fx: number, fy: number, rot: number, mirror: number) => {
-    g.save();
-    g.translate(fx, fy);
-    g.rotate(rot);
-    g.scale(mirror, 1);
-
-    // Dark river-mud sole & heel imprint with warm lamp/blood-moon wet rim
-    g.fillStyle = "#0b0f12";
-    g.strokeStyle = "rgba(235, 150, 125, 0.68)";
-    g.lineWidth = 3.2;
-    // Forefoot
-    g.beginPath();
-    g.ellipse(-4, -24, 28, 38, 0.08, 0, Math.PI * 2);
-    g.fill();
-    g.stroke();
-    // Heel
-    g.beginPath();
-    g.ellipse(2, 36, 20, 24, -0.05, 0, Math.PI * 2);
-    g.fill();
-    g.stroke();
-
-    // 5 distinct mud toe prints
-    for (const [tx, ty, tr] of [
-      [-23, -68, 9.0],
-      [-8, -75, 7.6],
-      [6, -73, 6.8],
-      [18, -67, 6.0],
-      [27, -58, 5.2],
-    ] as const) {
-      g.beginPath();
-      g.ellipse(tx, ty, tr * 0.9, tr * 1.15, 0, 0, Math.PI * 2);
-      g.fill();
-      g.stroke();
-    }
-    g.restore();
-  };
-
-  drawFoot(-58, 14, -0.10, 1);
-  drawFoot(56, -18, 0.08, -1);
-
-  // Specular wet glints catching the oil lamp light
-  g.fillStyle = "rgba(255, 210, 185, 0.78)";
-  for (const [gx, gy, gw, gh] of [
-    [-64, 4, 15, 5],
-    [52, -26, 16, 5],
-    [-4, 46, 24, 6],
-    [18, -58, 14, 4],
-  ] as const) {
-    g.beginPath();
-    g.ellipse(gx, gy, gw, gh, 0.15, 0, Math.PI * 2);
-    g.fill();
-  }
+  // Dark water surface fade submerging forearm cleanly
+  const wMask = g.createLinearGradient(0, waterY - 12, 0, ch);
+  wMask.addColorStop(0, "rgba(7,16,22,0)");
+  wMask.addColorStop(0.38, "rgba(7,16,22,0.92)");
+  wMask.addColorStop(1, "rgba(7,16,22,0)");
+  g.fillStyle = wMask;
+  g.fillRect(0, waterY - 12, cw, ch - waterY + 12);
   g.restore();
 }

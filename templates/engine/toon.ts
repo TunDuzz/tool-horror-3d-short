@@ -1,26 +1,25 @@
-// Neutral 2D cartoon character & effect drawing engine (Canvas2D Pen API).
-// Construction v2: superellipse heads (pointed crown 1.75 / full jaw 2.3, chin taper, seeded side bulge + tilt),
-// bean torsos, single-stroke limbs with ink-dot hands, thick-thin plum outline weighted away from the light,
-// soft painted crescents, deadpan lidded eyes, no blush, no catchlights.
-// Project-specific hats, clothing details, and held props are injected via Outfit hooks in src/<project>/toon.ts.
-// Design space: 600 x 1000 units (soles at y = 975); the canvas transform scales it.
+// Horror Engine v2: Gothic Ink-Noir 2D Character & Atmospheric FX Drawing Engine (Canvas2D Pen API).
+// Aesthetic: Don't Starve x Darkest Dungeon x Mike Mignola (gaunt ~4.8-head proportions, angular skulls,
+// articulated tapered limbs & 4-finger gaunt hands, recessed shadowed eye sockets, dip-pen variable ink weight,
+// cross-hatching shadows, 3 views including Back + Over-The-Shoulder glance, and continuous horror actions).
+// Project-specific hats, hair, props, and garments are injected cleanly via Outfit hooks in src/<project>/toon.ts.
+// Design space: 600 x 1000 units (soles at y = 970).
 
-export const INK = "#241726";
-export const SKIN = "#ffe2c2";
-const WHITE = "#ffffff";
-const MOUTH = "#5a1e28";
-const TONGUE = "#e86e78";
+export const INK = "#0c0712";
+export const SKIN = "#cfb7a2";
+const WHITE = "#e8e4dc";
+const MOUTH = "#1e0c14";
 export type C3 = [number, number, number];
-export const SH_SKIN: C3 = [0.96, 0.86, 0.84];
-export const SH_CLOTH: C3 = [0.64, 0.66, 0.74];
-export const SH_FELT: C3 = [0.62, 0.62, 0.7];
-export const SKINS = [SKIN, "#f5c9a0", "#ecd0b6", "#c99067"];
+export const SH_SKIN: C3 = [0.68, 0.62, 0.68];
+export const SH_CLOTH: C3 = [0.48, 0.46, 0.56];
+export const SH_FELT: C3 = [0.46, 0.44, 0.54];
 
-export type Build = "adult" | "stout" | "kid";
+export type Build = "adult" | "elder" | "gaunt" | "kid";
 export type P2 = [number, number];
 
 const rad = (d: number) => (d * Math.PI) / 180;
 const clamp = (x: number, a: number, b: number) => Math.max(a, Math.min(b, x));
+
 export const mul = (c: string, m: C3) => {
   const n = parseInt(c.slice(1), 16);
   const ch = (v: number, k: number) => Math.min(255, Math.round(v * k)).toString(16).padStart(2, "0");
@@ -32,7 +31,6 @@ export const mix = (a: string, b: string, t: number) => {
   const ch = (s: number) => Math.round(((A >> s) & 255) * (1 - t) + ((B >> s) & 255) * t).toString(16).padStart(2, "0");
   return `#${ch(16)}${ch(8)}${ch(0)}`;
 };
-/** Deterministic per-character random in [0, 1). */
 export const rnd = (seed: number, k: number) => {
   const x = Math.sin(seed * 127.1 + k * 311.7) * 43758.5453;
   return x - Math.floor(x);
@@ -41,7 +39,6 @@ export const rotPts = (pts: P2[], a: number, cx: number, cy: number): P2[] =>
   pts.map(([x, y]) => [cx + (x - cx) * Math.cos(a) - (y - cy) * Math.sin(a), cy + (x - cx) * Math.sin(a) + (y - cy) * Math.cos(a)]);
 export const rotAbout = (q: P2, a: number, c: P2): P2 => rotPts([q], a, c[0], c[1])[0];
 export const lerp2 = (a: P2, b: P2, t: number): P2 => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
-/** Smooth quadratic curve from a through (near) k to b, as a polyline. */
 export const curve = (a: P2, k: P2, b: P2, n = 10): P2[] => {
   const c: P2 = [2 * k[0] - (a[0] + b[0]) / 2, 2 * k[1] - (a[1] + b[1]) / 2], out: P2[] = [];
   for (let i = 0; i <= n; i++) {
@@ -51,80 +48,189 @@ export const curve = (a: P2, k: P2, b: P2, n = 10): P2[] => {
   return out;
 };
 
+// ---------------- Gothic Dip-Pen API (Woodcut / Junji Ito Ink Wobble) ----------------
+const wobbleHash = (a: number, b: number) => {
+  const s = Math.sin(a * 12.9898 + b * 78.233) * 43758.5453;
+  return (s - Math.floor(s)) * 2 - 1;
+};
+
 export class Pen {
   g: CanvasRenderingContext2D;
-  ol = 12;
-  /** [angle, cx, cy] rotation about (cx, cy), optional post-translation [.., dx, dy]. */
+  ol = 6;
+  grit = 0.95; // 0 = clean vector, 1 = hand-inked dip-pen wobble, 1.6 = frantic uncanny horror scratch
   rot: number[] | null = null;
-  constructor(g: CanvasRenderingContext2D) { this.g = g; }
+  constructor(g: CanvasRenderingContext2D) {
+    this.g = g;
+  }
   P(x: number, y: number): P2 {
     if (!this.rot) return [x, y];
     const r = this.rot, a = r[0], cx = r[1], cy = r[2], dx = r.length > 3 ? r[3] : 0, dy = r.length > 4 ? r[4] : 0;
     const c = Math.cos(a), s = Math.sin(a);
     return [cx + (x - cx) * c - (y - cy) * s + dx, cy + (x - cx) * s + (y - cy) * c + dy];
   }
-  path(pts: P2[], close: boolean) {
+  path(pts: P2[], close: boolean, jitter = 0) {
     const g = this.g;
     g.beginPath();
-    pts.forEach((p, i) => { const [x, y] = this.P(p[0], p[1]); if (i) g.lineTo(x, y); else g.moveTo(x, y); });
+    const n = pts.length;
+    if (!n) return;
+    const [x0, y0] = this.P(pts[0][0], pts[0][1]);
+    g.moveTo(x0, y0);
+    const segCount = close ? n : n - 1;
+    for (let i = 0; i < segCount; i++) {
+      const a = pts[i];
+      const b = pts[(i + 1) % n];
+      const dx = b[0] - a[0], dy = b[1] - a[1];
+      const len = Math.hypot(dx, dy);
+      if (jitter > 0.05 && len > 24) {
+        const steps = Math.min(7, Math.max(2, Math.floor(len / 22)));
+        const nx = -dy / len, ny = dx / len;
+        for (let s = 1; s < steps; s++) {
+          const t = s / steps;
+          const off = wobbleHash(a[0] * 0.37 + s * 17.3, a[1] * 0.41 + b[0] * 0.19) * jitter;
+          const [px, py] = this.P(a[0] + dx * t + nx * off, a[1] + dy * t + ny * off);
+          g.lineTo(px, py);
+        }
+      }
+      const [bx, by] = this.P(b[0], b[1]);
+      g.lineTo(bx, by);
+    }
     if (close) g.closePath();
   }
-  /** Filled shape with an ink outline; fill=null draws the outline only. */
-  poly(pts: P2[], fill: string | null, ol?: number) {
+  poly(pts: P2[], fill: string | null, ol?: number, inkCol = INK) {
     const g = this.g, w = ol ?? this.ol;
-    this.path(pts, true);
-    if (fill) { g.fillStyle = fill; g.fill(); }
-    if (w) { g.lineWidth = w; g.strokeStyle = INK; g.lineJoin = "round"; g.stroke(); }
+    const j = this.grit * 1.15;
+    this.path(pts, true, j);
+    if (fill) {
+      g.fillStyle = fill;
+      g.fill();
+    }
+    if (w) {
+      g.lineWidth = w;
+      g.strokeStyle = inkCol;
+      g.lineJoin = "round";
+      g.stroke();
+      // Subtle woodcut scratch over-stroke for organic dip-pen grit (stronger on uncanny horror entities)
+      if (this.grit >= 1.25 && w >= 2.2) {
+        this.path(pts, true, j * 1.85);
+        g.lineWidth = Math.max(1, w * 0.36);
+        g.strokeStyle = "rgba(6,3,10,0.46)";
+        g.stroke();
+      }
+    }
   }
   ell(cx: number, cy: number, rx: number, ry: number, fill: string | null, ol?: number, a0 = 0, a1 = 360, rot = 0) {
     this.poly(ellPts(cx, cy, rx, ry, a0, a1, rot), fill, ol);
   }
-  /** Thick round-capped limb with an ink rim (effects, rope). */
-  line(pts: P2[], fill: string, w: number, ink = true) {
-    const g = this.g;
-    g.lineCap = "round"; g.lineJoin = "round";
-    if (ink) { this.path(pts, false); g.strokeStyle = INK; g.lineWidth = w + 2 * this.ol * 0.9; g.stroke(); }
-    this.path(pts, false); g.strokeStyle = fill; g.lineWidth = w; g.stroke();
-  }
   stroke(pts: P2[], w: number, fill = INK) {
     const g = this.g;
-    g.lineCap = "round"; g.lineJoin = "round";
-    this.path(pts, false); g.strokeStyle = fill; g.lineWidth = w; g.stroke();
+    g.lineCap = "round";
+    g.lineJoin = "round";
+    this.path(pts, false, this.grit * 0.9);
+    g.strokeStyle = fill;
+    g.lineWidth = w;
+    g.stroke();
+  }
+  /** Dark dripping ichor/ink tear streak descending vertically with pooled droplet tip. */
+  drip(x: number, y: number, len: number, w = 2.2, col = "rgba(6,3,10,0.82)") {
+    const midX = x + wobbleHash(x, y) * w * 0.7;
+    this.stroke([[x, y], [midX, y + len * 0.55], [x + wobbleHash(y, x) * w * 0.5, y + len]], w, col);
+    this.dot(x + wobbleHash(y, x) * w * 0.5, y + len, w * 0.88, col);
   }
   arc(cx: number, cy: number, rx: number, ry: number, a0: number, a1: number, w: number, fill = INK) {
     const pts: P2[] = [];
-    for (let i = 0; i <= 24; i++) pts.push([cx + rx * Math.cos(rad(a0 + ((a1 - a0) * i) / 24)), cy + ry * Math.sin(rad(a0 + ((a1 - a0) * i) / 24))]);
+    for (let i = 0; i <= 20; i++) {
+      pts.push([cx + rx * Math.cos(rad(a0 + ((a1 - a0) * i) / 20)), cy + ry * Math.sin(rad(a0 + ((a1 - a0) * i) / 20))]);
+    }
     this.stroke(pts, w, fill);
   }
   dot(cx: number, cy: number, r: number, fill = INK) {
     const [x, y] = this.P(cx, cy);
-    this.g.beginPath(); this.g.arc(x, y, r, 0, Math.PI * 2); this.g.fillStyle = fill; this.g.fill();
+    this.g.beginPath();
+    this.g.arc(x, y, r, 0, Math.PI * 2);
+    this.g.fillStyle = fill;
+    this.g.fill();
   }
-  /** Draw with a closed shape as clip. */
-  clip(pts: P2[], fn: () => void) { const g = this.g; g.save(); this.path(pts, true); g.clip(); fn(); g.restore(); }
-  /** Flat fill + soft crescent on the side away from the light (light = canvas angle the light comes FROM). */
-  shadedFill(pts: P2[], base: string, shadow: string, light: number, R: number, shift = 0.45, r0 = 1.05, r1 = 1.25) {
+  clip(pts: P2[], fn: () => void) {
+    const g = this.g;
+    g.save();
+    this.path(pts, true);
+    g.clip();
+    fn();
+    g.restore();
+  }
+  /** Two-step chiaroscuro fill (sharp Gothic shadow cut + soft dark falloff away from light). */
+  shadedFill(pts: P2[], base: string, shadow: string, light: number, R: number, shift = 0.42) {
     const g = this.g, n = pts.length;
     let cx = 0, cy = 0;
     for (const [x, y] of pts) { cx += x / n; cy += y / n; }
     const [gx, gy] = this.P(cx + Math.cos(light) * shift * R, cy + Math.sin(light) * shift * R);
-    const gr = g.createRadialGradient(gx, gy, 0, gx, gy, r1 * R);
-    gr.addColorStop(0, base); gr.addColorStop(r0 / r1, base); gr.addColorStop(1, shadow);
-    this.path(pts, true); g.fillStyle = gr; g.fill();
+    const gr = g.createRadialGradient(gx, gy, R * 0.15, gx, gy, R * 1.38);
+    gr.addColorStop(0, base);
+    gr.addColorStop(0.62, base);
+    gr.addColorStop(0.84, mix(base, shadow, 0.72));
+    gr.addColorStop(1, shadow);
+    this.path(pts, true);
+    g.fillStyle = gr;
+    g.fill();
   }
-  /** Broad gradient across a shape along the light: lit edge = base, far edge = shadow (torsos, coats). */
-  gradFill(pts: P2[], base: string, shadow: string, light: number, flat = 0.22) {
+  /** Broad Gothic chiaroscuro linear wash across a garment along light angle. */
+  gradFill(pts: P2[], base: string, shadow: string, light: number, flat = 0.18) {
     const g = this.g, dx = Math.cos(light), dy = Math.sin(light), n = pts.length;
     let cx = 0, cy = 0, lo = Infinity, hi = -Infinity;
-    for (const [x, y] of pts) { cx += x / n; cy += y / n; const d = x * dx + y * dy; lo = Math.min(lo, d); hi = Math.max(hi, d); }
+    for (const [x, y] of pts) {
+      cx += x / n; cy += y / n;
+      const d = x * dx + y * dy;
+      lo = Math.min(lo, d); hi = Math.max(hi, d);
+    }
     const dc = cx * dx + cy * dy;
-    const [ax, ay] = this.P(cx + dx * (hi - dc), cy + dy * (hi - dc)), [bx, by] = this.P(cx + dx * (lo - dc), cy + dy * (lo - dc));
+    const [ax, ay] = this.P(cx + dx * (hi - dc), cy + dy * (hi - dc));
+    const [bx, by] = this.P(cx + dx * (lo - dc), cy + dy * (lo - dc));
     const gr = g.createLinearGradient(ax, ay, bx, by);
-    gr.addColorStop(0, base); gr.addColorStop(flat, base); gr.addColorStop(1, shadow);
-    this.path(pts, true); g.fillStyle = gr; g.fill();
+    gr.addColorStop(0, base);
+    gr.addColorStop(flat, base);
+    gr.addColorStop(0.66, mix(base, shadow, 0.65));
+    gr.addColorStop(1, shadow);
+    this.path(pts, true);
+    g.fillStyle = gr;
+    g.fill();
   }
-  /** Thick-thin ink ring: w(theta) = w0 (1 + k cos(theta - thick)), theta from contour centroid. */
-  inkRing(pts: P2[], w0: number, thick: number, k = 0.45, col = INK) {
+  /** Hand-inked Gothic cross-hatching lines clipped inside `pts` on the shadow side away from `light`. */
+  hatch(pts: P2[], light: number, spacing = 10, lw = 1.6, col = "rgba(12,7,18,0.48)", cross = false) {
+    let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+    for (const [x, y] of pts) {
+      if (x < x0) x0 = x; if (x > x1) x1 = x;
+      if (y < y0) y0 = y; if (y > y1) y1 = y;
+    }
+    const cx = (x0 + x1) * 0.5, cy = (y0 + y1) * 0.5;
+    const sx = -Math.cos(light), sy = -Math.sin(light);
+    const span = Math.hypot(x1 - x0, y1 - y0) * 0.6;
+    const drawSet = (angDeg: number, step: number, alphaK = 1) => {
+      const a = rad(angDeg), ca = Math.cos(a), sa = Math.sin(a);
+      const nx = -sa, ny = ca;
+      const g = this.g;
+      g.strokeStyle = col;
+      g.lineWidth = lw * alphaK;
+      g.lineCap = "round";
+      for (let d = -span; d <= span; d += step) {
+        const px = cx + nx * d, py = cy + ny * d;
+        // Favor shadow side of the silhouette
+        const side = (px - cx) * sx + (py - cy) * sy;
+        if (side < -span * 0.16) continue;
+        const pA = this.P(px - ca * span, py - sa * span);
+        const pB = this.P(px + ca * span, py + sa * span);
+        g.beginPath();
+        g.moveTo(pA[0], pA[1]);
+        g.lineTo(pB[0], pB[1]);
+        g.stroke();
+      }
+    };
+    this.clip(pts, () => {
+      drawSet(38, spacing, 1);
+      if (cross) drawSet(-34, spacing * 1.45, 0.72);
+    });
+  }
+  /** Variable dip-pen ink ring: razor-thin on lit edge, heavy pooled obsidian ink on shadow side. */
+  inkRing(pts: P2[], w0: number, thick: number, k = 0.58, col = INK) {
     const n = pts.length;
     let cx = 0, cy = 0;
     for (const [x, y] of pts) { cx += x / n; cy += y / n; }
@@ -132,25 +238,44 @@ export class Pen {
     pts.forEach((q, i) => {
       const a = pts[(i + n - 1) % n], b = pts[(i + 1) % n];
       let nx = b[1] - a[1], ny = a[0] - b[0];
-      const l = Math.hypot(nx, ny) || 1; nx /= l; ny /= l;
+      const l = Math.hypot(nx, ny) || 1;
+      nx /= l; ny /= l;
       const h = 0.5 * w0 * (1 + k * Math.cos(Math.atan2(q[1] - cy, q[0] - cx) - thick));
-      out.push([q[0] + nx * h, q[1] + ny * h]); inn.push([q[0] - nx * h, q[1] - ny * h]);
+      out.push([q[0] + nx * h, q[1] + ny * h]);
+      inn.push([q[0] - nx * h, q[1] - ny * h]);
     });
     const g = this.g;
-    const trace = (r: P2[]) => { r.forEach(([x0, y0], i) => { const [x, y] = this.P(x0, y0); if (i) g.lineTo(x, y); else g.moveTo(x, y); }); g.closePath(); };
-    g.beginPath(); trace(out); trace(inn.reverse());
-    g.fillStyle = col; g.fill("evenodd");
+    const trace = (r: P2[]) => {
+      r.forEach(([x0, y0], i) => {
+        const [x, y] = this.P(x0, y0);
+        if (i) g.lineTo(x, y);
+        else g.moveTo(x, y);
+      });
+      g.closePath();
+    };
+    g.beginPath();
+    trace(out);
+    trace(inn.reverse());
+    g.fillStyle = col;
+    g.fill("evenodd");
   }
-  /** Flat strap with a thin ink rim (belts, sashes, handles). */
   band(pts: P2[], fill: string, w: number, rim: number, cap: CanvasLineCap = "butt") {
-    const g = this.g; g.lineCap = cap; g.lineJoin = "round";
-    this.path(pts, false); g.strokeStyle = INK; g.lineWidth = w + 2 * rim; g.stroke();
-    this.path(pts, false); g.strokeStyle = fill; g.lineWidth = w; g.stroke();
+    const g = this.g;
+    g.lineCap = cap;
+    g.lineJoin = "round";
+    this.path(pts, false);
+    g.strokeStyle = INK;
+    g.lineWidth = w + 2 * rim;
+    g.stroke();
+    this.path(pts, false);
+    g.strokeStyle = fill;
+    g.lineWidth = w;
+    g.stroke();
     g.lineCap = "round";
   }
 }
 
-const ellPts = (cx: number, cy: number, rx: number, ry: number, a0 = 0, a1 = 360, rot = 0, n = 48): P2[] => {
+const ellPts = (cx: number, cy: number, rx: number, ry: number, a0 = 0, a1 = 360, rot = 0, n = 36): P2[] => {
   const r = rad(rot), pts: P2[] = [];
   for (let i = 0; i <= n; i++) {
     const a = rad(a0 + ((a1 - a0) * i) / n), x = rx * Math.cos(a), y = ry * Math.sin(a);
@@ -159,220 +284,630 @@ const ellPts = (cx: number, cy: number, rx: number, ry: number, a0 = 0, a1 = 360
   return pts;
 };
 
-export const rrect = (x0: number, y0: number, x1: number, y1: number, r: number, n = 8): P2[] => {
-  const pts: P2[] = [];
-  for (const [cx, cy, a] of [[x1 - r, y0 + r, -90], [x1 - r, y1 - r, 0], [x0 + r, y1 - r, 90], [x0 + r, y0 + r, 180]])
-    for (let i = 0; i <= n; i++) pts.push([cx + r * Math.cos(rad(a + (90 * i) / n)), cy + r * Math.sin(rad(a + (90 * i) / n))]);
-  return pts;
-};
-
-/** Tapered stroke, thick end at a: brows, moustache halves. */
 export const taper = (p: Pen, a: P2, b: P2, wa: number, wb: number, col = INK) => {
   const dx = b[0] - a[0], dy = b[1] - a[1], l = Math.hypot(dx, dy) || 1, nx = -dy / l, ny = dx / l;
-  p.poly([[a[0] + nx * wa / 2, a[1] + ny * wa / 2], [b[0] + nx * wb / 2, b[1] + ny * wb / 2],
-    [b[0] - nx * wb / 2, b[1] - ny * wb / 2], [a[0] - nx * wa / 2, a[1] - ny * wa / 2]], col, 0);
-  p.dot(a[0], a[1], wa / 2, col); p.dot(b[0], b[1], wb / 2, col);
+  p.poly(
+    [
+      [a[0] + (nx * wa) / 2, a[1] + (ny * wa) / 2],
+      [b[0] + (nx * wb) / 2, b[1] + (ny * wb) / 2],
+      [b[0] - (nx * wb) / 2, b[1] - (ny * wb) / 2],
+      [a[0] - (nx * wa) / 2, a[1] - (ny * wa) / 2],
+    ],
+    col,
+    0,
+  );
+  p.dot(a[0], a[1], wa / 2, col);
+  p.dot(b[0], b[1], wb / 2, col);
 };
 
-// ---------------- contours ----------------
-export type Blob = { a: number; b: number; nTop: number; nBot: number; egg: number; asym: number; rot: number; noise: number; seed: number };
+/** Tapered shaded limb segment (sleeve/trouser volume) instead of stickman lines! */
+const limbPoly = (a: P2, b: P2, wa: number, wb: number): P2[] => {
+  const dx = b[0] - a[0], dy = b[1] - a[1], l = Math.hypot(dx, dy) || 1;
+  const nx = -dy / l, ny = dx / l;
+  return [
+    [a[0] + nx * wa * 0.5, a[1] + ny * wa * 0.5],
+    [b[0] + nx * wb * 0.5, b[1] + ny * wb * 0.5],
+    [b[0] - nx * wb * 0.5, b[1] - ny * wb * 0.5],
+    [a[0] - nx * wa * 0.5, a[1] - ny * wa * 0.5],
+  ];
+};
 
-/** Superellipse "bean": separate crown / jaw exponents, egg taper (neg = narrower chin), one-side bulge, soft noise. */
-export const blobPts = (cx: number, cy: number, B: Blob, n = 72): P2[] => {
-  const ph = [rnd(B.seed, 11), rnd(B.seed, 12), rnd(B.seed, 13)].map((v) => v * Math.PI * 2);
-  const pts: P2[] = [];
-  for (let i = 0; i < n; i++) {
-    const t = (i / n) * Math.PI * 2, c = Math.cos(t), s = Math.sin(t), e = 2 / (s < 0 ? B.nTop : B.nBot);
-    let X = Math.sign(c) * Math.abs(c) ** e;
-    const Y = Math.sign(s) * Math.abs(s) ** e;
-    X *= (1 + B.egg * Y) * (1 + B.asym * Math.sign(X));
-    const r = 1 + B.noise * (Math.cos(2 * t + ph[0]) + 0.7 * Math.cos(3 * t + ph[1]) + 0.5 * Math.cos(4 * t + ph[2]));
-    const x = B.a * X * r, y = B.b * Y * r;
-    pts.push([cx + x * Math.cos(B.rot) - y * Math.sin(B.rot), cy + x * Math.sin(B.rot) + y * Math.cos(B.rot)]);
+const drawArticulatedLimb = (
+  p: Pen,
+  root: P2,
+  joint: P2,
+  tip: P2,
+  wRoot: number,
+  wJoint: number,
+  wTip: number,
+  fill: string,
+  light: number,
+  ow: number,
+) => {
+  const sh = mul(fill, SH_CLOTH);
+  const seg1 = limbPoly(root, joint, wRoot, wJoint);
+  const seg2 = limbPoly(joint, tip, wJoint * 0.96, wTip);
+  p.gradFill(seg1, fill, sh, light, 0.25);
+  p.poly(seg1, null, ow * 0.82);
+  p.gradFill(seg2, fill, sh, light, 0.25);
+  p.poly(seg2, null, ow * 0.82);
+  // Subtle joint crease fold
+  p.dot(joint[0], joint[1], wJoint * 0.44, mix(fill, sh, 0.45));
+};
+
+/** Articulated bony hand with 4 tapered fingers (clawed/grasping for horror entities, tense fingers for humans). */
+const drawGauntHand = (
+  p: Pen,
+  wrist: P2,
+  elbow: P2,
+  u: number,
+  skin: string,
+  claw: boolean,
+  open: boolean,
+  ow: number,
+) => {
+  const dx = wrist[0] - elbow[0], dy = wrist[1] - elbow[1];
+  const ang = Math.atan2(dy, dx);
+  const ca = Math.cos(ang), sa = Math.sin(ang);
+  const nx = -sa, ny = ca;
+  const palmL = (claw ? 16 : 12.5) * u;
+  const palmW = (claw ? 11 : 11.5) * u;
+  const palm: P2[] = [
+    [wrist[0] - nx * palmW * 0.45, wrist[1] - ny * palmW * 0.45],
+    [wrist[0] + ca * palmL - nx * palmW * 0.55, wrist[1] + sa * palmL - ny * palmW * 0.55],
+    [wrist[0] + ca * palmL + nx * palmW * 0.55, wrist[1] + sa * palmL + ny * palmW * 0.55],
+    [wrist[0] + nx * palmW * 0.45, wrist[1] + ny * palmW * 0.45],
+  ];
+  p.poly(palm, mul(skin, [0.92, 0.90, 0.92]), ow * 0.58);
+  const fLen = (claw ? 24 : open ? 15 : 9.5) * u;
+  const spread = claw ? 0.32 : open ? 0.24 : 0.12;
+  for (let i = 0; i < 4; i++) {
+    const fFrac = (i - 1.5) / 1.5;
+    const base: P2 = [
+      wrist[0] + ca * palmL * 0.88 + nx * fFrac * palmW * 0.48,
+      wrist[1] + sa * palmL * 0.88 + ny * fFrac * palmW * 0.48,
+    ];
+    const fa = ang + fFrac * spread;
+    const len = fLen * (i === 1 || i === 2 ? 1.08 : 0.88);
+    const mid: P2 = [base[0] + Math.cos(fa) * len * 0.55, base[1] + Math.sin(fa) * len * 0.55];
+    const tipA = fa + (claw ? 0.35 : open ? 0.14 : 0.65);
+    const tip: P2 = [mid[0] + Math.cos(tipA) * len * 0.5, mid[1] + Math.sin(tipA) * len * 0.5];
+    p.stroke([base, mid, tip], (claw ? 3.2 : 3.4) * u, INK);
+    p.stroke([base, mid], (claw ? 1.7 : 2.1) * u, skin);
   }
-  return pts;
 };
 
-/** Measured head: H/W 0.94, slightly pointed crown (1.75), fuller jaw (2.3), chin taper -0.12, 8 % bulge to the facing side. */
-export const headBlob = (seed: number, a = 118, facing = 0): Blob => ({
-  a, b: a * (0.94 + 0.08 * (rnd(seed, 1) - 0.5)),
-  nTop: 1.75 + 0.3 * (rnd(seed, 2) - 0.5), nBot: 2.3 + 0.3 * (rnd(seed, 3) - 0.5),
-  egg: -0.12 + 0.06 * (rnd(seed, 4) - 0.5),
-  asym: (0.06 + 0.04 * rnd(seed, 5)) * (facing || (rnd(seed, 6) < 0.5 ? -1 : 1)),
-  rot: rad(8 * (rnd(seed, 7) - 0.5)), noise: 0.008, seed,
-});
+/** Pointed Gothic boot/shoe volume instead of a flat bar. */
+const drawBoot = (p: Pen, ank: P2, dir: number, pitch: number, u: number, col: string, ow: number) => {
+  const c = Math.cos(pitch), s = Math.sin(pitch);
+  const pt = (lx: number, ly: number): P2 => [ank[0] + (lx * c - ly * s) * dir, ank[1] + (lx * s + ly * c)];
+  const poly: P2[] = [
+    pt(-6 * u, -4 * u),
+    pt(6 * u, -3 * u),
+    pt(21 * u, 3 * u),
+    pt(23 * u, 8.5 * u),
+    pt(-8 * u, 8.5 * u),
+    pt(-9 * u, 2 * u),
+  ];
+  p.poly(poly, col, ow * 0.72);
+  // Boot heel notch
+  p.stroke([pt(-7 * u, 7.5 * u), pt(21 * u, 7.5 * u)], 2.2 * u, INK);
+};
 
-/** Thickest outline direction: away from the light, pulled toward the ground (64 deg measured for upper-left light). */
-export const thickAngle = (light: number) => Math.atan2(-Math.sin(light) + 0.8, -Math.cos(light));
+// ---------------- Gothic Angular Skull Contours ----------------
+export const thickAngle = (light: number) => Math.atan2(-Math.sin(light) + 0.75, -Math.cos(light));
 const DEF_LIGHT = rad(-120);
 
-// ---------------- faces ----------------
-export type Expr = "neutral" | "stern" | "grin" | "laugh" | "whistle" | "nervous" | "shock" | "relief" | "relief_open" | "dazed"
-  | "pained" | "smile" | "smile_closed" | "lick" | "terrified" | "dread" | "suspicious" | "hollow" | "unhinged";
-type EyeK = "dot" | "small" | "lid" | "slit" | "happy" | "dash" | "squeeze" | "shock" | "shockHalf" | "spiral"
-  | "wide" | "hollow" | "pinpoint";
-type MouthK = "dash" | "frown" | "smirk" | "smile" | "smileWide" | "grin" | "laugh" | "o" | "O" | "wave" | "teeth" | "lick"
-  | "scream" | "creepyGrin";
-const FACE: Record<Expr, { eye: [EyeK, EyeK]; brow: [number, number]; mouth: MouthK }> = {
-  neutral: { eye: ["lid", "lid"], brow: [0, -1], mouth: "dash" },
-  stern: { eye: ["lid", "lid"], brow: [3, -2], mouth: "frown" },
-  grin: { eye: ["happy", "happy"], brow: [-3, -3], mouth: "grin" },
-  laugh: { eye: ["squeeze", "squeeze"], brow: [-4, -4], mouth: "laugh" },
-  whistle: { eye: ["dash", "dash"], brow: [-2, -4], mouth: "o" },
-  nervous: { eye: ["small", "small"], brow: [-3, 2], mouth: "wave" },
-  shock: { eye: ["shock", "shock"], brow: [-7, -6], mouth: "O" },
-  relief: { eye: ["happy", "happy"], brow: [-2, 1], mouth: "smileWide" },
-  relief_open: { eye: ["happy", "happy"], brow: [-2, 1], mouth: "grin" },
-  dazed: { eye: ["spiral", "spiral"], brow: [-3, 2], mouth: "wave" },
-  pained: { eye: ["squeeze", "lid"], brow: [-3, 2], mouth: "teeth" },
-  smile: { eye: ["dot", "dot"], brow: [0, -1], mouth: "smirk" },
-  smile_closed: { eye: ["happy", "happy"], brow: [0, -1], mouth: "smile" },
-  lick: { eye: ["dot", "dot"], brow: [0, -1], mouth: "lick" },
-  terrified: { eye: ["shock", "shock"], brow: [-8, -6], mouth: "scream" },
-  dread: { eye: ["wide", "wide"], brow: [-5, 1], mouth: "wave" },
-  suspicious: { eye: ["slit", "slit"], brow: [4, -2], mouth: "dash" },
-  hollow: { eye: ["hollow", "hollow"], brow: [-1, -1], mouth: "dash" },
-  unhinged: { eye: ["pinpoint", "pinpoint"], brow: [-7, -3], mouth: "creepyGrin" },
+/** Angular gaunt Gothic front/3-quarter head contour (defined temples, sunken cheeks, optional elongated uncanny jawDrop). */
+const gothicHeadFront = (cx: number, hc: number, hw: number, hh: number, facing: number, gaunt: boolean, jawDrop = 0): P2[] => {
+  const f = facing * 0.10 * hw;
+  const cheek = gaunt ? 0.88 : 0.94;
+  const jaw = gaunt ? 0.50 : 0.64;
+  const chin = gaunt ? 0.22 : 0.31;
+  const drop = jawDrop * hh * 0.34;
+  return [
+    [cx + f * 0.3, hc - hh], // crown
+    [cx + hw * 0.62 + f * 0.3, hc - hh * 0.90],
+    [cx + hw * 0.98 + f * 0.4, hc - hh * 0.42], // temple R
+    [cx + hw * cheek + f * 0.6, hc + hh * 0.02], // cheekbone R
+    [cx + hw * (cheek - 0.14) + f * 0.5, hc + hh * 0.28], // sunken hollow R
+    [cx + hw * jaw + f * 0.4, hc + hh * 0.60 + drop * 0.55], // jaw corner R
+    [cx + hw * chin + f * 0.2, hc + hh * 0.96 + drop], // chin R
+    [cx + f * 0.15, hc + hh * 1.03 + drop], // chin tip
+    [cx - hw * chin + f * 0.1, hc + hh * 0.96 + drop], // chin L
+    [cx - hw * jaw + f * 0.1, hc + hh * 0.60 + drop * 0.55], // jaw corner L
+    [cx - hw * (cheek - 0.14) + f * 0.15, hc + hh * 0.28], // sunken hollow L
+    [cx - hw * cheek + f * 0.2, hc + hh * 0.02], // cheekbone L
+    [cx - hw * 0.98 + f * 0.2, hc - hh * 0.42], // temple L
+    [cx - hw * 0.62 + f * 0.2, hc - hh * 0.90],
+  ];
 };
-const halfLid = (k: EyeK): EyeK =>
-  (k === "dot" || k === "small" || k === "wide" ? "lid" : k === "lid" ? "slit" : k === "shock" || k === "pinpoint" ? "shockHalf" : k);
-const eyeKind = (k: EyeK, lid: number): EyeK =>
-  lid >= 1 && k !== "happy" && k !== "squeeze" && k !== "spiral" && k !== "hollow" ? "dash" : lid > 0 ? halfLid(k) : k;
-const lidOf = (b: boolean | number | undefined) => (b === true ? 1 : Number(b) || 0);
 
-const eye = (p: Pen, kind: EyeK, x: number, ey: number, u: number, side: number, look: number, skin: string) => {
-  const lx = x + look * 3 * u, lw = 3.8 * u;
+/** Angular Gothic side profile skull (brow ridge, recessed eye socket, bony nose, angular chin, optional jawDrop). */
+const gothicHeadSide = (cx: number, hc: number, hw: number, hh: number, gaunt: boolean, jawDrop = 0): P2[] => {
+  const nose = gaunt ? 1.22 : 1.14;
+  const drop = jawDrop * hh * 0.30;
+  return [
+    [cx - hw * 0.10, hc - hh], // top crown
+    [cx + hw * 0.56, hc - hh * 0.86], // forehead top
+    [cx + hw * 0.90, hc - hh * 0.32], // brow ridge
+    [cx + hw * 0.76, hc - hh * 0.05], // deep eye socket notch
+    [cx + hw * nose, hc + hh * 0.18], // bony nose tip
+    [cx + hw * 0.82, hc + hh * 0.28], // under nose
+    [cx + hw * 0.88, hc + hh * 0.48 + drop * 0.35], // lips
+    [cx + hw * 0.70, hc + hh * 0.90 + drop], // angular chin
+    [cx + hw * 0.22, hc + hh * 0.99 + drop], // under jaw
+    [cx - hw * 0.38, hc + hh * 0.74 + drop * 0.4], // jaw back
+    [cx - hw * 0.88, hc + hh * 0.24], // occiput
+    [cx - hw * 0.96, hc - hh * 0.35], // rear cranium
+    [cx - hw * 0.68, hc - hh * 0.84],
+  ];
+};
+
+// ---------------- Horror Expressions (Darkest Dungeon / Mignola Chiaroscuro) ----------------
+export type Expr =
+  | "stoic"
+  | "wary"
+  | "suspicious"
+  | "dread"
+  | "uneasy"
+  | "terrified"
+  | "hollow"
+  | "unhinged"
+  | "possessed";
+
+type FaceStyle = {
+  socketDepth: number; // 0..1 darkness of upper-face brow shadow
+  eye: "slit" | "widePin" | "pinpoint" | "void" | "glowSlit" | "tense";
+  browTilt: number; // + furrowed/suspicious, - terrified/angled up
+  mouth: "tight" | "downturn" | "quiver" | "gasp" | "slack" | "eerieGrin";
+  underRings: boolean;
+  cheekHatch: boolean;
+};
+
+const FACES: Record<Expr, FaceStyle> = {
+  stoic: { socketDepth: 0.58, eye: "slit", browTilt: 2, mouth: "tight", underRings: false, cheekHatch: true },
+  wary: { socketDepth: 0.66, eye: "slit", browTilt: 4, mouth: "downturn", underRings: true, cheekHatch: true },
+  suspicious: { socketDepth: 0.72, eye: "slit", browTilt: 5, mouth: "tight", underRings: true, cheekHatch: true },
+  uneasy: { socketDepth: 0.68, eye: "tense", browTilt: -3, mouth: "quiver", underRings: true, cheekHatch: true },
+  dread: { socketDepth: 0.78, eye: "widePin", browTilt: -5, mouth: "quiver", underRings: true, cheekHatch: true },
+  terrified: { socketDepth: 0.82, eye: "pinpoint", browTilt: -8, mouth: "gasp", underRings: true, cheekHatch: true },
+  hollow: { socketDepth: 0.92, eye: "void", browTilt: -1, mouth: "slack", underRings: true, cheekHatch: true },
+  unhinged: { socketDepth: 0.84, eye: "pinpoint", browTilt: -6, mouth: "eerieGrin", underRings: true, cheekHatch: true },
+  possessed: { socketDepth: 0.96, eye: "glowSlit", browTilt: 3, mouth: "slack", underRings: false, cheekHatch: true },
+};
+
+const drawHorrorEye = (
+  p: Pen,
+  kind: FaceStyle["eye"],
+  x: number,
+  y: number,
+  u: number,
+  look: number,
+  lid: number,
+  shiver: number,
+  time: number,
+  eyeGlow?: string,
+  uncanny = false,
+  eyeScale = 1,
+) => {
+  const jx = shiver > 0 ? Math.sin(time * 47 + x) * 1.3 * u * shiver : 0;
+  const jy = shiver > 0 ? Math.cos(time * 53 + y) * 1.0 * u * shiver : 0;
+  const sc = eyeScale;
+  const lx = x + look * 3.0 * u + jx;
+  const ly = y + jy;
+
+  // Deep Darkest-Dungeon sunken obsidian orbital cavity (pitch-black skull socket!)
+  p.ell(x, y + 1.8 * u, 16.0 * u * sc, 13.8 * u * sc, "rgba(5,2,9,0.88)", 0);
+  p.ell(x, y + 2.2 * u, 13.2 * u * sc, 11.4 * u * sc, "#06030a", 0);
+
+  if (lid >= 0.95 && kind !== "void" && kind !== "glowSlit") {
+    p.stroke([[x - 11 * u * sc, y + 1 * u], [x + 11 * u * sc, y + 1 * u]], 3.2 * u, INK);
+    return;
+  }
+  const lidScale = lid > 0 && kind !== "void" && kind !== "glowSlit" ? 0.45 : 1.0;
   switch (kind) {
-    case "dot": p.ell(lx, ey, 3.8 * u, 5.5 * u, INK, 0); break;
-    case "small": p.ell(lx, ey, 3 * u, 4.4 * u, INK, 0); break;
-    case "lid": p.ell(lx, ey - u, 7 * u, 6 * u, INK, 0, 0, 180); p.stroke([[x - 9 * u, ey - u], [x + 9 * u, ey - u]], lw); break;
-    case "slit": p.ell(lx, ey, 7 * u, 2.6 * u, INK, 0, 0, 180); p.stroke([[x - 9 * u, ey], [x + 9 * u, ey]], lw); break;
-    case "happy": p.arc(x, ey + 3 * u, 8 * u, 6 * u, 200, 340, lw); break;
-    case "dash": p.stroke([[x - 8.5 * u, ey], [x + 8.5 * u, ey]], lw); break;
-    case "squeeze": p.stroke([[x + 6 * u * side, ey - 5 * u], [x - 6 * u * side, ey], [x + 6 * u * side, ey + 5 * u]], lw); break;
-    case "wide":
-      p.ell(x, ey, 9.5 * u, 9.5 * u, WHITE, 2.5 * u);
-      p.dot(lx - side * 1.2 * u, ey + u, 3.6 * u);
+    case "slit": {
+      p.ell(x, y, 9.8 * u * sc, 3.6 * u * lidScale * sc, "#bdb7ac", 2.2 * u);
+      p.dot(lx, ly, 2.0 * u * sc, INK);
+      p.stroke([[x - 12.5 * u * sc, y - 3.6 * u], [x + 12.5 * u * sc, y - 2.4 * u]], 4.4 * u, INK);
       break;
-    case "pinpoint":
-      p.ell(x, ey, 11 * u, 11.5 * u, WHITE, 2.8 * u);
-      p.dot(lx, ey, 1.8 * u);
+    }
+    case "tense": {
+      p.ell(x, y, 9.8 * u * sc, 6.2 * u * lidScale * sc, "#c8c2b4", 2.5 * u);
+      p.dot(lx, ly, 2.1 * u * sc, INK);
+      // Fine tired eyelid crease
+      p.arc(x, y - 4.5 * u, 10 * u * sc, 4 * u, 200, 340, 1.8 * u, INK);
       break;
-    case "hollow":
-      p.ell(x, ey, 9 * u, 10.5 * u, "#140b18", 2.2 * u);
+    }
+    case "widePin": {
+      p.ell(x, y, 10.8 * u * sc, 8.6 * u * lidScale * sc, "#cfc9be", 2.8 * u);
+      // Subtle bloodshot capillaries in corners
+      p.stroke([[x - 9.5 * u * sc, y + 1 * u], [x - 5.5 * u * sc, y + 2 * u]], 1.0 * u, "rgba(110,22,26,0.58)");
+      p.stroke([[x + 9.5 * u * sc, y - 1 * u], [x + 5.5 * u * sc, y]], 1.0 * u, "rgba(110,22,26,0.58)");
+      p.dot(lx, ly + 0.5 * u, 1.8 * u * sc, INK);
       break;
-    case "shock": case "shockHalf":
-      p.ell(x, ey, 11 * u, 11 * u, WHITE, 2.6 * u); p.dot(lx - side * 1.5 * u, ey + 1.5 * u, 3 * u);
-      if (kind === "shockHalf") { p.ell(x, ey, 11 * u, 11 * u, skin, 0, 180, 360); p.stroke([[x - 11 * u, ey], [x + 11 * u, ey]], 2.6 * u); }
+    }
+    case "pinpoint": {
+      const rw = (uncanny ? 11.8 : 10.6) * u * sc;
+      const rh = (uncanny ? 10.4 : 8.8) * u * lidScale * sc;
+      p.ell(x, y, rw, rh, uncanny ? "#dcd8ce" : "#d0cabd", 2.9 * u);
+      // Uncanny dilated bloodshot veins radiating toward iris
+      p.stroke([[x - rw * 0.9, y + 1 * u], [x - rw * 0.45, y + 2 * u]], 1.15 * u, "rgba(128,18,24,0.68)");
+      p.stroke([[x + rw * 0.9, y - 2 * u], [x + rw * 0.45, y - 0.5 * u]], 1.15 * u, "rgba(128,18,24,0.68)");
+      p.stroke([[x - rw * 0.65, y - rh * 0.65], [x - rw * 0.3, y - rh * 0.35]], 0.95 * u, "rgba(128,18,24,0.52)");
+      // Razor-tiny terrifying pinpoint pupil (off-axis slightly when uncanny)
+      p.dot(lx, ly, (uncanny ? 1.25 : 1.4) * u * sc, INK);
+      if (uncanny) {
+        p.dot(lx + 0.8 * u, ly - 0.8 * u, 0.7 * u, "#ffffff");
+        p.drip(x - 4 * u * sc, y + rh * 0.85, 22 * u, 1.7 * u, "rgba(6,3,10,0.82)");
+        p.drip(x + 4 * u * sc, y + rh * 0.85, 14 * u, 1.3 * u, "rgba(6,3,10,0.68)");
+      }
       break;
-    default: {
-      const s: P2[] = [];
-      for (let t = 1; t < 15; t++) s.push([x + Math.cos(t * 0.9) * t * 0.55 * u, ey + Math.sin(t * 0.9) * t * 0.55 * u]);
-      p.stroke(s, 2.4 * u);
+    }
+    case "void": {
+      p.ell(x, y + 0.8 * u, 12.2 * u * sc, 13.8 * u * sc, "#030106", 2.4 * u);
+      if (eyeGlow) {
+        // Tiny cold spectral pinhole floating inside bottomless black socket
+        p.dot(lx, ly, 3.0 * u * sc, "rgba(210,235,255,0.22)");
+        p.dot(lx, ly, 1.55 * u * sc, eyeGlow);
+      }
+      // Heavy dripping black river-ooze / ichor tears streaming down gaunt cheeks
+      p.drip(x - 4.2 * u * sc, y + 10 * u * sc, 28 * u, 2.0 * u, "rgba(5,2,9,0.86)");
+      p.drip(x + 3.4 * u * sc, y + 11 * u * sc, 20 * u, 1.5 * u, "rgba(5,2,9,0.74)");
+      p.drip(x, y + 12 * u * sc, 15 * u, 1.2 * u, "rgba(5,2,9,0.65)");
+      break;
+    }
+    case "glowSlit": {
+      p.ell(x, y, 12.5 * u * sc, 10.5 * u * sc, "#030106", 0);
+      const col = eyeGlow ?? "#dceeff";
+      p.poly(
+        [
+          [x - 9.0 * u * sc, y],
+          [x, y - 2.6 * u * sc],
+          [x + 9.0 * u * sc, y],
+          [x, y + 2.2 * u * sc],
+        ],
+        col,
+        0,
+      );
+      p.drip(x - 2 * u, y + 9 * u, 18 * u, 1.5 * u, "rgba(5,2,9,0.78)");
+      break;
     }
   }
 };
 
-const dmouth = (p: Pen, mx: number, y: number, rx: number, ry: number, u: number, tongue = false) => {
-  p.ell(mx, y, rx, ry, MOUTH, 0, 0, 180);
-  p.clip([[mx - rx, y], [mx + rx, y], [mx + rx, y + 3 * u], [mx - rx, y + 3 * u]], () => p.ell(mx, y, rx, ry, WHITE, 0, 0, 180));
-  if (tongue) p.ell(mx + 2 * u, y + 0.62 * ry, 0.4 * rx, 0.28 * ry, TONGUE, 0);
-  p.ell(mx, y, rx, ry, null, 3 * u, 0, 180);
-};
-
-const mouth = (p: Pen, kind: MouthK, mx: number, my: number, u: number, k = 1) => {
-  const mw = 4 * u;
+const drawHorrorMouth = (
+  p: Pen,
+  kind: FaceStyle["mouth"],
+  mx: number,
+  my: number,
+  u: number,
+  k = 1,
+  shiver = 0,
+  time = 0,
+  uncanny = false,
+) => {
+  const j = shiver > 0 ? Math.sin(time * 51) * 1.2 * u * shiver : 0;
+  const y = my + j;
   switch (kind) {
-    case "dash": p.stroke([[mx - 5.5 * u * k, my], [mx + 5.5 * u * k, my - 0.8 * u]], mw); break;
-    case "frown": p.arc(mx, my + 3 * u, 6.5 * u * k, 3.5 * u, 200, 340, mw); break;
-    case "smirk": p.arc(mx + u, my - 3 * u, 7 * u * k, 4 * u, 10, 150, mw); break;
-    case "smile": p.arc(mx, my - 3 * u, 8 * u * k, 4.5 * u, 20, 160, mw); break;
-    case "smileWide": p.arc(mx, my - 4 * u, 11 * u * k, 6 * u, 15, 165, mw); break;
-    case "grin": dmouth(p, mx, my - u, 12 * u * k, 8 * u, u); break;
-    case "laugh": dmouth(p, mx, my, 16 * u * k, 11 * u, u, true); break;
-    case "o": p.ell(mx + 4 * u, my, 3.5 * u, 4 * u, MOUTH, 2.8 * u); break;
-    case "O": p.ell(mx, my + 2 * u, 9 * u * k, 11 * u, MOUTH, 3.2 * u); break;
-    case "wave": { const s: P2[] = []; for (let i = 0; i <= 12; i++) s.push([mx - 9 * u * k + i * 1.5 * u * k, my + 1.5 * u * Math.sin(i * 1.3)]); p.stroke(s, 3 * u); break; }
-    case "teeth":
-      p.poly([[mx - 12 * u * k, my - 4 * u], [mx + 12 * u * k, my - 4 * u], [mx + 11 * u * k, my + 4 * u], [mx - 11 * u * k, my + 4 * u]], WHITE, 3 * u);
-      for (const j of [-1, 0, 1]) p.stroke([[mx + j * 6 * u * k, my - 4 * u], [mx + j * 6 * u * k, my + 4 * u]], 1.5 * u);
+    case "tight":
+      p.stroke([[mx - 9.5 * u * k, y], [mx + 9.5 * u * k, y - 0.8 * u]], 3.2 * u, INK);
+      p.stroke([[mx - 5 * u * k, y + 5 * u], [mx + 5 * u * k, y + 5 * u]], 1.6 * u, "rgba(10,5,16,0.52)");
       break;
-    case "lick": p.arc(mx, my - 3 * u, 8 * u * k, 4.5 * u, 20, 160, mw); p.ell(mx + 6 * u * k, my + 3 * u, 3.6 * u, 4.6 * u, TONGUE, 2.4 * u); break;
-    case "scream": {
-      const rx = 10 * u * k, ry = 13 * u, cy = my + 2.5 * u;
-      p.ell(mx, cy, rx, ry, MOUTH, 0);
-      p.clip([[mx - rx, cy - ry], [mx + rx, cy - ry], [mx + rx, cy - 0.45 * ry], [mx - rx, cy - 0.45 * ry]], () =>
-        p.ell(mx, cy, rx, ry, WHITE, 0));
-      p.ell(mx, cy, rx, ry, null, 3.2 * u);
+    case "downturn":
+      p.arc(mx, y + 5.5 * u, 10 * u * k, 5.2 * u, 200, 340, 3.4 * u, INK);
+      break;
+    case "quiver": {
+      const pts: P2[] = [];
+      for (let i = 0; i <= 10; i++) {
+        pts.push([mx - 10.5 * u * k + i * 2.1 * u * k, y + Math.sin(i * 1.7 + time * 19) * (1.3 + 0.9 * shiver) * u]);
+      }
+      p.stroke(pts, 2.8 * u, INK);
+      // Tense nasolabial creases
+      p.stroke([[mx - 12 * u * k, y - 6 * u], [mx - 10 * u * k, y + 4 * u]], 1.4 * u, "rgba(10,5,16,0.55)");
+      p.stroke([[mx + 12 * u * k, y - 6 * u], [mx + 10 * u * k, y + 4 * u]], 1.4 * u, "rgba(10,5,16,0.55)");
       break;
     }
-    case "creepyGrin": {
-      const rx = 16 * u * k, ry = 10 * u, y = my - 2 * u;
-      p.ell(mx, y, rx, ry, WHITE, 0, 0, 180);
-      p.clip([[mx - rx, y], [mx + rx, y], [mx + rx, y + ry], [mx - rx, y + ry]], () => {
-        for (const j of [-2, -1, 0, 1, 2]) p.stroke([[mx + j * 4.8 * u * k, y], [mx + j * 4.8 * u * k, y + ry]], 1.6 * u);
-      });
-      p.ell(mx, y, rx, ry, null, 3.2 * u, 0, 180);
-      p.stroke([[mx - rx, y], [mx + rx, y]], 3.2 * u);
+    case "gasp": {
+      // Truly terrified clenched/ragged scream grimace with shadowed tooth ridges (ZERO cute cartoon round 'O'!)
+      const poly: P2[] = [
+        [mx - 14.5 * u * k, y + 2 * u],
+        [mx - 9 * u * k, y - 5.5 * u],
+        [mx, y - 4.0 * u],
+        [mx + 9 * u * k, y - 5.5 * u],
+        [mx + 14.5 * u * k, y + 2 * u],
+        [mx + 10.5 * u * k, y + 10.5 * u],
+        [mx, y + 8.5 * u],
+        [mx - 10.5 * u * k, y + 10.5 * u],
+      ];
+      p.poly(poly, "#08030a", 2.9 * u);
+      // Shadowed upper & lower clenched teeth bars with vertical ink gaps
+      p.stroke([[mx - 9.5 * u * k, y - 2.6 * u], [mx + 9.5 * u * k, y - 2.6 * u]], 2.4 * u, "#9f988c");
+      p.stroke([[mx - 8.0 * u * k, y + 7.2 * u], [mx + 8.0 * u * k, y + 7.2 * u]], 2.0 * u, "#847d74");
+      for (const tx of [-6, -2, 2, 6]) {
+        p.stroke([[mx + tx * u * k, y - 4.2 * u], [mx + tx * u * k, y - 0.8 * u]], 1.0 * u, INK);
+        p.stroke([[mx + tx * u * k, y + 5.6 * u], [mx + tx * u * k, y + 8.8 * u]], 1.0 * u, INK);
+      }
+      // Deep screaming cheek strain furrows
+      p.stroke([[mx - 18 * u * k, y - 7 * u], [mx - 15 * u * k, y + 9 * u]], 1.8 * u, "rgba(10,5,16,0.68)");
+      p.stroke([[mx + 18 * u * k, y - 7 * u], [mx + 15 * u * k, y + 9 * u]], 1.8 * u, "rgba(10,5,16,0.68)");
+      break;
+    }
+    case "slack": {
+      // Uncanny elongated yawning black abyss (jaw-dropped horror entity!)
+      const stretch = uncanny ? 1.85 : 1.15;
+      const poly: P2[] = [
+        [mx - 10.5 * u * k, y - 2 * u],
+        [mx, y - 6 * u],
+        [mx + 10.5 * u * k, y - 2 * u],
+        [mx + 8.5 * u * k, y + 14 * u * stretch],
+        [mx, y + 18 * u * stretch],
+        [mx - 8.5 * u * k, y + 14 * u * stretch],
+      ];
+      p.poly(poly, "#040107", 2.8 * u);
+      if (uncanny) {
+        // Needle teeth clinging inside upper/lower black void + black ooze dripping off lower lip
+        p.stroke([[mx - 7.5 * u * k, y - 2.5 * u], [mx + 7.5 * u * k, y - 2.5 * u]], 1.8 * u, "#8c928e");
+        for (const tx of [-5.5, -2.2, 1.2, 4.8]) {
+          p.stroke([[mx + tx * u * k, y - 4 * u], [mx + tx * u * k, y + 0.5 * u]], 1.0 * u, INK);
+        }
+        p.drip(mx - 5 * u * k, y + 15 * u * stretch, 16 * u, 1.5 * u, "rgba(5,2,9,0.85)");
+        p.drip(mx + 3 * u * k, y + 17 * u * stretch, 22 * u, 1.8 * u, "rgba(5,2,9,0.88)");
+      }
+      break;
+    }
+    case "eerieGrin": {
+      // Junji Ito cheek-splitting manic rictus grin lined with thin gapped needle teeth & radial horror creases!
+      const wMul = uncanny ? 1.28 : 1.0;
+      const pts: P2[] = [
+        [mx - 23 * u * k * wMul, y - 10 * u],
+        [mx - 12 * u * k * wMul, y + 5 * u],
+        [mx, y + 9 * u],
+        [mx + 12 * u * k * wMul, y + 5 * u],
+        [mx + 23 * u * k * wMul, y - 10 * u],
+        [mx + 11 * u * k * wMul, y - 0.5 * u],
+        [mx, y + 1.5 * u],
+        [mx - 11 * u * k * wMul, y - 0.5 * u],
+      ];
+      p.poly(pts, "#050208", 2.7 * u);
+      // Upper and lower rows of pale bone-grey needle teeth separated by fine ink cracks
+      p.stroke([[mx - 17 * u * k * wMul, y + 1.2 * u], [mx + 17 * u * k * wMul, y + 1.2 * u]], 2.0 * u, "#9da6a4");
+      p.stroke([[mx - 13 * u * k * wMul, y + 5.6 * u], [mx + 13 * u * k * wMul, y + 5.6 * u]], 1.6 * u, "#7e8684");
+      for (const tx of [-15, -11, -7, -3.5, 0, 3.5, 7, 11, 15]) {
+        p.stroke(
+          [[mx + tx * u * k * wMul, y - 1.5 * u], [mx + tx * u * k * wMul, y + 8.5 * u]],
+          1.15 * u,
+          INK,
+        );
+      }
+      // Deep Junji Ito cheek-carving creases & oozing corner drips
+      for (const s of [-1, 1]) {
+        p.stroke([[mx + s * 25 * u * k * wMul, y - 14 * u], [mx + s * 19 * u * k * wMul, y + 1 * u]], 2.0 * u, "rgba(8,3,14,0.82)");
+        p.stroke([[mx + s * 28 * u * k * wMul, y - 9 * u], [mx + s * 22 * u * k * wMul, y + 5 * u]], 1.3 * u, "rgba(8,3,14,0.58)");
+      }
+      if (uncanny) {
+        p.drip(mx - 18 * u * k * wMul, y - 2 * u, 20 * u, 1.6 * u, "rgba(5,2,9,0.84)");
+        p.drip(mx + 16 * u * k * wMul, y - 1 * u, 16 * u, 1.4 * u, "rgba(5,2,9,0.78)");
+      }
       break;
     }
   }
 };
 
-const faceFront = (p: Pen, cx: number, cy: number, W: number, expr: Expr, facing: number, look: number, lid: number, brim: boolean,
-  skin: string, moustache?: string, stout = false) => {
-  const u = W / 100, F = FACE[expr], fx = cx + 7 * u * facing;
-  const ex = (F.eye[0] === "shock" || F.eye[0] === "pinpoint" ? 12 : 13) * u, ey = cy;
+const drawFaceFront = (
+  p: Pen,
+  cx: number,
+  hc: number,
+  hp: P2[],
+  W: number,
+  expr: Expr,
+  facing: number,
+  look: number,
+  lid: number,
+  shiver: number,
+  time: number,
+  eyeGlow?: string,
+  ageLines?: boolean,
+  uncanny = false,
+  underLight = 0,
+) => {
+  const u = W / 100, F = FACES[expr], fx = cx + 9 * u * facing;
+  const ey = hc - 2 * u, ex = 19 * u;
+  // Mignola / Darkest Dungeon upper-face shadow band (or terrifying inverted under-lighting!)
+  p.clip(hp, () => {
+    if (underLight > 0.05) {
+      // Under-lighting: heavy ink shadow pressed across upper forehead & brow while lower jaw glows eeriely
+      const gr = p.g.createLinearGradient(cx, hc - 56 * u, cx, hc + 42 * u);
+      gr.addColorStop(0, `rgba(5,2,10,${(0.94 * underLight + 0.15).toFixed(2)})`);
+      gr.addColorStop(0.52, `rgba(5,2,10,${(0.66 * underLight).toFixed(2)})`);
+      gr.addColorStop(0.78, "rgba(5,2,10,0)");
+      gr.addColorStop(1, `rgba(255,220,165,${(0.18 * underLight).toFixed(2)})`);
+      p.g.fillStyle = gr;
+      p.g.fillRect(cx - W, hc - W, W * 2, W * 2);
+    } else {
+      const gr = p.g.createLinearGradient(cx, hc - 48 * u, cx, hc + 24 * u);
+      gr.addColorStop(0, `rgba(6,3,12,${(F.socketDepth * 0.96).toFixed(2)})`);
+      gr.addColorStop(0.56, `rgba(6,3,12,${(F.socketDepth * 0.62).toFixed(2)})`);
+      gr.addColorStop(1, "rgba(6,3,12,0)");
+      p.g.fillStyle = gr;
+      p.g.fillRect(cx - W, hc - W, W * 2, W * 1.45);
+    }
+    // Junji Ito fine vertical stress/dread scratch lines descending across brow & temples
+    if (uncanny || expr === "terrified" || expr === "dread") {
+      for (let i = -4; i <= 4; i++) {
+        const sx = fx + i * 9.5 * u;
+        p.stroke([[sx, hc - 46 * u], [sx + i * 0.6 * u, hc - 14 * u]], 1.15 * u, "rgba(6,3,12,0.52)");
+      }
+    }
+  });
   for (const side of [-1, 1]) {
+    // Deliberate Uncanny Valley asymmetry on horror entities (one eye slightly larger & higher, misaligned gaze!)
     const x = fx + side * ex;
-    const kind = eyeKind(F.eye[(facing ? side === facing : side > 0) ? 1 : 0], lid);
-    eye(p, kind, x, ey, u, side, look, skin);
-    if (expr === "dread") p.arc(x, ey + 9.5 * u, 8 * u, 3 * u, 15, 165, 2.2 * u, "#4a3346");
-    const [dI, dO] = F.brow, by = ey - (brim ? 17 : 20) * u;
-    if (kind === "shock" || kind === "shockHalf") p.arc(x, by - 6 * u, 9 * u, 3 * u, 200, 340, 4 * u);
-    else taper(p, [x - side * 8.5 * u, by + dI * u], [x + side * 8.5 * u, by + dO * u], 5 * u, 2.5 * u);
+    const yOff = uncanny ? (side < 0 ? -3.2 * u : 2.6 * u) : 0;
+    const eScale = uncanny ? (side < 0 ? 1.16 : 0.86) : 1.0;
+    const eLook = uncanny ? look + side * 0.28 : look;
+    drawHorrorEye(p, F.eye, x, ey + yOff, u, eLook, lid, shiver, time, eyeGlow, uncanny, eScale);
+    if (F.underRings) {
+      p.arc(x, ey + yOff + 11.5 * u * eScale, 12 * u * eScale, 5.0 * u, 16, 164, 2.2 * u, "rgba(10,4,16,0.82)");
+      p.arc(x, ey + yOff + 16 * u * eScale, 9 * u * eScale, 3.4 * u, 24, 156, 1.5 * u, "rgba(10,4,16,0.56)");
+    }
+    const by = ey + yOff - 14.5 * u * eScale;
+    const tilt = F.browTilt * u;
+    taper(p, [x - side * 13 * u, by + tilt * 0.6], [x + side * 12 * u, by - tilt * 0.55], 4.6 * u, 1.9 * u, INK);
   }
-  const mx = cx + 8 * u * facing, my = cy + 20 * u;
-  mouth(p, F.mouth, mx, my, u);
-  if (moustache) for (const s of [-1, 1])
-    taper(p, [mx + s * 1.5 * u, cy + 12.5 * u], [mx + s * (stout ? 19 : 15) * u, cy + (stout ? 10.5 : 15) * u], stout ? 5.5 * u : 4.5 * u, 1.6 * u, moustache);
-  if (expr === "nervous" || expr === "terrified") p.ell(cx + 40 * u * (facing || 1), cy - 22 * u, 3 * u, 5 * u, "#9fd4ff", 2 * u);
+  // Sharp bony nose bridge + shadowed nostrils
+  const nx = fx + 2.5 * u * facing;
+  p.stroke([[nx, ey + 2 * u], [nx + 2.5 * u * (facing || 1), ey + 17 * u], [nx - 3.5 * u * (facing || 1), ey + 19 * u]], 2.4 * u, INK);
+  if (uncanny) {
+    p.dot(nx - 3 * u, ey + 18 * u, 1.8 * u, "#050208");
+    p.dot(nx + 3 * u, ey + 18 * u, 1.8 * u, "#050208");
+  }
+  // Sunken gaunt cheek hollows & harsh cross-hatch furrows
+  if (F.cheekHatch) {
+    for (const side of [-1, 1]) {
+      const chx = fx + side * 32 * u;
+      p.stroke([[chx, ey + 13 * u], [chx - side * 9 * u, ey + 35 * u]], 2.1 * u, "rgba(10,5,16,0.68)");
+      p.stroke([[chx - side * 4 * u, ey + 17 * u], [chx - side * 12 * u, ey + 33 * u]], 1.4 * u, "rgba(10,5,16,0.52)");
+      if (ageLines || uncanny) p.stroke([[chx - side * 10 * u, ey + 21 * u], [chx - side * 16 * u, ey + 38 * u]], 1.4 * u, "rgba(10,5,16,0.50)");
+    }
+  }
+  // Cold sweat drop on terrified humans
+  if (!uncanny && (expr === "terrified" || expr === "dread")) {
+    p.poly([[fx + 30 * u, ey - 14 * u], [fx + 33 * u, ey - 5 * u], [fx + 27 * u, ey - 5 * u]], "#d8e6ee", 1.3 * u);
+  }
+  drawHorrorMouth(p, F.mouth, fx + 1 * u * facing, ey + 32 * u, u, 1, shiver, time, uncanny);
 };
 
-const faceSide = (p: Pen, hx: number, hy: number, W: number, expr: Expr, lid: number, brim: boolean, skin: string, moustache?: string, stout = false) => {
-  const u = W / 100, F = FACE[expr], ex = hx + 27 * u, ey = hy;
-  const kind = eyeKind(F.eye[1], lid);
-  eye(p, kind, ex, ey, u, 1, 0.6, skin);
-  if (expr === "dread") p.arc(ex, ey + 9.5 * u, 7.5 * u, 3 * u, 15, 165, 2.2 * u, "#4a3346");
-  const by = ey - (brim ? 17 : 20) * u, [dI, dO] = F.brow;
-  if (kind === "shock" || kind === "shockHalf") p.arc(ex, by - 6 * u, 9 * u, 3 * u, 200, 340, 4 * u);
-  else taper(p, [ex + 8 * u, by + dI * u], [ex - 7 * u, by - u + dO * u], 5 * u, 2.5 * u);
-  p.stroke([[hx + 44 * u, hy + 4 * u], [hx + 47.5 * u, hy + 9 * u], [hx + 43 * u, hy + 10 * u]], 3 * u);
-  mouth(p, F.mouth, hx + 33 * u, hy + 21 * u, u, 0.62);
-  if (moustache) taper(p, [hx + 41 * u, hy + 13.5 * u], [hx + 25 * u, hy + (stout ? 11.5 : 16) * u], stout ? 5.5 * u : 4.5 * u, 1.6 * u, moustache);
-  if (expr === "nervous" || expr === "terrified") p.ell(hx - 30 * u, hy - 24 * u, 3 * u, 5 * u, "#9fd4ff", 2 * u);
+const drawFaceSide = (
+  p: Pen,
+  hx: number,
+  hc: number,
+  hp: P2[],
+  W: number,
+  expr: Expr,
+  lid: number,
+  shiver: number,
+  time: number,
+  eyeGlow?: string,
+  ageLines?: boolean,
+  uncanny = false,
+  underLight = 0,
+) => {
+  const u = W / 100, F = FACES[expr];
+  const ex = hx + 27 * u, ey = hc - 2 * u;
+  p.clip(hp, () => {
+    if (underLight > 0.05) {
+      const gr = p.g.createLinearGradient(hx, hc - 54 * u, hx, hc + 42 * u);
+      gr.addColorStop(0, `rgba(5,2,10,${(0.92 * underLight + 0.15).toFixed(2)})`);
+      gr.addColorStop(0.52, `rgba(5,2,10,${(0.62 * underLight).toFixed(2)})`);
+      gr.addColorStop(0.80, "rgba(5,2,10,0)");
+      gr.addColorStop(1, `rgba(255,220,165,${(0.18 * underLight).toFixed(2)})`);
+      p.g.fillStyle = gr;
+      p.g.fillRect(hx - W, hc - W, W * 2, W * 2);
+    } else {
+      const gr = p.g.createLinearGradient(hx, hc - 46 * u, hx, hc + 22 * u);
+      gr.addColorStop(0, `rgba(6,3,12,${(F.socketDepth * 0.94).toFixed(2)})`);
+      gr.addColorStop(0.58, `rgba(6,3,12,${(F.socketDepth * 0.56).toFixed(2)})`);
+      gr.addColorStop(1, "rgba(6,3,12,0)");
+      p.g.fillStyle = gr;
+      p.g.fillRect(hx - W, hc - W, W * 2, W * 1.45);
+    }
+    if (uncanny || expr === "terrified" || expr === "dread") {
+      for (let i = -2; i <= 3; i++) {
+        p.stroke([[hx + i * 10 * u, hc - 44 * u], [hx + i * 10 * u, hc - 14 * u]], 1.15 * u, "rgba(6,3,12,0.52)");
+      }
+    }
+  });
+  drawHorrorEye(p, F.eye, ex, ey, u, 0.5, lid, shiver, time, eyeGlow, uncanny, uncanny ? 1.12 : 1.0);
+  if (F.underRings) {
+    p.arc(ex, ey + 11.5 * u, 10.5 * u, 4.4 * u, 18, 162, 2.1 * u, "rgba(10,4,16,0.82)");
+    p.arc(ex, ey + 15.5 * u, 7.5 * u, 3.0 * u, 25, 155, 1.4 * u, "rgba(10,4,16,0.55)");
+  }
+  const by = ey - 14.5 * u;
+  taper(p, [ex + 11 * u, by + F.browTilt * 0.55 * u], [ex - 12 * u, by - F.browTilt * 0.55 * u], 4.6 * u, 1.9 * u, INK);
+  // Sunken profile cheek furrow
+  p.stroke([[hx + 16 * u, ey + 14 * u], [hx + 5 * u, ey + 35 * u]], 2.1 * u, "rgba(10,5,16,0.70)");
+  p.stroke([[hx + 11 * u, ey + 18 * u], [hx + 1 * u, ey + 34 * u]], 1.4 * u, "rgba(10,5,16,0.52)");
+  if (ageLines || uncanny) p.stroke([[hx + 24 * u, ey + 20 * u], [hx + 15 * u, ey + 35 * u]], 1.4 * u, "rgba(10,5,16,0.50)");
+  drawHorrorMouth(p, F.mouth, hx + 33 * u, ey + 31 * u, u, 0.68, shiver, time, uncanny);
 };
 
-// ---------------- extensible outfit & hooks ----------------
+// ---------------- Extensible Outfit & Hooks ----------------
 export type HeadCtx = {
-  H: Blob; hp: P2[]; cx: number; hc: number; W: number; HH: number; u: number; crown: number;
-  ow: number; light: number; thick: number; seed: number; facing: number; side: boolean;
+  hp: P2[];
+  cx: number;
+  hc: number;
+  W: number;
+  HH: number;
+  u: number;
+  crown: number;
+  ow: number;
+  light: number;
+  thick: number;
+  seed: number;
+  facing: number;
+  side: boolean;
+  back: boolean;
+  time: number;
+  wind: number;
   rot: (pts: P2[]) => P2[];
 };
 export type TorsoCtx = {
-  T: Blob; tp: P2[]; tcx: number; tcy: number; chin: number; torsoBot: number; W: number; HH: number;
-  u: number; ow: number; light: number; thick: number; facing: number; side: boolean;
+  tp: P2[];
+  tcx: number;
+  tcy: number;
+  chin: number;
+  torsoBot: number;
+  W: number;
+  HH: number;
+  u: number;
+  ow: number;
+  light: number;
+  thick: number;
+  facing: number;
+  side: boolean;
+  back: boolean;
+  time: number;
+  wind: number;
 };
 export type BodyCtx = {
-  tcx: number; chin: number; torsoBot: number; crown: number; W: number; HH: number; u: number;
-  ow: number; light: number; facing: number; side: boolean; hands: [P2, P2];
+  tcx: number;
+  chin: number;
+  torsoBot: number;
+  crown: number;
+  W: number;
+  HH: number;
+  u: number;
+  ow: number;
+  light: number;
+  facing: number;
+  side: boolean;
+  back: boolean;
+  time: number;
+  wind: number;
+  hands: [P2, P2]; // [back/left hand, front/right hand]
 };
 
 export type Outfit = {
-  jacket: string; pants: string; boots: string;
-  hat?: "cap" | "hair" | null; cap?: string; hair?: string;
-  belt?: string | null; buttons?: string; sash?: string; dress?: string; moustache?: string; skin?: string;
-  build?: Build; hasBrim?: boolean;
+  jacket: string;
+  pants: string;
+  boots: string;
+  skin?: string;
+  coatLen?: number; // extra coat hem drop below hip (0..0.95 HH)
+  tattered?: boolean; // ragged jagged hem strips animated by wind/time
+  hat?: "cap" | "hair" | "hood" | null;
+  cap?: string;
+  hair?: string;
+  eyeGlow?: string; // eerie pinpoint/slit glow color in dark eye sockets
+  uncanny?: boolean; // Junji Ito / Silent Hill uncanny mode: asymmetric eyes, stretched jaw, scratchy double-ink, ichor drips
+  ageLines?: boolean;
+  belt?: string | null;
+  buttons?: string;
+  sash?: string;
+  dress?: string;
+  build?: Build;
+  hasBrim?: boolean;
   hatBehind?: (p: Pen, ctx: HeadCtx) => void;
   hatOn?: (p: Pen, ctx: HeadCtx) => void;
   torsoDetail?: (p: Pen, ctx: TorsoCtx) => void;
@@ -380,490 +915,923 @@ export type Outfit = {
   inFrontHand?: (p: Pen, hand: P2, ctx: BodyCtx) => void;
 };
 
-const drawBuiltinHat = (p: Pen, o: Outfit, ctx: HeadCtx) => {
-  if (o.hat !== "cap" && o.hat !== "hair") return;
-  const { H, hp, cx, hc, HH, u, crown, ow, light, seed, facing, side, rot } = ctx;
-  const cut = crown + (o.hat === "cap" ? 0.3 : 0.42) * HH;
-  const keep = (x: number, y: number) => y < cut || (side && o.hat === "hair" && x < cx - 6 * u && y < hc + 0.42 * H.b);
-  const n = hp.length, startIdx = Math.max(0, hp.findIndex(([x, y], i) => keep(x, y) && !keep(hp[(i + n - 1) % n][0], hp[(i + n - 1) % n][1])));
-  const arc = [...hp.slice(startIdx), ...hp.slice(0, startIdx)].filter(([x, y]) => keep(x, y))
-    .map(([x, y]) => [cx + (x - cx) * 1.03, hc + (y - hc) * 1.03] as P2);
-  if (arc.length < 3) return;
+const drawBuiltinHeadgear = (p: Pen, o: Outfit, ctx: HeadCtx) => {
+  if (!o.hat) return;
+  const { cx, hc, W, HH, u, crown, ow, light, side, back, time, wind } = ctx;
+  const col = o.hat === "cap" ? (o.cap ?? "#2c282a") : (o.hair ?? "#121018");
+  const sh = mul(col, SH_FELT);
   if (o.hat === "hair") {
-    const [x0, y0] = arc[arc.length - 1], [x1, y1] = arc[0];
-    for (let i = 1; i < 6; i++) arc.push([x0 + ((x1 - x0) * i) / 6, y0 + ((y1 - y0) * i) / 6 + (i % 2 ? 4 * u : 0)]);
-  }
-  const col = o.hat === "cap" ? (o.cap ?? "#e2453c") : (o.hair ?? "#5a3b2a");
-  p.shadedFill(arc, col, mul(col, SH_FELT), light, H.a, 0.35);
-  p.poly(arc, null, ow);
-  if (o.hat === "hair") {
-    const s = side ? -1 : facing || 1;
-    p.stroke([[cx + s * 10 * u, cut - 30 * u], [cx + s * 2 * u, cut - 12 * u]], 1.2 * u);
-  }
-  if (o.hat === "cap") {
-    const a = H.rot + rad(4 * (rnd(seed, 20) - 0.5)), deg = (a * 180) / Math.PI;
-    if (side) p.poly(rot([[cx + 40 * u, cut - 2 * u], [cx + 74 * u, cut + 4 * u], [cx + 40 * u, cut + 6 * u]]), shade(col, 0.8), ow);
-    else {
-      const s = facing || (rnd(seed, 21) < 0.5 ? -1 : 1), [px, py] = rot([[cx + s * 4 * u, cut + 1.5 * u]])[0];
-      p.ell(px, py, 32 * u, 0.06 * HH, shade(col, 0.8), ow, 0, 180, deg);
-    }
-  }
-};
-
-// ---------------- bodies ----------------
-const BUILD: Record<Build, { a: number; torso: number; legs: number; tw: number }> = {
-  adult: { a: 118, torso: 1.1, legs: 1.4, tw: 0.8 },
-  stout: { a: 118, torso: 1.15, legs: 1.32, tw: 0.92 },
-  kid: { a: 112, torso: 0.85, legs: 1.0, tw: 0.72 },
-};
-
-export type FrontArm = "hold" | "raise" | ["swing", number];
-export type FrontOpts = {
-  phase?: number; expr?: Expr; mode?: "march" | "stroll" | "stand" | "sit" | "fall"; look?: number; blink?: boolean | number; lift?: number;
-  frontArm?: FrontArm; tilt?: number; headTilt?: number; wave?: number;
-  /** Canvas angle the key light comes FROM (painted crescent + thick outline side). */
-  light?: number; facing?: -1 | 0 | 1; seed?: number;
-};
-
-const footStroke = (p: Pen, a: P2, b: P2, w: number, col: string) => {
-  if (col !== INK) p.stroke([a, b], w + 3, INK);
-  p.stroke([a, b], w, col);
-};
-
-export const bodyFront = (p: Pen, o: Outfit, opts: FrontOpts) => {
-  const { phase = 0, expr = "neutral", mode = "march", look = 0, blink = false, lift = 60, frontArm, tilt = 0, headTilt = 0, wave,
-    light = DEF_LIGHT, facing = 0, seed = 1 } = opts;
-  const Bd = BUILD[o.build ?? "adult"], skin = o.skin ?? SKIN, two = Math.PI * 2, lid = lidOf(blink);
-  const H = headBlob(seed, Bd.a, facing), W = 2 * H.a, HH = 2 * H.b, u = W / 100;
-  const tall = (1 + Bd.torso + Bd.legs) * HH, sole = 975;
-  const bob = mode === "march" ? 0.025 * tall * Math.cos(2 * two * phase) : mode === "stroll" ? 0.015 * tall * Math.cos(2 * two * phase) : 0;
-  const torsoBot = mode === "sit" ? sole - 0.2 * HH : sole - Bd.legs * HH + bob;
-  const chin = torsoBot - Bd.torso * HH, hc = chin - H.b, crown = hc - H.b, hipY = torsoBot - 0.12 * HH;
-  const thick = thickAngle(light), ow = 5 * u;
-  const legCol = mix(o.pants, INK, 0.55), armCol = mix(o.jacket, INK, 0.5), footCol = o.boots;
-  const legW = 5.8 * u, footW = 7.5 * u;
-  // ---- legs + feet (not rotated) ----
-  p.rot = null;
-  if (mode === "sit") {
-    for (const side of [-1, 1]) {
-      const h: P2 = [300 + side * 15 * u, hipY], k: P2 = [300 + side * 36 * u, hipY + 0.2 * HH], f: P2 = [300 + side * 44 * u, sole - 8 * u];
-      p.stroke(curve(h, k, f), legW, legCol);
-      footStroke(p, [f[0] - side * 2 * u, f[1]], [f[0] + side * 12 * u, f[1] - 5 * u], footW, footCol);
-    }
-  } else if (mode === "fall") {
-    const legs: [P2, P2, P2][] = [
-      [[300 - 15 * u, hipY], [300 - 46 * u, hipY + 0.5 * HH], [300 - 70 * u, hipY + 0.72 * HH]],
-      [[300 + 15 * u, hipY], [300 + 50 * u, hipY + 0.45 * HH], [300 + 76 * u, hipY + 0.22 * HH]],
-    ];
-    legs.forEach(([h, k, f], i) => {
-      p.stroke(curve(h, k, f), legW, legCol);
-      footStroke(p, f, [f[0] + (i ? 14 : -14) * u, f[1] + (i ? -6 : 4) * u], footW, footCol);
-    });
-  } else if (o.dress) {
-    for (const side of [-1, 1]) {
-      const fx = 300 + side * 12 * u, fy = sole - 4 * u;
-      p.stroke([[fx, sole - 0.4 * HH], [fx + side * u, fy]], legW, legCol);
-      footStroke(p, [fx - side * 3 * u, fy], [fx + side * 12 * u, fy + u], footW, footCol);
-    }
-  } else {
-    const L = mode === "march" ? lift * 1.25 : mode === "stroll" ? lift * 0.55 : 0;
-    for (const [side, ph] of [[-1, 0], [1, 0.5]] as const) {
-      const up = Math.max(0, Math.sin(two * (phase + ph))) * L;
-      const hx = 300 + side * 15 * u, fx = 300 + side * 22 * u, fy = sole - 4 * u - up;
-      const k: P2 = [(hx + fx) / 2 + side * (1.5 * u + up * 0.16), (hipY + fy) / 2 - up * 0.08];
-      p.stroke(curve([hx, hipY], k, [fx, fy]), legW, legCol);
-      footStroke(p, [fx - side * 3 * u, fy], [fx + side * 13 * u, fy + 0.5 * u], footW, footCol);
-    }
-  }
-  // ---- upper body ----
-  const sway = mode === "march" ? 1.6 * Math.sin(two * phase) : mode === "stroll" ? 1.0 * Math.sin(two * phase) : 0;
-  const A = tilt + sway;
-  p.rot = A ? [rad(A), 300, hipY] : null;
-  const dress = !!o.dress && mode !== "sit" && mode !== "fall";
-  const T: Blob = {
-    a: ((Bd.tw / 2) * W) / 1.06, b: 0.5 * (torsoBot - (chin - 0.25 * HH)), nTop: 2.2, nBot: 2.6,
-    egg: o.build === "stout" ? 0.17 : 0.12, asym: 0.04 * facing, rot: 0, noise: 0.006, seed: seed + 7,
-  };
-  const tcx = 300 + 3 * u * facing, tcy = torsoBot - T.b, tp = blobPts(tcx, tcy, T);
-  const sh = (side: number): P2 => [tcx + side * 0.85 * T.a, chin + 0.12 * HH];
-  const hang = (side: number, fwd: number): [P2, P2, P2] => {
-    const S = sh(side), ex = tcx + side * (1.12 * T.a + 4 * u);
-    const hx = ex + side * 3 * u - side * 6 * u * Math.max(0, fwd) + side * 4 * u * Math.max(0, -fwd);
-    return [S, [ex, S[1] + 0.48 * HH], [hx, chin + 1.04 * HH - Math.abs(fwd) * 9 * u]];
-  };
-  const sw = mode === "march" || mode === "stroll" ? Math.sin(two * phase) : 0;
-  type Arm = { pts: [P2, P2, P2]; front: boolean };
-  const arms: Arm[] = [];
-  if (mode === "sit") {
-    for (const side of [-1, 1]) arms.push({ pts: [sh(side), [tcx + side * (1.1 * T.a + 6 * u), sh(side)[1] + 0.4 * HH], [tcx + side * (1.2 * T.a + 10 * u), torsoBot + 0.04 * HH]], front: false });
-  } else if (mode === "fall") {
-    for (const side of [-1, 1]) arms.push({ pts: [sh(side), [tcx + side * (1.15 * T.a + 12 * u), sh(side)[1] - 0.25 * HH], [tcx + side * (1.3 * T.a + 24 * u), sh(side)[1] - 0.68 * HH]], front: false });
-  } else {
-    arms.push({ pts: hang(-1, -sw), front: false });
-    if (wave !== undefined) {
-      const S = sh(1);
-      arms.push({ pts: [S, [tcx + 1.1 * T.a + 10 * u + 3 * u * wave, S[1] - 0.22 * HH], [tcx + 1.18 * T.a + 16 * u + 12 * u * wave, S[1] - 0.6 * HH]], front: false });
-    } else if (frontArm === "hold") {
-      const S = sh(1);
-      arms.push({ pts: [S, [tcx + 1.05 * T.a + 4 * u, S[1] + 0.45 * HH], [tcx + 0.5 * T.a, S[1] + 0.4 * HH]], front: true });
-    } else if (frontArm === "raise") {
-      const S = sh(1);
-      arms.push({ pts: [S, [tcx + 1.1 * T.a + 10 * u, S[1] - 0.18 * HH], [tcx + 1.18 * T.a + 14 * u, S[1] - 0.55 * HH]], front: true });
-    } else if (Array.isArray(frontArm)) {
-      const S = sh(1), k = clamp(frontArm[1], 0, 1);
-      const E = lerp2([tcx + 1.1 * T.a + 10 * u, S[1] - 0.15 * HH], [tcx + 1.2 * T.a + 10 * u, S[1] + 0.3 * HH], k);
-      const Hd = lerp2([tcx + 1.15 * T.a + 14 * u, S[1] - 0.55 * HH], [tcx + 1.45 * T.a + 22 * u, S[1] + 0.35 * HH], k);
-      arms.push({ pts: [S, E, Hd], front: true });
+    const sway = Math.sin(time * 2.6 + cx * 0.02) * (3 + 8 * wind) * u;
+    if (back) {
+      // Full matted hair draping down back of skull & nape
+      const poly: P2[] = [
+        [cx - 0.56 * W, hc - 0.10 * HH],
+        [cx - 0.44 * W, crown - 0.04 * HH],
+        [cx, crown - 0.08 * HH],
+        [cx + 0.44 * W, crown - 0.04 * HH],
+        [cx + 0.56 * W, hc - 0.10 * HH],
+        [cx + 0.54 * W + sway, hc + 0.62 * HH],
+        [cx + 0.25 * W + sway * 0.7, hc + 0.74 * HH],
+        [cx + sway * 0.8, hc + 0.60 * HH],
+        [cx - 0.25 * W + sway * 0.7, hc + 0.76 * HH],
+        [cx - 0.54 * W + sway, hc + 0.64 * HH],
+      ];
+      p.gradFill(poly, col, sh, light);
+      p.hatch(poly, light, 8, 1.5);
+      p.poly(poly, null, ow);
+    } else if (side) {
+      const poly: P2[] = [
+        [cx + 0.46 * W, hc - 0.20 * HH],
+        [cx + 0.22 * W, crown - 0.05 * HH],
+        [cx - 0.36 * W, crown - 0.03 * HH],
+        [cx - 0.58 * W, hc - 0.02 * HH],
+        [cx - 0.56 * W + sway, hc + 0.58 * HH],
+        [cx - 0.26 * W + sway * 0.6, hc + 0.48 * HH],
+        [cx - 0.08 * W, hc - 0.02 * HH],
+        [cx + 0.18 * W, hc - 0.14 * HH],
+      ];
+      p.gradFill(poly, col, sh, light);
+      p.poly(poly, null, ow);
     } else {
-      arms.push({ pts: hang(1, sw), front: false });
+      // Jagged Gothic fringe overhanging shadowed forehead + dangling side strands
+      const poly: P2[] = [
+        [cx - 0.56 * W, hc + 0.28 * HH],
+        [cx - 0.54 * W, hc - 0.24 * HH],
+        [cx - 0.36 * W, crown - 0.05 * HH],
+        [cx, crown - 0.08 * HH],
+        [cx + 0.36 * W, crown - 0.05 * HH],
+        [cx + 0.54 * W, hc - 0.24 * HH],
+        [cx + 0.56 * W, hc + 0.28 * HH],
+        [cx + 0.42 * W + sway * 0.4, hc - 0.06 * HH],
+        [cx + 0.24 * W, hc - 0.12 * HH],
+        [cx + 0.08 * W + sway * 0.2, hc - 0.02 * HH],
+        [cx - 0.10 * W, hc - 0.15 * HH],
+        [cx - 0.28 * W + sway * 0.2, hc - 0.04 * HH],
+        [cx - 0.42 * W + sway * 0.4, hc - 0.08 * HH],
+      ];
+      p.gradFill(poly, col, sh, light);
+      p.poly(poly, null, ow);
+    }
+  } else if (o.hat === "cap") {
+    const capY = crown + 0.30 * HH;
+    const dome: P2[] = [
+      [cx - 0.53 * W, capY],
+      [cx - 0.46 * W, crown - 0.04 * HH],
+      [cx, crown - 0.10 * HH],
+      [cx + 0.46 * W, crown - 0.04 * HH],
+      [cx + 0.53 * W, capY],
+    ];
+    p.gradFill(dome, col, sh, light);
+    p.hatch(dome, light, 9, 1.3);
+    p.poly(dome, null, ow);
+    if (!back) {
+      if (side) {
+        p.poly(
+          [
+            [cx + 0.34 * W, capY - 2 * u],
+            [cx + 0.80 * W, capY + 6 * u],
+            [cx + 0.38 * W, capY + 9 * u],
+          ],
+          shade(col, 0.72),
+          ow * 0.85,
+        );
+      } else {
+        p.poly(
+          [
+            [cx - 0.50 * W, capY],
+            [cx, capY - 4 * u],
+            [cx + 0.50 * W, capY],
+            [cx + 0.38 * W, capY + 11 * u],
+            [cx - 0.38 * W, capY + 11 * u],
+          ],
+          shade(col, 0.72),
+          ow * 0.85,
+        );
+      }
+    }
+  } else if (o.hat === "hood") {
+    if (back) {
+      const hood: P2[] = [
+        [cx - 0.64 * W, hc + 0.48 * HH],
+        [cx - 0.60 * W, hc - 0.22 * HH],
+        [cx - 0.34 * W, crown - 0.12 * HH],
+        [cx, crown - 0.20 * HH],
+        [cx + 0.34 * W, crown - 0.12 * HH],
+        [cx + 0.60 * W, hc - 0.22 * HH],
+        [cx + 0.64 * W, hc + 0.48 * HH],
+      ];
+      p.gradFill(hood, col, sh, light);
+      p.hatch(hood, light, 9, 1.5, "rgba(8,4,12,0.52)", true);
+      p.poly(hood, null, ow);
+    } else if (side) {
+      // Side-profile draped cowl behind crown & neck, overhanging forehead without covering eyes/nose
+      const cowlSide: P2[] = [
+        [cx - 0.68 * W, hc + 0.50 * HH],
+        [cx - 0.66 * W, hc - 0.24 * HH],
+        [cx - 0.26 * W, crown - 0.16 * HH],
+        [cx + 0.34 * W, crown - 0.10 * HH],
+        [cx + 0.58 * W, crown + 0.08 * HH],
+        [cx + 0.24 * W, crown + 0.14 * HH],
+        [cx - 0.18 * W, hc - 0.06 * HH],
+        [cx - 0.26 * W, hc + 0.46 * HH],
+      ];
+      p.gradFill(cowlSide, col, sh, light);
+      p.hatch(cowlSide, light, 9, 1.4, "rgba(8,4,12,0.48)", true);
+      p.poly(cowlSide, null, ow);
+    } else {
+      // Front open-faced Gothic hood cowl arch framing the face & casting deep shadow across the brow
+      const cowl: P2[] = [
+        [cx - 0.68 * W, hc + 0.50 * HH],
+        [cx - 0.64 * W, hc - 0.20 * HH],
+        [cx - 0.34 * W, crown - 0.14 * HH],
+        [cx, crown - 0.22 * HH],
+        [cx + 0.34 * W, crown - 0.14 * HH],
+        [cx + 0.64 * W, hc - 0.20 * HH],
+        [cx + 0.68 * W, hc + 0.50 * HH],
+        [cx + 0.44 * W, hc + 0.44 * HH],
+        [cx + 0.46 * W, hc - 0.14 * HH],
+        [cx + 0.26 * W, crown + 0.11 * HH],
+        [cx, crown + 0.15 * HH],
+        [cx - 0.26 * W, crown + 0.11 * HH],
+        [cx - 0.46 * W, hc - 0.14 * HH],
+        [cx - 0.44 * W, hc + 0.44 * HH],
+      ];
+      p.gradFill(cowl, col, sh, light);
+      p.hatch(cowl, light, 9, 1.4, "rgba(8,4,12,0.48)", true);
+      p.poly(cowl, null, ow);
     }
   }
-  const bodyCtx: BodyCtx = {
-    tcx, chin, torsoBot, crown, W, HH, u, ow, light, facing, side: false,
-    hands: [arms[0].pts[2], arms[1].pts[2]],
-  };
-  const drawArm = (a: Arm) => { p.stroke(curve(a.pts[0], a.pts[1], a.pts[2]), 5.2 * u, armCol); p.dot(a.pts[2][0], a.pts[2][1], 5.5 * u); };
-  o.behindBody?.(p, bodyCtx);
-  for (const a of arms) if (!a.front) drawArm(a);
-  const torsoCtx: TorsoCtx = { T, tp, tcx, tcy, chin, torsoBot, W, HH, u, ow, light, thick, facing, side: false };
-  if (dress) {
-    const D: Blob = { a: 0.5 * W * 0.98, b: 0.5 * ((sole - 0.35 * HH) - (chin - 0.2 * HH)), nTop: 2.0, nBot: 3.0, egg: 0.35, asym: 0.03 * facing, rot: 0, noise: 0.006, seed: seed + 9 };
-    const dp = blobPts(300, sole - 0.35 * HH - D.b, D);
-    p.gradFill(dp, o.dress!, mul(o.dress!, SH_CLOTH), light);
-    p.inkRing(dp, ow, thick);
-    const Sw: Blob = { a: 0.37 * W, b: 0.3 * HH, nTop: 2.2, nBot: 2.4, egg: 0.1, asym: 0, rot: 0, noise: 0.006, seed: seed + 8 };
-    const sp = blobPts(300, chin + 0.12 * HH, Sw);
-    p.gradFill(sp, o.jacket, mul(o.jacket, SH_CLOTH), light);
-    if (o.torsoDetail) p.clip(sp, () => o.torsoDetail!(p, { ...torsoCtx, T: Sw, tp: sp, tcx: 300, tcy: chin + 0.12 * HH }));
-    p.inkRing(sp, ow * 0.9, thick);
-  } else {
-    p.gradFill(tp, o.jacket, mul(o.jacket, SH_CLOTH), light);
-    p.clip(tp, () => {
-      if (o.belt) {
-        for (const s of [-1, 1]) p.band([[tcx - s * 0.75 * T.a, chin - 0.05 * HH], [tcx + s * 0.8 * T.a, torsoBot - 0.1 * HH]], o.belt!, 5.5 * u, 1.8 * u);
-        const xc = tcx + 0.025 * T.a, yc = chin - 0.05 * HH + (torsoBot - 0.1 * HH - (chin - 0.05 * HH)) * (0.75 / 1.55);
-        p.poly([[xc - 3.5 * u, yc - 3.5 * u], [xc + 3.5 * u, yc - 3.5 * u], [xc + 3.5 * u, yc + 3.5 * u], [xc - 3.5 * u, yc + 3.5 * u]], "#d9dde0", 1.5 * u);
-      }
-      if (o.sash) p.band([[tcx - 1.3 * T.a, torsoBot - 0.32 * HH], [tcx + 1.3 * T.a, torsoBot - 0.32 * HH]], o.sash, 0.13 * HH, 1.8 * u);
-      if (o.buttons) {
-        for (let i = 0; i < 4; i++) {
-          const y = chin + 0.12 * HH + i * 0.2 * HH;
-          if (o.sash && Math.abs(y - (torsoBot - 0.32 * HH)) < 0.08 * HH) continue;
-          p.dot(tcx + 2 * u * facing, y, 2.2 * u + 0.8 * u, INK); p.dot(tcx + 2 * u * facing, y, 2.2 * u, o.buttons);
-        }
-      }
-      o.torsoDetail?.(p, torsoCtx);
-    });
-    if (o.sash) { const s = facing || 1; p.poly([[tcx + s * 0.55 * T.a, torsoBot - 0.3 * HH], [tcx + s * 0.75 * T.a, torsoBot + 0.05 * HH], [tcx + s * 0.45 * T.a, torsoBot + 0.02 * HH]], o.sash, 1.6 * u); }
-    p.inkRing(tp, ow, thick);
-  }
-  for (const a of arms) if (a.front) {
-    drawArm(a);
-    o.inFrontHand?.(p, a.pts[2], bodyCtx);
-  }
-  // ---- head ----
-  const Ah = A + headTilt, [cpx, cpy] = rotAbout([300, chin], rad(A), [300, hipY]);
-  p.rot = Ah ? [rad(Ah), 300, chin, cpx - 300, cpy - chin] : null;
-  const hp = blobPts(300, hc, H);
-  const hatAngle = H.rot + rad(4 * (rnd(seed, 20) - 0.5));
-  const headCtx: HeadCtx = {
-    H, hp, cx: 300, hc, W, HH, u, crown, ow: 0.85 * ow, light, thick, seed, facing, side: false,
-    rot: (pts: P2[]) => rotPts(pts, hatAngle, 300, hc),
-  };
-  o.hatBehind?.(p, headCtx);
-  p.shadedFill(hp, skin, mul(skin, SH_SKIN), light, H.a);
-  p.inkRing(hp, ow, thick);
-  drawBuiltinHat(p, o, headCtx);
-  o.hatOn?.(p, headCtx);
-  faceFront(p, 300, hc, W, expr, facing, look, lid, o.hasBrim ?? false, skin, o.moustache, o.build === "stout");
-  p.rot = null;
 };
 
-export type SideOpts = {
-  phase?: number; expr?: Expr; mode?: "march" | "stand" | "sit" | "push"; blink?: boolean | number; stomp?: number; pose?: number;
-  /** Step length as a multiple of 0.8 m (370 units): matches 1.6 m/s at 2 steps/s; scale by the view's foreshortening. */
-  stride?: number; light?: number; seed?: number;
-  /** Push mode: where the hands land at pose 1, in final canvas units. */
-  hand?: [number, number];
+// ---------------- Proportions & Articulated Horror Rig ----------------
+type RigSpec = {
+  headW: number;
+  headH: number;
+  neckH: number;
+  shW: number;
+  waistW: number;
+  torsoH: number;
+  legH: number;
+  armScale: number;
+  hunch: number;
+  gaunt: boolean;
+  claw: boolean;
+};
+
+const RIGS: Record<Build, RigSpec> = {
+  adult: { headW: 57, headH: 73, neckH: 24, shW: 94, waistW: 54, torsoH: 260, legH: 410, armScale: 1.0, hunch: 3, gaunt: false, claw: false },
+  elder: { headW: 55, headH: 71, neckH: 22, shW: 88, waistW: 52, torsoH: 248, legH: 392, armScale: 0.98, hunch: 9, gaunt: true, claw: false },
+  gaunt: { headW: 52, headH: 76, neckH: 34, shW: 84, waistW: 44, torsoH: 274, legH: 428, armScale: 1.22, hunch: 10, gaunt: true, claw: true },
+  kid: { headW: 53, headH: 66, neckH: 18, shW: 72, waistW: 44, torsoH: 198, legH: 312, armScale: 0.92, hunch: 2, gaunt: false, claw: false },
+};
+
+export type Action =
+  | "idle"
+  | "walk"
+  | "creep"
+  | "flee"
+  | "peer"
+  | "crouch"
+  | "recoil"
+  | "lunge"
+  | "reach"
+  | "boltDoor"
+  | "cower"
+  | "emerge";
+
+export type FrontArm = "hold" | "raise" | "extend" | "defend" | ["swing", number];
+
+export type PoseOpts = {
+  action?: Action;
+  phase?: number; // 0..1 walk/flee stride cycle
+  poseMix?: number; // 0..1 continuous intensity of peer/recoil/lunge/boltDoor
+  expr?: Expr;
+  look?: number; // -1..1 horizontal eye gaze
+  blink?: boolean | number;
+  frontArm?: FrontArm;
   holdProp?: boolean;
+  tilt?: number; // extra body tilt deg
+  headTilt?: number; // extra head cant deg (use 25..42 deg with uncannyTwitch for inhuman neck snaps!)
+  headPitch?: number; // -1 (look down) .. +1 (look up)
+  jawDrop?: number; // 0..1 unnatural elongated slack/screaming jaw for horror entities
+  underLight?: number; // 0..1 eerie upward lantern/floor under-lighting casting shadows up across brow
+  glance?: -1 | 0 | 1; // for bodyBack: over-the-shoulder profile glance!
+  facing?: -1 | 0 | 1;
+  time?: number; // continuous seconds driving breathing, wind, shiver
+  shiver?: number; // 0..1 nervous tremor
+  wind?: number; // 0..1 fluttering hair / coat hem
+  stride?: number;
+  light?: number;
+  seed?: number;
 };
 
-const ik = (hip: P2, ank: P2, l1: number, l2: number): P2 => {
-  const dx = ank[0] - hip[0], dy = ank[1] - hip[1], d = clamp(Math.hypot(dx, dy), 1, l1 + l2 - 0.01);
-  const A = Math.acos(clamp((l1 * l1 + d * d - l2 * l2) / (2 * l1 * d), -1, 1)), k = Math.atan2(dy, dx) - A;
+const lidOf = (b: boolean | number | undefined) => (b === true ? 1 : Number(b) || 0);
+
+const ik = (hip: P2, ank: P2, l1: number, l2: number, bendDir = 1): P2 => {
+  const dx = ank[0] - hip[0], dy = ank[1] - hip[1], d = clamp(Math.hypot(dx, dy), 1, l1 + l2 - 0.5);
+  const A = Math.acos(clamp((l1 * l1 + d * d - l2 * l2) / (2 * l1 * d), -1, 1));
+  const k = Math.atan2(dy, dx) - A * bendDir;
   return [hip[0] + l1 * Math.cos(k), hip[1] + l1 * Math.sin(k)];
 };
 
-/** Side view facing screen-right; march footfalls land at phase 0 (near foot) and 0.5 (far foot). */
-export const bodySide = (p: Pen, o: Outfit, opts: SideOpts) => {
-  const { phase = 0, expr = "neutral", mode = "march", blink = false, stomp = 1, pose = 0, stride = 1, light = DEF_LIGHT, seed = 1, holdProp = false } = opts;
-  const Bd = BUILD[o.build ?? "adult"], skin = o.skin ?? SKIN, two = Math.PI * 2, lid = lidOf(blink);
-  const H: Blob = { ...headBlob(seed, Bd.a, 1), asym: 0.12, rot: rad(3 + 3 * (rnd(seed, 7) - 0.5)) };
-  const W = 2 * H.a, HH = 2 * H.b, u = W / 100, sole = 975, ankY = sole - 4 * u;
-  const thick = thickAngle(light), ow = 5 * u;
-  const legLen = (Bd.legs + 0.12) * HH - 4 * u, l1 = legLen / 2, l2 = legLen / 2;
-  const nearCol = mix(o.pants, INK, 0.55), farCol = mix(o.pants, INK, 0.75), footCol = o.boots;
+/** Build organically curved Gothic coat/tunic silhouette (curved spine/shoulders, flared coat drape, optional tatters). */
+const coatTorsoPts = (
+  cx: number,
+  shY: number,
+  hipY: number,
+  shW: number,
+  waistW: number,
+  coatDrop: number,
+  tattered: boolean,
+  time: number,
+  wind: number,
+  facing: number,
+): P2[] => {
+  const waistY = shY + (hipY - shY) * 0.62;
+  const hemY = hipY + coatDrop;
+  const hemW = Math.max(waistW * 1.24, shW * (coatDrop > 40 ? 0.96 : 0.78));
+  const sway = Math.sin(time * 2.5 + 0.6) * (4 + 14 * wind);
+  const f = facing * 6;
+  const shL: P2 = [cx - shW + f * 0.3, shY + 18];
+  const shR: P2 = [cx + shW + f * 0.3, shY + 18];
+  const wL: P2 = [cx - waistW + f * 0.2, waistY];
+  const wR: P2 = [cx + waistW + f * 0.2, waistY];
+  const hL: P2 = [cx - hemW + sway, hemY];
+  const hR: P2 = [cx + hemW + sway, hemY];
+
+  const topEdge = curve(shL, [cx + f * 0.4, shY - 12], shR, 8);
+  const rightSide = curve(shR, [wR[0] - 4, waistY], hR, 8);
+  const leftSide = curve(hL, [wL[0] + 4, waistY], shL, 8);
+
+  const pts: P2[] = [...topEdge, ...rightSide.slice(1)];
+  if (tattered) {
+    const teeth = 7;
+    for (let i = teeth - 1; i >= 1; i--) {
+      const u = i / teeth;
+      const tx = cx - hemW + u * hemW * 2 + sway * (0.7 + 0.3 * Math.sin(i * 1.7));
+      const drop = i % 2 === 1 ? 26 + 10 * Math.sin(time * 3.1 + i) : -6;
+      pts.push([tx, hemY + drop]);
+    }
+  } else {
+    pts.push([cx + sway * 0.9, hemY + 8]);
+  }
+  pts.push(...leftSide);
+  return pts;
+};
+
+// ---------------- 1. FRONT / 3-QUARTER VIEW ----------------
+export const bodyFront = (p: Pen, o: Outfit, opts: PoseOpts = {}) => {
+  const {
+    action = "idle",
+    phase = 0,
+    poseMix = 1,
+    expr = "wary",
+    look = 0,
+    blink = false,
+    frontArm,
+    tilt = 0,
+    headTilt = 0,
+    headPitch = 0,
+    jawDrop = 0,
+    underLight = 0,
+    facing = 0,
+    time = 0,
+    shiver = 0,
+    wind = 0.2,
+    light = DEF_LIGHT,
+    seed = 1,
+  } = opts;
+  const R = RIGS[o.build ?? "adult"];
+  p.grit = o.uncanny || R.gaunt ? 1.55 : 0.95;
+  const skin = o.skin ?? SKIN;
+  const lid = lidOf(blink);
+  const W = R.headW * 2, HH = R.headH * 2, u = W / 100;
+  const sole = 970, two = Math.PI * 2;
+  const ow = 4.6 * u, thick = thickAngle(light);
+
+  // Continuous living breathing + crouch/peer/recoil vertical offset
+  const breath = Math.sin(time * 2.4 + seed) * (action === "flee" ? 4.5 : 2.6);
+  const crouchDrop =
+    action === "crouch"
+      ? 95 * poseMix
+      : action === "peer"
+      ? 42 * poseMix
+      : action === "cower"
+      ? 72 * poseMix
+      : action === "recoil"
+      ? 24 * poseMix
+      : 0;
+  const strideBob =
+    action === "flee" ? 18 * Math.abs(Math.sin(two * phase)) : action === "walk" || action === "creep" ? 10 * Math.abs(Math.sin(two * phase)) : 0;
+
+  const hipY = sole - R.legH + crouchDrop - strideBob;
+  const shY = hipY - R.torsoH + breath;
+  const chin = shY - R.neckH + (action === "peer" ? 14 * poseMix : 0);
+  const hc = chin - R.headH + headPitch * -10;
+  const crown = hc - R.headH;
+  const tcx = 300 + facing * 6 + (shiver > 0 ? Math.sin(time * 43) * 2.2 * shiver : 0);
+
+  // ---- Articulated Legs ----
+  p.rot = null;
+  const legCol = o.pants, bootCol = o.boots;
+  const l1 = R.legH * 0.51, l2 = R.legH * 0.49;
+  const stepLift = action === "flee" ? 78 : action === "walk" ? 44 : action === "creep" ? 28 : 0;
+  for (const [side, ph] of [[-1, 0], [1, 0.5]] as const) {
+    const up = stepLift > 0 ? Math.max(0, Math.sin(two * (phase + ph))) * stepLift : 0;
+    const spread = action === "recoil" ? 36 * poseMix : action === "flee" ? 34 : action === "crouch" ? 42 * poseMix : 22;
+    const hip: P2 = [tcx + side * (R.waistW * 0.48), hipY - 8];
+    const ank: P2 = [tcx + side * spread, sole - 8 - up];
+    const knee: P2 = [
+      (hip[0] + ank[0]) * 0.5 + side * (crouchDrop * 0.25 + up * 0.14 + 4),
+      (hip[1] + ank[1]) * 0.5 - up * 0.10,
+    ];
+    drawArticulatedLimb(p, hip, knee, ank, 26 * u, 19 * u, 13 * u, legCol, light, ow);
+    drawBoot(p, ank, side, up > 5 ? -0.14 : 0, u, bootCol, ow);
+  }
+
+  // ---- Upper Body Tilt & Lean ----
+  const walkSway = action === "flee" ? 6 * Math.sin(two * phase) : action === "walk" || action === "creep" ? 2.5 * Math.sin(two * phase) : 0;
+  const actTilt =
+    action === "recoil"
+      ? -13 * poseMix
+      : action === "lunge"
+      ? 14 * poseMix
+      : action === "peer"
+      ? 8 * poseMix
+      : action === "cower"
+      ? -8 * poseMix
+      : 0;
+  const A = tilt + walkSway + actTilt;
+  p.rot = A ? [rad(A), tcx, hipY] : null;
+
+  // ---- Articulated Arms ----
+  const aLen = R.torsoH * 0.94 * R.armScale;
+  const shL: P2 = [tcx - R.shW * 0.88, shY + 18];
+  const shR: P2 = [tcx + R.shW * 0.88, shY + 18];
+  const sw = action === "flee" ? Math.sin(two * phase) * 1.4 : action === "walk" || action === "creep" ? Math.sin(two * phase) * 0.6 : 0;
+  const trembX = shiver > 0 ? Math.sin(time * 49) * 3.5 * shiver : 0;
+  const trembY = shiver > 0 ? Math.cos(time * 55) * 3.0 * shiver : 0;
+
+  let armL: [P2, P2, P2] = [shL, [shL[0] - 18 - sw * 14, shL[1] + aLen * 0.48], [shL[0] - 14 - sw * 28, shL[1] + aLen * 0.92]];
+  let armR: [P2, P2, P2] = [shR, [shR[0] + 18 + sw * 14, shR[1] + aLen * 0.48], [shR[0] + 14 + sw * 28, shR[1] + aLen * 0.92]];
+  let rightInFront = false;
+  let openL = false, openR = false;
+
+  if (action === "peer") {
+    // Leaning forward lowering storm lantern/right hand out & down
+    armL = [shL, [shL[0] - 26, shL[1] + aLen * 0.42], [shL[0] - 18, shL[1] + aLen * 0.80]];
+    armR = [shR, [shR[0] + 34 * poseMix, shR[1] + aLen * 0.36], [shR[0] + 54 * poseMix + trembX, shR[1] + aLen * 0.72 + trembY]];
+    rightInFront = true;
+  } else if (action === "recoil" || action === "cower") {
+    armL = [shL, [shL[0] - 42 * poseMix, shL[1] + 24], [shL[0] - 24 + trembX, shL[1] - 48 * poseMix + trembY]];
+    armR = [shR, [shR[0] + 44 * poseMix, shR[1] + 10], [shR[0] + 28 + trembX, shR[1] - 68 * poseMix + trembY]];
+    rightInFront = true;
+    openL = openR = true;
+  } else if (action === "lunge" || action === "reach") {
+    armL = [shL, [shL[0] - 32, shL[1] + 42], [shL[0] - 58 * poseMix, shL[1] + 12]];
+    armR = [shR, [shR[0] + 68 * poseMix, shR[1] - 10], [shR[0] + 148 * poseMix + trembX, shR[1] - 22 * poseMix + trembY]];
+    rightInFront = true;
+    openL = openR = true;
+  } else if (action === "emerge") {
+    const wr = Math.sin(time * 2.2) * 14;
+    armL = [shL, [shL[0] - 52, shL[1] + 28 + wr], [shL[0] - 92, shL[1] - 16 - wr * 0.6]];
+    armR = [shR, [shR[0] + 54, shR[1] + 24 - wr], [shR[0] + 96, shR[1] - 20 + wr * 0.6]];
+    rightInFront = true;
+    openL = openR = true;
+  } else if (action === "boltDoor") {
+    armL = [shL, [shL[0] - 12, shL[1] + 65], [tcx - 24, shY + 55]];
+    armR = [shR, [shR[0] + 12, shR[1] + 65], [tcx + 28, shY + 55]];
+    rightInFront = true;
+  } else if (frontArm === "hold") {
+    armR = [shR, [shR[0] + 26, shR[1] + aLen * 0.42], [tcx + R.shW * 0.56 + trembX, shR[1] + aLen * 0.44 + trembY]];
+    rightInFront = true;
+  } else if (frontArm === "raise") {
+    armR = [shR, [shR[0] + 44, shR[1] - 8], [shR[0] + 56 + trembX, shR[1] - 82 + trembY]];
+    rightInFront = true;
+  } else if (frontArm === "extend") {
+    armR = [shR, [shR[0] + 58, shR[1] + 22], [shR[0] + 114 + trembX, shR[1] + 18 + trembY]];
+    rightInFront = true;
+    openR = true;
+  } else if (frontArm === "defend") {
+    armR = [shR, [shR[0] + 24, shR[1] + 26], [tcx + 14 + trembX, shR[1] - 42 + trembY]];
+    rightInFront = true;
+    openR = true;
+  } else if (Array.isArray(frontArm)) {
+    const k = clamp(frontArm[1], 0, 1);
+    armR = [
+      shR,
+      lerp2([shR[0] + 40, shR[1] - 12], [shR[0] + 48, shR[1] + 68], k),
+      lerp2([shR[0] + 52, shR[1] - 78], [shR[0] + 92, shR[1] + 74], k),
+    ];
+    rightInFront = true;
+  }
+
+  const coatDrop = o.dress ? sole - hipY - 58 : (o.coatLen ?? 0.24) * HH;
+  const tp = coatTorsoPts(tcx, shY, hipY, R.shW, R.waistW, coatDrop, !!o.tattered, time, wind, facing);
+  const bodyCtx: BodyCtx = {
+    tcx, chin, torsoBot: hipY + coatDrop, crown, W, HH, u, ow, light, facing, side: false, back: false, time, wind,
+    hands: [armL[2], armR[2]],
+  };
+
+  o.behindBody?.(p, bodyCtx);
+  drawArticulatedLimb(p, armL[0], armL[1], armL[2], 22 * u, 16 * u, 11 * u, o.jacket, light, ow);
+  drawGauntHand(p, armL[2], armL[1], u, skin, R.claw, openL, ow);
+  if (!rightInFront) {
+    drawArticulatedLimb(p, armR[0], armR[1], armR[2], 22 * u, 16 * u, 11 * u, o.jacket, light, ow);
+    drawGauntHand(p, armR[2], armR[1], u, skin, R.claw, openR, ow);
+  }
+
+  // ---- Torso / Coat with Gothic Cross-Hatching & Drapery Folds ----
+  const mainCol = o.dress ?? o.jacket;
+  p.gradFill(tp, mainCol, mul(mainCol, SH_CLOTH), light);
+  p.hatch(tp, light, 11, 1.5, "rgba(10,6,16,0.44)", true);
+  p.clip(tp, () => {
+    // Vertical Gothic coat drapery creases
+    p.stroke([[tcx - R.waistW * 0.35, shY + 40], [tcx - R.waistW * 0.55, hipY + coatDrop - 8]], 2.0 * u, "rgba(10,6,16,0.5)");
+    p.stroke([[tcx + R.waistW * 0.32, shY + 46], [tcx + R.waistW * 0.50, hipY + coatDrop - 8]], 1.8 * u, "rgba(10,6,16,0.42)");
+    if (o.belt) {
+      const by = shY + R.torsoH * 0.66;
+      p.band([[tcx - R.shW, by], [tcx + R.shW, by]], o.belt, 10 * u, 1.8 * u);
+    }
+    if (o.sash) {
+      const by = shY + R.torsoH * 0.68;
+      p.band([[tcx - R.shW, by], [tcx + R.shW, by]], o.sash, 16 * u, 1.8 * u);
+    }
+    if (o.buttons) {
+      for (let i = 0; i < 4; i++) {
+        p.dot(tcx + 3 * u * facing, shY + 34 + i * 44, 2.8 * u, o.buttons);
+      }
+    }
+    o.torsoDetail?.(p, {
+      tp, tcx, tcy: (shY + hipY) * 0.5, chin, torsoBot: hipY + coatDrop, W, HH, u, ow, light, thick, facing, side: false, back: false, time, wind,
+    });
+  });
+  p.inkRing(tp, ow, thick);
+
+  // ---- Slender Gothic Neck ----
+  const neckPts: P2[] = [
+    [tcx - 16 * u, chin - 24],
+    [tcx + 16 * u, chin - 24],
+    [tcx + 21 * u, shY + 18],
+    [tcx - 21 * u, shY + 18],
+  ];
+  p.poly(neckPts, mul(skin, [0.72, 0.68, 0.72]), ow * 0.7);
+  p.hatch(neckPts, light, 6, 1.3, "rgba(10,6,16,0.55)");
+
+  if (rightInFront) {
+    drawArticulatedLimb(p, armR[0], armR[1], armR[2], 22 * u, 16 * u, 11 * u, o.jacket, light, ow);
+    drawGauntHand(p, armR[2], armR[1], u, skin, R.claw, openR, ow);
+    o.inFrontHand?.(p, armR[2], bodyCtx);
+  }
+
+  // ---- Angular Gothic Head ----
+  const headBreathTilt = Math.sin(time * 1.9 + seed) * 1.4;
+  const Ah = A + headTilt + headBreathTilt + (action === "unhinged" as never ? 6 : 0);
+  const [cpx, cpy] = rotAbout([tcx, chin], rad(A), [tcx, hipY]);
+  p.rot = Ah ? [rad(Ah), tcx, chin, cpx - tcx, cpy - chin] : null;
+  const effJaw = jawDrop || (o.uncanny && (expr === "hollow" || expr === "unhinged") ? 0.65 : 0);
+  const hp = gothicHeadFront(tcx, hc, R.headW, R.headH, facing, R.gaunt, effJaw);
+  const headCtx: HeadCtx = {
+    hp, cx: tcx, hc, W, HH, u, crown, ow: 0.9 * ow, light, thick, seed, facing, side: false, back: false, time, wind,
+    rot: (pts: P2[]) => rotPts(pts, 0, tcx, hc),
+  };
+  o.hatBehind?.(p, headCtx);
+  p.shadedFill(hp, skin, mul(skin, SH_SKIN), light, R.headH);
+  p.hatch(hp, light, o.uncanny ? 6.5 : 8.0, 1.35, o.uncanny ? "rgba(8,4,14,0.46)" : "rgba(12,7,18,0.38)", !!o.uncanny);
+  p.inkRing(hp, ow, thick);
+  drawFaceFront(p, tcx, hc, hp, W, expr, facing, look, lid, shiver, time, o.eyeGlow, o.ageLines, !!o.uncanny, underLight);
+  drawBuiltinHeadgear(p, o, headCtx);
+  o.hatOn?.(p, headCtx);
+  p.rot = null;
+};
+
+// ---------------- 2. SIDE PROFILE VIEW ----------------
+export const bodySide = (p: Pen, o: Outfit, opts: PoseOpts = {}) => {
+  const {
+    action = "idle",
+    phase = 0,
+    poseMix = 1,
+    expr = "wary",
+    blink = false,
+    holdProp = false,
+    tilt = 0,
+    headTilt = 0,
+    headPitch = 0,
+    jawDrop = 0,
+    underLight = 0,
+    time = 0,
+    shiver = 0,
+    wind = 0.2,
+    stride = 1,
+    light = DEF_LIGHT,
+    seed = 1,
+  } = opts;
+  const R = RIGS[o.build ?? "adult"];
+  p.grit = o.uncanny || R.gaunt ? 1.55 : 0.95;
+  const skin = o.skin ?? SKIN;
+  const lid = lidOf(blink);
+  const W = R.headW * 2, HH = R.headH * 2, u = W / 100;
+  const sole = 970, ankY = sole - 8, two = Math.PI * 2;
+  const ow = 4.6 * u, thick = thickAngle(light);
+  const l1 = R.legH * 0.51, l2 = R.legH * 0.49;
+
+  const breath = Math.sin(time * 2.4 + seed) * 2.6;
+  const moving = action === "walk" || action === "creep" || action === "flee";
+  const S = (action === "flee" ? 310 : action === "creep" ? 190 : 250) * stride;
+  const liftH = action === "flee" ? 72 : action === "creep" ? 28 : 42;
+
   type LegS = { ank: P2; pitch: number; near: boolean };
   const legs: LegS[] = [];
-  let hipY = ankY - legLen * 0.995, lean = 0, nearFwd = 0;
-  if (mode === "march") {
-    const S = 370 * stride, liftH = Math.max(22, 40 + 70 * (stomp - 1));
+  let hipY = ankY - R.legH * 0.97;
+  let lean = R.hunch + tilt;
+  let nearFwd = 0;
+
+  if (moving) {
     const st = (ph: number) => {
       const c = (((phase + ph) % 1) + 1) % 1;
-      if (c < 0.5) { const s = c / 0.5; return { x: S / 2 - S * s, h: 0, stance: true, s }; }
+      if (c < 0.5) {
+        const s = c / 0.5;
+        return { x: S / 2 - S * s, h: 0, stance: true, s };
+      }
       const s = (c - 0.5) / 0.5;
       return { x: -S / 2 + S * s - (S / Math.PI) * Math.sin(2 * Math.PI * s), h: liftH * Math.sin(Math.PI * s), stance: false, s };
     };
     const nL = st(0), fL = st(0.5), stance = nL.stance ? nL : fL;
-    const Leff = legLen * (1 - 0.035 * Math.sin(Math.PI * stance.s));
-    hipY = ankY - Math.sqrt(Math.max(1, Leff * Leff - stance.x * stance.x));
-    for (const [L, near] of [[fL, false], [nL, true]] as const)
-      legs.push({ ank: [300 + L.x, ankY - L.h], pitch: L.stance ? 0 : rad(35 * Math.sin(Math.PI * L.s) * (1 - 1.6 * L.s)), near });
-    lean = 4 + 3 * Math.cos(2 * two * phase);
-    nearFwd = nL.x / (S / 2);
-  } else if (mode === "push") {
-    hipY = ankY - 0.87 * legLen;
-    legs.push({ ank: [300 - 0.5 * legLen, ankY], pitch: rad(-8), near: false }, { ank: [300 + 0.32 * legLen, ankY], pitch: 0, near: true });
-    lean = 14 * pose;
-  } else if (mode === "sit") {
-    hipY = ankY - 0.52 * legLen;
-    const kneeX = 300 + l1 * 0.95;
-    legs.push({ ank: [kneeX - 8 * u, ankY], pitch: 0, near: false }, { ank: [kneeX + 4 * u, ankY], pitch: 0, near: true });
+    const Leff = R.legH * (action === "creep" ? 0.92 : 0.97);
+    hipY = ankY - Math.sqrt(Math.max(100, Leff * Leff - stance.x * stance.x));
+    for (const [L, near] of [[fL, false], [nL, true]] as const) {
+      legs.push({ ank: [300 + L.x, ankY - L.h], pitch: L.stance ? 0 : rad(28 * Math.sin(Math.PI * L.s) * (1 - 1.5 * L.s)), near });
+    }
+    lean += (action === "flee" ? 18 : action === "creep" ? 14 : 6) + 3 * Math.cos(2 * two * phase);
+    nearFwd = nL.x / Math.max(1, S / 2);
+  } else if (action === "peer" || action === "crouch") {
+    hipY = ankY - R.legH * (action === "crouch" ? 0.72 : 0.88);
+    legs.push({ ank: [272, ankY], pitch: 0, near: false }, { ank: [332, ankY], pitch: 0, near: true });
+    lean += (action === "peer" ? 26 : 20) * poseMix;
+  } else if (action === "recoil" || action === "cower") {
+    hipY = ankY - R.legH * 0.88;
+    legs.push({ ank: [255, ankY], pitch: rad(-10), near: false }, { ank: [345, ankY], pitch: 0, near: true });
+    lean -= 16 * poseMix;
+  } else if (action === "lunge" || action === "reach") {
+    hipY = ankY - R.legH * 0.84;
+    legs.push({ ank: [240, ankY], pitch: rad(-14), near: false }, { ank: [365, ankY], pitch: 0, near: true });
+    lean += 24 * poseMix;
   } else {
-    legs.push({ ank: [300 - 4 * u, ankY], pitch: 0, near: false }, { ank: [300 + 4 * u, ankY], pitch: 0, near: true });
+    legs.push({ ank: [288, ankY], pitch: 0, near: false }, { ank: [314, ankY], pitch: 0, near: true });
   }
-  const torsoBot = hipY + 0.12 * HH, chin = torsoBot - Bd.torso * HH, hc = chin - H.b, crown = hc - H.b, hip: P2 = [300, hipY];
+
+  const hip: P2 = [300, hipY];
+  const shY = hipY - R.torsoH + breath;
+  const chin = shY - R.neckH;
+  const hc = chin - R.headH;
+  const crown = hc - R.headH;
+
+  // ---- Articulated IK Side Legs ----
   p.rot = null;
   for (const L of legs) {
-    const knee = mode === "sit" ? ([300 + l1 * 0.95 + (L.near ? 0 : -6 * u), hipY + 6 * u] as P2) : ik(hip, L.ank, l1, l2);
-    const hp0: P2 = [300 + (L.near ? 0 : -5 * u), hipY];
-    p.stroke([hp0, knee, L.ank], 5.8 * u, L.near ? nearCol : farCol);
-    const c = Math.cos(L.pitch), s = Math.sin(L.pitch);
-    footStroke(p, [L.ank[0] - 3 * u * c, L.ank[1] - 3 * u * s], [L.ank[0] + 13 * u * c, L.ank[1] + 13 * u * s + 0.5 * u],
-      7.5 * u, L.near ? footCol : footCol === INK ? INK : shade(footCol, 0.82));
+    const hp0: P2 = [300 + (L.near ? 2 : -8), hipY - 6];
+    const knee = ik(hp0, L.ank, l1, l2, 1);
+    const col = L.near ? o.pants : shade(o.pants, 0.76);
+    drawArticulatedLimb(p, hp0, knee, L.ank, 27 * u, 19 * u, 13 * u, col, light, ow);
+    drawBoot(p, L.ank, 1, L.pitch, u, L.near ? o.boots : shade(o.boots, 0.78), ow);
   }
-  // ---- upper body leans about the hip ----
+
+  // ---- Leaning Upper Body ----
   p.rot = lean ? [rad(lean), 300, hipY] : null;
-  const T: Blob = {
-    a: (o.build === "stout" ? 0.36 : 0.31) * W, b: 0.5 * (torsoBot - (chin - 0.25 * HH)), nTop: 2.2, nBot: 2.5,
-    egg: 0.1, asym: 0.06, rot: 0, noise: 0.006, seed: seed + 7,
-  };
-  const tcx = 300 + 2 * u, tcy = torsoBot - T.b, tp = blobPts(tcx, tcy, T);
-  const armCol = mix(o.jacket, INK, 0.5), farArm = mix(o.jacket, INK, 0.68);
-  const S: P2 = [tcx + 0.05 * T.a, chin + 0.14 * HH], aLen = 0.95 * HH;
+  const tcx = 304, aLen = R.torsoH * 0.94 * R.armScale;
+  const Spt: P2 = [tcx + 4, shY + 18];
+  const trembX = shiver > 0 ? Math.sin(time * 49) * 3.5 * shiver : 0;
+  const trembY = shiver > 0 ? Math.cos(time * 55) * 3.0 * shiver : 0;
+
   const swingArm = (ang: number): [P2, P2, P2] => {
-    const e: P2 = [S[0] + Math.sin(ang) * aLen * 0.5, S[1] + Math.cos(ang) * aLen * 0.5], a2 = ang + rad(16) * Math.sign(ang || 1);
-    return [S, e, [e[0] + Math.sin(a2) * aLen * 0.5, e[1] + Math.cos(a2) * aLen * 0.5]];
+    const e: P2 = [Spt[0] + Math.sin(ang) * aLen * 0.5, Spt[1] + Math.cos(ang) * aLen * 0.5];
+    const a2 = ang + rad(22) * Math.sign(ang || 1);
+    return [Spt, e, [e[0] + Math.sin(a2) * aLen * 0.5, e[1] + Math.cos(a2) * aLen * 0.5]];
   };
-  const holdPos: P2 = [tcx + 0.72 * T.a, chin + 0.58 * HH];
-  let near: [P2, P2, P2], far: [P2, P2, P2] | null;
-  if (mode === "push") {
-    const reach = 0.55 * HH + 0.45 * HH * pose;
-    let hN: P2 = [S[0] + reach, S[1] + 0.06 * HH];
-    if (opts.hand) {
-      const th = -rad(lean), dx = opts.hand[0] - 300, dy = opts.hand[1] - hipY;
-      const tg: P2 = [300 + dx * Math.cos(th) - dy * Math.sin(th), hipY + dx * Math.sin(th) + dy * Math.cos(th)];
-      hN = [hN[0] + (tg[0] - hN[0]) * pose, hN[1] + (tg[1] - hN[1]) * pose];
-    }
-    near = [S, [(S[0] + hN[0]) / 2, (S[1] + hN[1]) / 2 + 0.06 * HH], hN];
-    far = [S, [(S[0] + hN[0]) / 2 - 4 * u, (S[1] + hN[1]) / 2 - 0.02 * HH], [hN[0] - 6 * u, hN[1] - 0.08 * HH]];
-  } else if (holdProp && (mode === "march" || mode === "stand")) {
-    near = [S, [S[0] - 4 * u, S[1] + 0.42 * HH], holdPos];
-    far = mode === "march" ? swingArm(rad(30) * nearFwd) : swingArm(0);
-  } else {
-    near = swingArm(rad(-30) * nearFwd);
-    far = mode === "march" ? swingArm(rad(30) * nearFwd) : null;
+
+  let near: [P2, P2, P2] = swingArm(rad(-32) * nearFwd);
+  let far: [P2, P2, P2] = swingArm(rad(32) * nearFwd);
+  let openNear = false;
+
+  if (action === "peer") {
+    near = [Spt, [Spt[0] + 62 * poseMix, Spt[1] + 74], [Spt[0] + 132 * poseMix + trembX, Spt[1] + 92 + trembY]];
+    far = [Spt, [Spt[0] - 18, Spt[1] + 85], [Spt[0] - 8, Spt[1] + 160]];
+  } else if (action === "lunge" || action === "reach") {
+    near = [Spt, [Spt[0] + 95 * poseMix, Spt[1] + 12], [Spt[0] + 195 * poseMix + trembX, Spt[1] - 6 + trembY]];
+    far = [Spt, [Spt[0] + 70 * poseMix, Spt[1] - 18], [Spt[0] + 150 * poseMix, Spt[1] - 30]];
+    openNear = true;
+  } else if (action === "boltDoor") {
+    near = [Spt, [Spt[0] + 68, Spt[1] + 22], [Spt[0] + 136, Spt[1] + 8]];
+    far = [Spt, [Spt[0] + 58, Spt[1] + 8], [Spt[0] + 124, Spt[1] - 4]];
+  } else if (action === "recoil" || action === "cower") {
+    near = [Spt, [Spt[0] + 52, Spt[1] + 12], [Spt[0] + 88 + trembX, Spt[1] - 48 + trembY]];
+    far = [Spt, [Spt[0] - 38, Spt[1] + 45], [Spt[0] - 62, Spt[1] + 110]];
+    openNear = true;
+  } else if (action === "emerge") {
+    const wr = Math.sin(time * 2.2) * 16;
+    near = [Spt, [Spt[0] + 76, Spt[1] + 22 + wr], [Spt[0] + 156, Spt[1] - 18 - wr * 0.6]];
+    far = [Spt, [Spt[0] + 54, Spt[1] - 6 - wr], [Spt[0] + 118, Spt[1] - 34 + wr * 0.5]];
+    openNear = true;
+  } else if (holdProp) {
+    near = [Spt, [Spt[0] + 16, Spt[1] + 92], [Spt[0] + 86 + trembX, Spt[1] + 88 + trembY]];
   }
+
+  const coatDrop = o.dress ? sole - hipY - 58 : (o.coatLen ?? 0.24) * HH;
+  const sideShW = R.shW * 0.62, sideWaistW = R.waistW * 0.72;
+  const tp = coatTorsoPts(tcx, shY, hipY, sideShW, sideWaistW, coatDrop, !!o.tattered, time, wind, 1);
   const bodyCtx: BodyCtx = {
-    tcx, chin, torsoBot, crown, W, HH, u, ow, light, facing: 1, side: true,
-    hands: [far ? far[2] : near[2], near[2]],
+    tcx, chin, torsoBot: hipY + coatDrop, crown, W, HH, u, ow, light, facing: 1, side: true, back: false, time, wind,
+    hands: [far[2], near[2]],
   };
-  if (far) { p.stroke(curve(far[0], far[1], far[2]), 5.2 * u, farArm); p.dot(far[2][0], far[2][1], 5.5 * u); }
+
+  drawArticulatedLimb(p, far[0], far[1], far[2], 20 * u, 15 * u, 10 * u, shade(o.jacket, 0.75), light, ow);
+  drawGauntHand(p, far[2], far[1], u, shade(skin, 0.8), R.claw, openNear, ow);
   o.behindBody?.(p, bodyCtx);
-  p.gradFill(tp, o.jacket, mul(o.jacket, SH_CLOTH), light);
+
+  // Torso
+  const mainCol = o.dress ?? o.jacket;
+  p.gradFill(tp, mainCol, mul(mainCol, SH_CLOTH), light);
+  p.hatch(tp, light, 11, 1.5, "rgba(10,6,16,0.46)", true);
   p.clip(tp, () => {
-    if (o.belt) p.band([[tcx - 0.65 * T.a, chin - 0.05 * HH], [tcx + 0.75 * T.a, torsoBot - 0.1 * HH]], o.belt!, 5.5 * u, 1.8 * u);
-    if (o.sash) p.band([[tcx - 1.3 * T.a, torsoBot - 0.32 * HH], [tcx + 1.3 * T.a, torsoBot - 0.32 * HH]], o.sash, 0.13 * HH, 1.8 * u);
-    if (o.buttons && !o.dress) {
-      for (let i = 0; i < 3; i++) {
-        const y = chin + 0.16 * HH + i * 0.24 * HH;
-        p.dot(tcx + 0.8 * T.a, y, 3 * u, INK); p.dot(tcx + 0.8 * T.a, y, 2.2 * u, o.buttons);
-      }
-    }
-    o.torsoDetail?.(p, { T, tp, tcx, tcy, chin, torsoBot, W, HH, u, ow, light, thick, facing: 1, side: true });
+    if (o.belt) p.band([[tcx - sideShW, shY + R.torsoH * 0.66], [tcx + sideShW, shY + R.torsoH * 0.66]], o.belt, 10 * u, 1.8 * u);
+    if (o.sash) p.band([[tcx - sideShW, shY + R.torsoH * 0.68], [tcx + sideShW, shY + R.torsoH * 0.68]], o.sash, 16 * u, 1.8 * u);
+    o.torsoDetail?.(p, {
+      tp, tcx, tcy: (shY + hipY) * 0.5, chin, torsoBot: hipY + coatDrop, W, HH, u, ow, light, thick, facing: 1, side: true, back: false, time, wind,
+    });
   });
   p.inkRing(tp, ow, thick);
-  p.stroke(curve(near[0], near[1], near[2]), 5.2 * u, armCol); p.dot(near[2][0], near[2][1], 5.5 * u);
-  if (holdProp) o.inFrontHand?.(p, near[2], bodyCtx);
-  // ---- head ----
-  const hx = 300 + 4 * u;
-  const hp = blobPts(hx, hc, H);
-  const hatAngle = H.rot + rad(4 * (rnd(seed, 20) - 0.5));
+
+  // Slender forward-tilted neck
+  const neckPts: P2[] = [
+    [tcx - 10 * u, chin - 24],
+    [tcx + 18 * u, chin - 24],
+    [tcx + 14 * u, shY + 20],
+    [tcx - 16 * u, shY + 20],
+  ];
+  p.poly(neckPts, mul(skin, [0.72, 0.68, 0.72]), ow * 0.7);
+  p.hatch(neckPts, light, 6, 1.3, "rgba(10,6,16,0.55)");
+
+  // Near arm + prop
+  drawArticulatedLimb(p, near[0], near[1], near[2], 22 * u, 16 * u, 11 * u, o.jacket, light, ow);
+  drawGauntHand(p, near[2], near[1], u, skin, R.claw, openNear, ow);
+  if (holdProp || action === "peer") o.inFrontHand?.(p, near[2], bodyCtx);
+
+  // Side Head
+  const hx = tcx + 12 * u;
+  const hPitchDeg = headPitch * -18 + headTilt;
+  const [cpx, cpy] = rotAbout([hx, chin], rad(lean), [300, hipY]);
+  p.rot = lean + hPitchDeg ? [rad(lean + hPitchDeg), hx, chin, cpx - hx, cpy - chin] : null;
+  const effJawS = jawDrop || (o.uncanny && (expr === "hollow" || expr === "unhinged") ? 0.65 : 0);
+  const hp = gothicHeadSide(hx, hc, R.headW, R.headH, R.gaunt, effJawS);
   const headCtx: HeadCtx = {
-    H, hp, cx: hx, hc, W, HH, u, crown, ow: 0.85 * ow, light, thick, seed, facing: 1, side: true,
-    rot: (pts: P2[]) => rotPts(pts, hatAngle, hx, hc),
+    hp, cx: hx, hc, W, HH, u, crown, ow: 0.9 * ow, light, thick, seed, facing: 1, side: true, back: false, time, wind,
+    rot: (pts: P2[]) => rotPts(pts, 0, hx, hc),
   };
   o.hatBehind?.(p, headCtx);
-  p.shadedFill(hp, skin, mul(skin, SH_SKIN), light, H.a);
+  p.shadedFill(hp, skin, mul(skin, SH_SKIN), light, R.headH);
+  p.hatch(hp, light, o.uncanny ? 6.5 : 8.0, 1.35, o.uncanny ? "rgba(8,4,14,0.46)" : "rgba(12,7,18,0.38)", !!o.uncanny);
   p.inkRing(hp, ow, thick);
-  drawBuiltinHat(p, o, headCtx);
+  drawFaceSide(p, hx, hc, hp, W, expr, lid, shiver, time, o.eyeGlow, o.ageLines, !!o.uncanny, underLight);
+  drawBuiltinHeadgear(p, o, headCtx);
   o.hatOn?.(p, headCtx);
-  faceSide(p, hx, hc, W, expr, lid, o.hasBrim ?? false, skin, o.moustache, o.build === "stout");
   p.rot = null;
 };
 
-// ---------------- neutral 2D effects ----------------
-export const fxNote = (p: Pen, kind: number, col = "#1f2a44") => {
-  p.ell(70, 200, 46, 34, col, 8, 0, 360, -20);
-  p.stroke([[110, 190], [110, 40]], 14);
-  if (kind === 0) p.poly([[110, 40], [170, 70], [170, 110], [110, 82]], col, 8);
-  else {
-    p.ell(150, 170, 40, 30, col, 8, 0, 360, -20);
-    p.stroke([[186, 160], [186, 20]], 14);
-    p.poly([[110, 40], [186, 20], [186, 50], [110, 70]], col, 8);
-  }
-};
+// ---------------- 3. TRUE BACK VIEW (Unlocks OTS Shots & Over-The-Shoulder Glances!) ----------------
+export const bodyBack = (p: Pen, o: Outfit, opts: PoseOpts = {}) => {
+  const {
+    action = "idle",
+    phase = 0,
+    poseMix = 1,
+    expr = "dread",
+    blink = false,
+    frontArm,
+    holdProp = false,
+    tilt = 0,
+    headTilt = 0,
+    underLight = 0,
+    glance = 0, // -1 (glancing back left) | 0 (pure back of head) | +1 (glancing back right)
+    time = 0,
+    shiver = 0,
+    wind = 0.2,
+    light = DEF_LIGHT,
+    seed = 1,
+  } = opts;
+  const R = RIGS[o.build ?? "adult"];
+  p.grit = o.uncanny || R.gaunt ? 1.55 : 0.95;
+  const skin = o.skin ?? SKIN;
+  const lid = lidOf(blink);
+  const W = R.headW * 2, HH = R.headH * 2, u = W / 100;
+  const sole = 970, two = Math.PI * 2;
+  const ow = 4.6 * u, thick = thickAngle(light);
 
-/** Spark / impact star on a 500 x 500 canvas; t in 0..1. */
-export const fxBurst = (p: Pen, t: number, col = "#fff3b0", rays = 10, r0 = 40, r1 = 230) => {
-  const c = 250, e = 1 - (1 - t) ** 3;
-  for (let i = 0; i < rays; i++) {
-    const a = rad((i * 360) / rays + 7 * (i % 2)), ra = r0 + (r1 - r0) * e * (0.75 + 0.25 * (i % 2));
-    p.poly([[c + r0 * 0.5 * Math.cos(a + 0.18), c + r0 * 0.5 * Math.sin(a + 0.18)], [c + ra * Math.cos(a), c + ra * Math.sin(a)],
-      [c + r0 * 0.5 * Math.cos(a - 0.18), c + r0 * 0.5 * Math.sin(a - 0.18)]], col, Math.max(3, 8 * (1 - t)));
-  }
-  if (t < 0.5) p.ell(c, c, r0 * (1.4 - t), r0 * (1.4 - t), WHITE, 8);
-};
+  const breath = Math.sin(time * 2.4 + seed) * 2.6;
+  const crouchDrop = action === "crouch" ? 85 * poseMix : action === "peer" ? 36 * poseMix : 0;
+  const strideBob = action === "flee" ? 16 * Math.abs(Math.sin(two * phase)) : action === "walk" || action === "creep" ? 9 * Math.abs(Math.sin(two * phase)) : 0;
+  const hipY = sole - R.legH + crouchDrop - strideBob;
+  const shY = hipY - R.torsoH + breath;
+  const chin = shY - R.neckH;
+  const hc = chin - R.headH;
+  const crown = hc - R.headH;
+  const tcx = 300 + (shiver > 0 ? Math.sin(time * 43) * 2.2 * shiver : 0);
 
-/** Water splash crown on an 800 x 800 canvas; t in 0..1. */
-export const fxSplash = (p: Pen, t: number) => {
-  const c = 400, size = 800, rise = Math.sin(Math.min(1, t * 1.3) * Math.PI);
-  const blue = "#bfe8ff", deep = "#6cc0f0";
-  if (rise > 0.02) {
-    const pts: P2[] = [];
-    for (let i = 0; i < 19; i++) {
-      const h = (i % 2 ? 260 : 130) * rise * (0.7 + 0.3 * Math.sin(i * 1.7));
-      pts.push([c - 330 + (660 * i) / 18, size - 120 - h]);
+  // Legs from behind
+  p.rot = null;
+  const stepLift = action === "flee" ? 68 : action === "walk" ? 38 : action === "creep" ? 24 : 0;
+  for (const [side, ph] of [[-1, 0], [1, 0.5]] as const) {
+    const up = stepLift > 0 ? Math.max(0, Math.sin(two * (phase + ph))) * stepLift : 0;
+    const hip: P2 = [tcx + side * (R.waistW * 0.48), hipY - 8];
+    const ank: P2 = [tcx + side * 24, sole - 8 - up];
+    const knee: P2 = [(hip[0] + ank[0]) * 0.5 + side * 3, (hip[1] + ank[1]) * 0.5 - up * 0.08];
+    drawArticulatedLimb(p, hip, knee, ank, 26 * u, 19 * u, 13 * u, shade(o.pants, 0.85), light, ow);
+    // Heel view of boot
+    p.poly(
+      [
+        [ank[0] - 11 * u, ank[1] - 4 * u],
+        [ank[0] + 11 * u, ank[1] - 4 * u],
+        [ank[0] + 13 * u, ank[1] + 8 * u],
+        [ank[0] - 13 * u, ank[1] + 8 * u],
+      ],
+      o.boots,
+      ow * 0.72,
+    );
+  }
+
+  const A = tilt + (action === "walk" || action === "creep" ? 2.2 * Math.sin(two * phase) : 0);
+  p.rot = A ? [rad(A), tcx, hipY] : null;
+
+  // Arms from behind
+  const aLen = R.torsoH * 0.94 * R.armScale;
+  const shL: P2 = [tcx - R.shW * 0.88, shY + 18];
+  const shR: P2 = [tcx + R.shW * 0.88, shY + 18];
+  const sw = action === "flee" ? Math.sin(two * phase) * 1.2 : action === "walk" || action === "creep" ? Math.sin(two * phase) * 0.55 : 0;
+  let armL: [P2, P2, P2] = [shL, [shL[0] - 18 - sw * 12, shL[1] + aLen * 0.48], [shL[0] - 14 - sw * 22, shL[1] + aLen * 0.90]];
+  let armR: [P2, P2, P2] = [shR, [shR[0] + 18 + sw * 12, shR[1] + aLen * 0.48], [shR[0] + 14 + sw * 22, shR[1] + aLen * 0.90]];
+  if (holdProp || frontArm === "hold" || action === "peer") {
+    armR = [shR, [shR[0] + 34, shR[1] + aLen * 0.40], [shR[0] + 54, shR[1] + aLen * 0.58]];
+  } else if (action === "boltDoor") {
+    armL = [shL, [shL[0] - 24, shL[1] + 24], [shL[0] - 4, shL[1] - 18]];
+    armR = [shR, [shR[0] + 24, shR[1] + 24], [shR[0] + 4, shR[1] - 18]];
+  }
+
+  const coatDrop = o.dress ? sole - hipY - 58 : (o.coatLen ?? 0.24) * HH;
+  const tp = coatTorsoPts(tcx, shY, hipY, R.shW, R.waistW, coatDrop, !!o.tattered, time, wind, 0);
+  const bodyCtx: BodyCtx = {
+    tcx, chin, torsoBot: hipY + coatDrop, crown, W, HH, u, ow, light, facing: 0, side: false, back: true, time, wind,
+    hands: [armL[2], armR[2]],
+  };
+
+  drawArticulatedLimb(p, armL[0], armL[1], armL[2], 22 * u, 16 * u, 11 * u, o.jacket, light, ow);
+  drawGauntHand(p, armL[2], armL[1], u, skin, R.claw, false, ow);
+  drawArticulatedLimb(p, armR[0], armR[1], armR[2], 22 * u, 16 * u, 11 * u, o.jacket, light, ow);
+  drawGauntHand(p, armR[2], armR[1], u, skin, R.claw, false, ow);
+  if (holdProp || frontArm === "hold" || action === "peer") o.inFrontHand?.(p, armR[2], bodyCtx);
+
+  // Back of coat with center seam, shoulder-blade shadows, and cross-hatching
+  const mainCol = o.dress ?? o.jacket;
+  p.gradFill(tp, shade(mainCol, 0.92), mul(mainCol, SH_CLOTH), light);
+  p.hatch(tp, light, 10, 1.5, "rgba(10,6,16,0.5)", true);
+  p.clip(tp, () => {
+    p.stroke([[tcx, shY + 12], [tcx, hipY + coatDrop]], 2.2 * u, "rgba(10,6,16,0.58)");
+    p.stroke([[tcx - R.shW * 0.42, shY + 24], [tcx - R.waistW * 0.45, hipY + coatDrop - 12]], 1.8 * u, "rgba(10,6,16,0.45)");
+    p.stroke([[tcx + R.shW * 0.42, shY + 24], [tcx + R.waistW * 0.45, hipY + coatDrop - 12]], 1.8 * u, "rgba(10,6,16,0.45)");
+    if (o.belt) p.band([[tcx - R.shW, shY + R.torsoH * 0.66], [tcx + R.shW, shY + R.torsoH * 0.66]], o.belt, 10 * u, 1.8 * u);
+  });
+  p.inkRing(tp, ow, thick);
+
+  // Nape of neck (overlaps cleanly behind skull base during glances)
+  p.poly(
+    [
+      [tcx - 16 * u, chin - 26],
+      [tcx + 16 * u, chin - 26],
+      [tcx + 22 * u, shY + 18],
+      [tcx - 22 * u, shY + 18],
+    ],
+    mul(skin, [0.65, 0.60, 0.65]),
+    ow * 0.7,
+  );
+
+  // Back of head OR dramatic over-the-shoulder profile glance!
+  const Ah = A + headTilt;
+  const [cpx, cpy] = rotAbout([tcx, chin], rad(A), [tcx, hipY]);
+  p.rot = Ah ? [rad(Ah), tcx, chin, cpx - tcx, cpy - chin] : null;
+  if (glance !== 0) {
+    // Dramatic over-the-shoulder glance: draw profile head facing left (-1) or right (+1)
+    p.g.save();
+    if (glance < 0) {
+      p.g.translate(tcx * 2, 0);
+      p.g.scale(-1, 1);
     }
-    p.poly([...pts, [c + 330, size - 90], [c - 330, size - 90]], blue, 10);
-    p.ell(c, size - 100, 360, 46, deep, 10);
+    const hp = gothicHeadSide(tcx + 6 * u, hc, R.headW, R.headH, R.gaunt);
+    const headCtx: HeadCtx = {
+      hp, cx: tcx + 6 * u, hc, W, HH, u, crown, ow: 0.9 * ow, light, thick, seed, facing: 1, side: true, back: false, time, wind,
+      rot: (pts: P2[]) => rotPts(pts, 0, tcx + 6 * u, hc),
+    };
+    o.hatBehind?.(p, headCtx);
+    p.shadedFill(hp, skin, mul(skin, SH_SKIN), light, R.headH);
+    p.hatch(hp, light, 8.5, 1.3, "rgba(12,7,18,0.38)");
+    p.inkRing(hp, ow, thick);
+    drawFaceSide(p, tcx + 6 * u, hc, hp, W, expr, lid, shiver, time, o.eyeGlow, o.ageLines, !!o.uncanny, underLight);
+    drawBuiltinHeadgear(p, o, headCtx);
+    o.hatOn?.(p, headCtx);
+    p.g.restore();
+  } else {
+    const hp = gothicHeadFront(tcx, hc, R.headW, R.headH, 0, R.gaunt);
+    const headCtx: HeadCtx = {
+      hp, cx: tcx, hc, W, HH, u, crown, ow: 0.9 * ow, light, thick, seed, facing: 0, side: false, back: true, time, wind,
+      rot: (pts: P2[]) => rotPts(pts, 0, tcx, hc),
+    };
+    o.hatBehind?.(p, headCtx);
+    p.shadedFill(hp, shade(skin, 0.78), mul(skin, SH_SKIN), light, R.headH);
+    // Natural dark back-of-skull hair cover down to the nape so back views never look bald/bare
+    const backHairCol = o.hair ?? "#1c1820";
+    p.clip(hp, () => {
+      const bh: P2[] = [
+        [tcx - W * 0.65, crown - 10],
+        [tcx + W * 0.65, crown - 10],
+        [tcx + W * 0.65, hc + R.headH * 0.42],
+        [tcx, hc + R.headH * 0.56],
+        [tcx - W * 0.65, hc + R.headH * 0.42],
+      ];
+      p.gradFill(bh, backHairCol, shade(backHairCol, 0.62), light);
+      p.hatch(bh, light, 7, 1.4, "rgba(6,4,10,0.55)");
+    });
+    p.hatch(hp, light, 8, 1.4, "rgba(12,7,18,0.45)");
+    p.inkRing(hp, ow, thick);
+    drawBuiltinHeadgear(p, o, headCtx);
+    o.hatOn?.(p, headCtx);
   }
-  for (let i = 0; i < 8; i++) {
-    const a = rad(200 + i * 18), d = 120 + 380 * t, y = size - 160 + d * Math.sin(a) + 520 * t * t, r = 26 * (1 - t) + 6;
-    if (t > 0.08 && y < size - 40) p.ell(c + d * Math.cos(a), y, r, r * 1.25, blue, 7);
-  }
+  p.rot = null;
 };
 
-/** Dust puff on a 300 x 300 canvas; t in 0..1. */
-export const fxPuff = (p: Pen, t: number) => {
-  for (let i = 0; i < 5; i++) {
-    const a = rad(160 + i * 55), d = 40 + 70 * t, r = (34 + 20 * (i % 2)) * (1 - 0.6 * t);
-    p.ell(150 + d * Math.cos(a), 180 + d * 0.45 * Math.sin(a), r, r * 0.8, `rgba(238,225,205,${(1 - t).toFixed(3)})`, 0);
-  }
-};
+// ---------------- Upgraded Gothic 2D Atmospheric FX ----------------
 
-/** Circling stars on a 420 x 210 canvas. */
-export const fxStars = (p: Pen, t: number) => {
-  for (let i = 0; i < 4; i++) {
-    const a = t * Math.PI * 2 + (i * Math.PI) / 2, x = 210 + 150 * Math.cos(a), y = 110 + 40 * Math.sin(a), pts: P2[] = [];
-    for (let k = 0; k < 10; k++) { const r = k % 2 ? 14 : 34, b = rad(k * 36 - 90); pts.push([x + r * Math.cos(b), y + r * Math.sin(b)]); }
-    p.poly(pts, "#ffd84a", 6);
-  }
-};
-
-/** Three jittering strain ticks on a 300 x 300 canvas. */
-export const fxCreak = (p: Pen, t: number) => {
-  const j = 6 * Math.sin(t * 40);
-  for (const a of [-30, 0, 30]) {
-    const b = rad(a - 90);
-    p.stroke([[150 + 70 * Math.cos(b) + j, 230 + 70 * Math.sin(b)], [150 + 100 * Math.cos(b) + 10 + j, 230 + 100 * Math.sin(b)],
-      [150 + 130 * Math.cos(b) + j, 230 + 130 * Math.sin(b)]], 10);
-  }
-};
-
-/** Flat water ring (drawn top-down) on a 600 x 600 canvas; t in 0..1. */
-export const fxRing = (p: Pen, t: number) => {
-  const g = p.g;
-  for (let k = 0; k < 3; k++) {
-    const u = t - k * 0.22;
-    if (u <= 0 || u >= 1) continue;
-    g.beginPath(); g.ellipse(300, 300, 60 + 230 * u, 60 + 230 * u, 0, 0, Math.PI * 2);
-    g.strokeStyle = k === 0 ? "#f6fcff" : "#cfe8fa"; g.lineWidth = 9 * (1 - u) + 3; g.stroke();
-  }
-};
-
-/** Soft cartoon cloud on a 600 x 300 canvas. */
-export const fxCloud = (p: Pen, seed: number) => {
-  const blobs: [number, number, number][] = [[150, 190, 80], [250, 150, 105], [360, 160, 95], [450, 195, 70], [300, 210, 90]];
-  for (const [x, y, r] of blobs) p.ell(x + ((seed * 37) % 20) - 10, y, r, r * 0.8, "#ffffff", 0);
-  p.ell(300, 235, 230, 40, "#ffffff", 0);
-};
-
-/** Cast shadow tail on a 128 x 256 canvas (multiply colour, white = no change). */
-export const fxShadow = (p: Pen, col: string) => {
-  const g = p.g;
-  g.fillStyle = WHITE; g.fillRect(0, 0, 128, 256);
-  g.save(); g.filter = "blur(9px)";
-  const lg = g.createLinearGradient(0, 205, 0, 22);
-  lg.addColorStop(0, mix(col, WHITE, 0.08)); lg.addColorStop(0.55, mix(col, WHITE, 0.3)); lg.addColorStop(1, mix(col, WHITE, 0.85));
-  g.fillStyle = lg;
-  g.beginPath(); g.moveTo(40, 205); g.bezierCurveTo(36, 120, 46, 50, 64, 30); g.bezierCurveTo(82, 50, 92, 120, 88, 205); g.closePath(); g.fill();
-  g.fillStyle = col; g.beginPath(); g.ellipse(64, 205, 30, 17, 0, 0, Math.PI * 2); g.fill();
-  g.restore();
-};
-
-/** Tight contact shadow right under the feet on a 128 x 128 canvas (multiply colour). */
+/** Soft contact shadow under feet on a 128 x 128 canvas (multiply blend). */
 export const fxContact = (p: Pen, col: string) => {
   const g = p.g;
-  g.fillStyle = WHITE; g.fillRect(0, 0, 128, 128);
+  g.fillStyle = "#ffffff";
+  g.fillRect(0, 0, 128, 128);
   const gr = g.createRadialGradient(64, 64, 0, 64, 64, 64);
-  for (const [r, k] of [[0, 0], [0.32, 0.02], [0.5, 0.22], [0.66, 0.58], [0.82, 0.88], [1, 1]] as const) gr.addColorStop(r, mix(col, WHITE, k));
-  g.fillStyle = gr; g.fillRect(0, 0, 128, 128);
+  for (const [r, k] of [[0, 0], [0.3, 0.04], [0.5, 0.25], [0.68, 0.62], [0.84, 0.9], [1, 1]] as const) {
+    gr.addColorStop(r, mix(col, "#ffffff", k));
+  }
+  g.fillStyle = gr;
+  g.fillRect(0, 0, 128, 128);
 };
 
-/** Soft ground contact blob on a 128 x 128 canvas (multiply colour). */
-export const fxBlob = (p: Pen, col: string) => {
-  const g = p.g;
-  g.fillStyle = WHITE; g.fillRect(0, 0, 128, 128);
-  const gr = g.createRadialGradient(64, 64, 0, 64, 64, 64);
-  for (const [r, k] of [[0, 0], [0.5, 0.04], [0.64, 0.18], [0.76, 0.42], [0.87, 0.72], [0.95, 0.92], [1, 1]] as const) gr.addColorStop(r, mix(col, WHITE, k));
-  g.fillStyle = gr; g.fillRect(0, 0, 128, 128);
-};
-
-// ---------------- neutral atmospheric / suspense 2D effects ----------------
-/** Drifting low-lying mist / fog wisps on a 600 x 300 soft canvas; t loops cleanly on 0..1. */
-export const fxMist = (p: Pen, t: number, col = "rgba(180,205,235,0.22)") => {
+/** Drifting Gothic low-lying mist on 600 x 300 canvas with smooth top+bottom vertical alpha feathering (NEVER leaves hard floor cut!). */
+export const fxMist = (p: Pen, t: number, col = "rgba(155,185,220,0.22)") => {
   const g = p.g;
   g.save();
-  g.filter = "blur(14px)";
+  g.filter = "blur(18px)";
   g.fillStyle = col;
   const wisps: [number, number, number, number, number][] = [
-    [130, 175, 115, 36, 1],
-    [290, 145, 135, 42, -0.7],
-    [455, 185, 110, 34, 0.8],
-    [220, 215, 145, 30, 0.5],
+    [120, 155, 130, 38, 1],
+    [290, 135, 155, 44, -0.75],
+    [460, 165, 135, 36, 0.85],
+    [225, 185, 165, 34, 0.55],
+    [390, 145, 120, 30, -0.5],
   ];
   for (const [bx, by, rx, ry, dir] of wisps) {
-    const x = ((bx + t * 120 * dir) % 600 + 600) % 600;
-    const y = by + 10 * Math.sin((t + bx * 0.01) * Math.PI * 2);
+    const x = (((bx + t * 140 * dir) % 600) + 600) % 600;
+    const y = by + 9 * Math.sin((t + bx * 0.01) * Math.PI * 2);
     for (const ox of [-600, 0, 600]) {
-      g.beginPath(); g.ellipse(x + ox, y, rx, ry, 0, 0, Math.PI * 2); g.fill();
+      g.beginPath();
+      g.ellipse(x + ox, y, rx, ry, 0, 0, Math.PI * 2);
+      g.fill();
     }
   }
   g.restore();
+  // Smooth vertical feathering mask to 0 at both top and bottom edges
+  g.save();
+  g.globalCompositeOperation = "destination-in";
+  const mask = g.createLinearGradient(0, 0, 0, 300);
+  mask.addColorStop(0.0, "rgba(0,0,0,0)");
+  mask.addColorStop(0.28, "rgba(0,0,0,1)");
+  mask.addColorStop(0.72, "rgba(0,0,0,1)");
+  mask.addColorStop(1.0, "rgba(0,0,0,0)");
+  g.fillStyle = mask;
+  g.fillRect(0, 0, 600, 300);
+  g.restore();
 };
 
-/** Diagonal cartoon rain streaks on a 400 x 600 canvas; t in 0..1 cycles drops smoothly. */
-export const fxRain = (p: Pen, t: number, slant = 0.22, col = "rgba(185,215,245,0.42)") => {
+/** Fine needle-sharp Gothic storm rain streaks (140 varying-depth translucent drops on 512 x 768 canvas). */
+export const fxRain = (p: Pen, t: number, slant = 0.24, col = "rgba(185,212,240,0.42)") => {
   const g = p.g;
-  g.strokeStyle = col;
   g.lineCap = "round";
-  for (let i = 0; i < 34; i++) {
-    const rx = rnd(i + 1, 3), ry = rnd(i + 1, 7), len = 28 + 34 * rnd(i + 1, 11);
-    const phase = (ry + t * (1.2 + 0.5 * rnd(i + 1, 17))) % 1;
-    const y0 = phase * 680 - 60;
-    const x0 = ((rx * 400 - y0 * slant * 0.5) % 400 + 400) % 400;
-    g.lineWidth = 0.9 + 0.7 * (i % 2);
+  for (let i = 0; i < 140; i++) {
+    const depth = 0.35 + 0.65 * rnd(i + 1, 2);
+    const rx = rnd(i + 1, 3), ry = rnd(i + 1, 7);
+    const len = (20 + 46 * rnd(i + 1, 11)) * depth;
+    const phase = (ry + t * (1.35 + 0.9 * depth)) % 1;
+    const y0 = phase * 840 - 72;
+    const x0 = (((rx * 512 - y0 * slant * 0.6) % 512) + 512) % 512;
+    const gr = g.createLinearGradient(x0, y0, x0 - len * slant, y0 + len);
+    gr.addColorStop(0, "rgba(185,212,240,0)");
+    gr.addColorStop(0.45, col);
+    gr.addColorStop(1, "rgba(220,238,255,0.06)");
+    g.strokeStyle = gr;
+    g.lineWidth = 0.55 + 0.75 * depth;
     g.beginPath();
     g.moveTo(x0, y0);
     g.lineTo(x0 - len * slant, y0 + len);
@@ -871,59 +1839,320 @@ export const fxRain = (p: Pen, t: number, slant = 0.22, col = "rgba(185,215,245,
   }
 };
 
-/** Jagged forked lightning bolt on a 400 x 800 canvas. */
-export const fxLightning = (p: Pen, seed: number, col = "#d8eeff") => {
+/** Fractal jagged sky lightning bolt on 400 x 800 canvas. */
+export const fxLightning = (p: Pen, seed: number, col = "#c8e4ff") => {
   const g = p.g;
-  const pts: P2[] = [[200, 10]];
-  let x = 200, y = 10;
-  for (let i = 1; i <= 11; i++) {
-    x += (rnd(seed * 17 + i, 5) - 0.5) * 84;
-    x = clamp(x, 60, 340);
-    y = 10 + (i / 11) * 760;
+  const pts: P2[] = [[200, 8]];
+  let x = 200, y = 8;
+  for (let i = 1; i <= 14; i++) {
+    x += (rnd(seed * 19 + i, 5) - 0.5) * 76;
+    x = clamp(x, 55, 345);
+    y = 8 + (i / 14) * 765;
     pts.push([x, y]);
   }
   const trace = (arr: P2[]) => {
     g.beginPath();
     arr.forEach(([px, py], idx) => (idx ? g.lineTo(px, py) : g.moveTo(px, py)));
   };
-  g.lineCap = "round"; g.lineJoin = "round";
-  trace(pts); g.strokeStyle = "rgba(150,200,255,0.38)"; g.lineWidth = 22; g.stroke();
-  trace(pts); g.strokeStyle = col; g.lineWidth = 9; g.stroke();
-  trace(pts); g.strokeStyle = WHITE; g.lineWidth = 3.5; g.stroke();
-  for (const bi of [3, 6]) {
+  g.lineCap = "round";
+  g.lineJoin = "round";
+  trace(pts); g.strokeStyle = "rgba(130,190,255,0.34)"; g.lineWidth = 22; g.stroke();
+  trace(pts); g.strokeStyle = col; g.lineWidth = 7; g.stroke();
+  trace(pts); g.strokeStyle = "#ffffff"; g.lineWidth = 2.6; g.stroke();
+  for (const bi of [3, 6, 10]) {
     const [sx, sy] = pts[bi];
-    const dir = bi === 3 ? -1 : 1;
-    const branch: P2[] = [[sx, sy], [sx + dir * 48, sy + 72], [sx + dir * 82, sy + 165]];
-    trace(branch); g.strokeStyle = col; g.lineWidth = 4.5; g.stroke();
-    trace(branch); g.strokeStyle = WHITE; g.lineWidth = 2; g.stroke();
+    const dir = bi % 2 === 0 ? 1 : -1;
+    const branch: P2[] = [
+      [sx, sy],
+      [sx + dir * 36, sy + 52],
+      [sx + dir * 68, sy + 124],
+      [sx + dir * 94, sy + 188],
+    ];
+    trace(branch); g.strokeStyle = "rgba(150,205,255,0.45)"; g.lineWidth = 8; g.stroke();
+    trace(branch); g.strokeStyle = col; g.lineWidth = 3.2; g.stroke();
+    trace(branch); g.strokeStyle = "#ffffff"; g.lineWidth = 1.4; g.stroke();
   }
 };
 
-/** Soft radial lantern / candle / flashlight halo on a 400 x 400 soft canvas (`col` = "R,G,B"). */
+/** Soft atmospheric lantern/candle halo on 400 x 400 soft canvas. */
 export const fxFlickerGlow = (p: Pen, intensity = 1, col = "255,175,90") => {
-  const g = p.g, a0 = clamp(0.65 * intensity, 0, 1), a1 = clamp(0.28 * intensity, 0, 1);
+  const g = p.g, a0 = clamp(0.55 * intensity, 0, 1), a1 = clamp(0.24 * intensity, 0, 1);
   const gr = g.createRadialGradient(200, 200, 4, 200, 200, 195);
-  gr.addColorStop(0, `rgba(255,250,235,${a0.toFixed(3)})`);
-  gr.addColorStop(0.22, `rgba(${col},${a1.toFixed(3)})`);
-  gr.addColorStop(0.62, `rgba(${col},${(a1 * 0.35).toFixed(3)})`);
+  gr.addColorStop(0, `rgba(255,246,225,${a0.toFixed(3)})`);
+  gr.addColorStop(0.24, `rgba(${col},${a1.toFixed(3)})`);
+  gr.addColorStop(0.62, `rgba(${col},${(a1 * 0.30).toFixed(3)})`);
   gr.addColorStop(1, `rgba(${col},0)`);
   g.fillStyle = gr;
   g.fillRect(0, 0, 400, 400);
 };
 
-/** Cold night breath vapor puff on a 300 x 300 soft canvas; t in 0..1, `dir` = +1 right / -1 left. */
+/** Delicate curling cold night breath vapor trailing organically forward & upward (NO white round dot!). */
 export const fxBreath = (p: Pen, t: number, dir = 1) => {
-  const g = p.g, u = clamp(t, 0, 1), alpha = Math.sin(u * Math.PI) * 0.34;
+  const g = p.g, u = clamp(t, 0, 1), alpha = Math.sin(u * Math.PI) * 0.24;
   if (alpha <= 0.01) return;
   const s = dir >= 0 ? 1 : -1;
   g.save();
-  g.filter = "blur(8px)";
-  g.fillStyle = `rgba(220,236,255,${alpha.toFixed(3)})`;
-  for (let i = 0; i < 4; i++) {
-    const v = clamp(u * 1.2 - i * 0.12, 0, 1);
-    const x = 150 + s * (16 + v * (72 + i * 14)), y = 165 - v * (32 + i * 9);
-    const rx = 11 + v * 22, ry = 8 + v * 15;
-    g.beginPath(); g.ellipse(x, y, rx, ry, 0, 0, Math.PI * 2); g.fill();
+  g.filter = "blur(9px)";
+  for (let i = 0; i < 6; i++) {
+    const v = clamp(u * 1.35 - i * 0.11, 0, 1);
+    if (v <= 0.01) continue;
+    const x = 150 + s * (14 + v * (92 + i * 11));
+    const y = 175 - v * (38 + i * 8) + Math.sin(v * 6 + i) * 7;
+    const rx = 14 + v * 28, ry = 5 + v * 13;
+    const a = alpha * (1 - v * 0.65);
+    g.fillStyle = `rgba(205,225,245,${a.toFixed(3)})`;
+    g.beginPath();
+    g.ellipse(x, y, rx, ry, -s * 0.22, 0, Math.PI * 2);
+    g.fill();
+  }
+  g.restore();
+};
+
+/** Subtle translucent concentric dark-water ripples for `flat: true` horizontal water placement (512 x 512). */
+export const fxWaterRipple = (p: Pen, t: number, col = "165,200,225") => {
+  const g = p.g;
+  for (let k = 0; k < 3; k++) {
+    const u = (t + k / 3) % 1;
+    const alpha = Math.sin(u * Math.PI) * 0.42;
+    if (alpha <= 0.01) continue;
+    const radR = 32 + u * 200;
+    g.strokeStyle = `rgba(${col},${alpha.toFixed(3)})`;
+    g.lineWidth = Math.max(1.2, 5.5 * (1 - u));
+    g.beginPath();
+    g.arc(256, 256, radR, 0, Math.PI * 2);
+    g.stroke();
+  }
+};
+
+/** Dark Gothic churning night-water spray & arcing droplets (translucent, never an opaque blocking wall) on 600 x 600 canvas. */
+export const fxSplash = (p: Pen, t: number, tint = "#68889c") => {
+  const g = p.g, c = 300, rise = Math.sin(Math.min(1, t * 1.25) * Math.PI);
+  g.save();
+  g.lineCap = "round";
+  if (rise > 0.03) {
+    // Organic wispy spray fan streaks
+    for (let i = 0; i < 13; i++) {
+      const a = rad(205 + i * 11);
+      const len = (70 + 135 * ((i % 3) / 2)) * rise;
+      const x1 = c + Math.cos(a) * len, y1 = 500 + Math.sin(a) * len;
+      g.strokeStyle = tint;
+      g.globalAlpha = 0.42 * rise;
+      g.lineWidth = 4.5 + (i % 2) * 2.5;
+      g.beginPath();
+      g.moveTo(c + (i - 6) * 14, 515);
+      g.quadraticCurveTo(c + Math.cos(a) * len * 0.55, 505 + Math.sin(a) * len * 0.65, x1, y1);
+      g.stroke();
+    }
+  }
+  g.globalAlpha = 0.72 * (1 - t * 0.4);
+  for (let i = 0; i < 18; i++) {
+    const a = rad(195 + i * 9), d = 65 + 265 * t;
+    const x = c + d * Math.cos(a);
+    const y = 480 + d * Math.sin(a) + 370 * t * t;
+    const r = Math.max(2, 9 * (1 - t));
+    if (t > 0.04 && y < 565) p.ell(x, y, r * 0.7, r * 1.35, tint, 1.8);
+  }
+  g.restore();
+};
+
+/** Realistic wet black-mud barefoot prints + dark floor puddle strictly for `flat: true` horizontal decal placement (512 x 512). */
+export const fxWetFootprints = (p: Pen, reveal: number, sheenRgb = "220,175,145") => {
+  const g = p.g;
+  g.save();
+  g.globalAlpha = clamp(reveal, 0.02, 1);
+  // Subtle dark wet water puddle soaking into wood floorboards (no bright orange ring!)
+  const pud = g.createRadialGradient(256, 256, 24, 256, 256, 225);
+  pud.addColorStop(0, "rgba(8,12,16,0.72)");
+  pud.addColorStop(0.55, "rgba(12,16,20,0.38)");
+  pud.addColorStop(1, "rgba(10,14,18,0)");
+  g.fillStyle = pud;
+  g.beginPath();
+  g.ellipse(256, 256, 220, 175, 0.08, 0, Math.PI * 2);
+  g.fill();
+
+  const drawFoot = (fx: number, fy: number, rot: number, mirror: number) => {
+    g.save();
+    g.translate(fx, fy);
+    g.rotate(rot);
+    g.scale(mirror, 1);
+    // Muddy sole & arch silhouette (realistic anatomical footprint curve, NOT two cartoon circles!)
+    g.fillStyle = "#080b0e";
+    g.beginPath();
+    g.moveTo(-22, -48);
+    g.bezierCurveTo(-34, -18, -16, 12, -20, 48);
+    g.bezierCurveTo(-22, 72, 14, 74, 18, 48);
+    g.bezierCurveTo(22, 20, 14, -8, 24, -36);
+    g.bezierCurveTo(30, -56, -12, -66, -22, -48);
+    g.closePath();
+    g.fill();
+    // Subtle wet specular rim catching the room's oil lamp
+    g.strokeStyle = `rgba(${sheenRgb},0.34)`;
+    g.lineWidth = 2.6;
+    g.stroke();
+    // 5 anatomical toes
+    for (const [tx, ty, rx, ry] of [
+      [-18, -74, 10.5, 13],
+      [-2, -80, 7.2, 10],
+      [11, -76, 6.2, 8.8],
+      [21, -68, 5.4, 7.6],
+      [29, -56, 4.6, 6.4],
+    ] as const) {
+      g.fillStyle = "#080b0e";
+      g.beginPath();
+      g.ellipse(tx, ty, rx, ry, 0.12, 0, Math.PI * 2);
+      g.fill();
+      g.strokeStyle = `rgba(${sheenRgb},0.28)`;
+      g.lineWidth = 2.0;
+      g.stroke();
+    }
+    // Delicate wet glint droplets
+    g.fillStyle = `rgba(${sheenRgb},0.46)`;
+    g.beginPath();
+    g.ellipse(-10, -40, 8, 3.2, -0.3, 0, Math.PI * 2);
+    g.fill();
+    g.beginPath();
+    g.ellipse(4, 42, 6, 2.6, 0.2, 0, Math.PI * 2);
+    g.fill();
+    g.restore();
+  };
+
+  drawFoot(182, 272, -0.10, 1);
+  drawFoot(328, 232, 0.08, -1);
+  // Stray mud droplets trailing behind
+  for (const [dx, dy, r] of [[146, 355, 6], [198, 376, 4.5], [352, 336, 5], [274, 152, 4.5]] as const) {
+    g.fillStyle = "rgba(8,11,14,0.85)";
+    g.beginPath();
+    g.arc(dx, dy, r, 0, Math.PI * 2);
+    g.fill();
+  }
+  g.restore();
+};
+
+// ---------------- Subliminal & Uncanny Horror FX Builders ----------------
+
+/** Faint, asymmetric pinpoint eyes peering out of pitch-black reeds, trees, or dark windows (256 x 128). */
+export const fxLurkingEyes = (p: Pen, blink = 0, col = "220,238,245") => {
+  const g = p.g;
+  if (blink > 0.85) return;
+  const open = 1 - blink;
+  g.save();
+  // Dark shadow mask behind eyes so they sink seamlessly into dark foliage/windows
+  const bg = g.createRadialGradient(128, 64, 10, 128, 64, 105);
+  bg.addColorStop(0, "rgba(3,2,6,0.72)");
+  bg.addColorStop(1, "rgba(3,2,6,0)");
+  g.fillStyle = bg;
+  g.fillRect(0, 0, 256, 128);
+  // Two slightly asymmetric watching eyes (left slightly higher/wider for uncanny valley)
+  for (const [ex, ey, rx, ry] of [
+    [94, 60, 15, 7.5 * open],
+    [164, 67, 13, 6.2 * open],
+  ] as const) {
+    const halo = g.createRadialGradient(ex, ey, 1, ex, ey, rx * 2.2);
+    halo.addColorStop(0, `rgba(${col},0.42)`);
+    halo.addColorStop(1, `rgba(${col},0)`);
+    g.fillStyle = halo;
+    g.beginPath();
+    g.arc(ex, ey, rx * 2.2, 0, Math.PI * 2);
+    g.fill();
+    g.fillStyle = `rgba(${col},0.88)`;
+    g.beginPath();
+    g.ellipse(ex, ey, rx, Math.max(1.2, ry), -0.06, 0, Math.PI * 2);
+    g.fill();
+    // Razor-small pinpoint pupil staring dead-center
+    g.fillStyle = "#040207";
+    g.beginPath();
+    g.arc(ex, ey, 2.2, 0, Math.PI * 2);
+    g.fill();
+  }
+  g.restore();
+};
+
+/** Pale gaunt clawed hand & elongated fingers pressed weakly against dark window glass from outside (320 x 380). */
+export const fxWindowHand = (p: Pen, press = 1, tint = "#aeb8be") => {
+  const g = p.g;
+  g.save();
+  g.globalAlpha = clamp(press, 0.05, 0.82);
+  // Faint fogged condensation smudge around palm on cold glass
+  const fog = g.createRadialGradient(160, 210, 18, 160, 210, 120);
+  fog.addColorStop(0, "rgba(195,212,224,0.22)");
+  fog.addColorStop(0.6, "rgba(165,185,200,0.08)");
+  fog.addColorStop(1, "rgba(165,185,200,0)");
+  g.fillStyle = fog;
+  g.fillRect(0, 0, 320, 380);
+  p.grit = 1.4;
+  // Gaunt narrow wrist & palm pressed against glass
+  p.poly([[128, 355], [122, 238], [134, 182], [190, 184], [198, 240], [186, 355]], shade(tint, 0.72), 3.6, "#06040a");
+  // 5 impossibly long spindly skeletal fingers splayed across pane
+  const fingers: [P2, P2, P2][] = [
+    [[128, 224], [84, 194], [62, 162]],
+    [[138, 188], [116, 114], [108, 48]],
+    [[156, 182], [154, 100], [150, 24]],
+    [[174, 184], [186, 108], [194, 42]],
+    [[188, 198], [220, 142], [238, 92]],
+  ];
+  for (const [b, m, tip] of fingers) {
+    p.stroke([b, m, tip], 14, "#06040a");
+    p.stroke([b, m, tip], 8.5, tint);
+    // Pale pressed fingertip pads + black claw smears
+    p.dot(tip[0], tip[1], 5.2, "#dce4e8");
+    p.drip(tip[0], tip[1] + 4, 24, 1.8, "rgba(6,4,10,0.65)");
+  }
+  g.restore();
+};
+
+/** Gravity-defying floating ash / eerie embers / hair wisps drifting UPWARD against physics (512 x 512). */
+export const fxFloatingAsh = (p: Pen, t: number, col = "rgba(210,222,232,0.52)") => {
+  const g = p.g;
+  g.save();
+  for (let i = 0; i < 36; i++) {
+    const xBase = rnd(i, 11) * 512;
+    const speed = 0.25 + rnd(i, 17) * 0.65;
+    const y = ((1 - (t * speed + rnd(i, 23)) % 1) + 1) % 1 * 512;
+    const sway = Math.sin(t * 2.4 + i * 1.7) * 18;
+    const r = 1.4 + rnd(i, 31) * 3.2;
+    g.fillStyle = col;
+    g.beginPath();
+    g.ellipse(xBase + sway, y, r * 1.5, r * 0.65, rnd(i, 37) * Math.PI, 0, Math.PI * 2);
+    g.fill();
+  }
+  g.restore();
+};
+
+/** Impossibly elongated distorted clawed shadow-decal (`flat: true`) stretching across floors/planks (512 x 512). */
+export const fxLongShadow = (p: Pen, twist = 0, col = "rgba(4,2,8,0.78)") => {
+  const g = p.g;
+  g.save();
+  // Soft feathered dark shadow body stretching top-to-bottom
+  g.fillStyle = col;
+  g.beginPath();
+  g.moveTo(222, 470);
+  g.quadraticCurveTo(205 + twist * 22, 310, 224 + twist * 18, 170);
+  g.quadraticCurveTo(212 + twist * 14, 118, 256 + twist * 28, 72);
+  g.quadraticCurveTo(298 + twist * 14, 118, 286 + twist * 18, 170);
+  g.quadraticCurveTo(308 + twist * 22, 310, 290, 470);
+  g.closePath();
+  g.fill();
+  // Elongated spindly skeletal shadow arms & splayed claws reaching forward independently!
+  g.strokeStyle = col;
+  g.lineCap = "round";
+  g.lineWidth = 14;
+  for (const s of [-1, 1]) {
+    const sx = 256 + s * 32 + twist * 16;
+    const ex = 256 + s * 112 + twist * 26;
+    const ey = 148 - s * 16;
+    g.beginPath();
+    g.moveTo(sx, 220);
+    g.quadraticCurveTo(sx + s * 54, 188, ex, ey);
+    g.stroke();
+    // 4 shadow claws
+    g.lineWidth = 4.2;
+    for (let f = -1.5; f <= 1.5; f += 1) {
+      g.beginPath();
+      g.moveTo(ex, ey);
+      g.lineTo(ex + s * 38 + f * 12, ey - 32 + f * 10);
+      g.stroke();
+    }
+    g.lineWidth = 14;
   }
   g.restore();
 };

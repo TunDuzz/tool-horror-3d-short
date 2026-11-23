@@ -35,7 +35,7 @@ Reference schemas and boilerplate for `shorts-project/src/<episode>/`.
   ]
 }
 ```
-Allowed `light` keys: `day | golden | night | candle | storm | eerie | blood`.
+Allowed `light` keys: `night | candle | storm | eerie | blood`.
 Allowed `transition_out` prefixes: `cut`, `fade:<sec>`, `blackout:<sec>`.
 
 ## 2. `bible/CONTINUITY.json` Schema

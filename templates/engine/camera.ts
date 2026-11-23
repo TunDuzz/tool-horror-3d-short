@@ -1,19 +1,30 @@
-// Neutral timeline, camera grammar, DOF, and foreground framing helpers (30 fps).
-// Grammar: symmetric smootherstep glides (18-40 f), hard cuts on large reframes, continuous slow push-ins on holds,
-// and 7-frame alternating-sign impact kicks (no hand-held float).
+// Neutral horror timeline, cinematography grammar, shot archetypes, DOF, and screen beat helpers (30 fps).
+// Grammar: purposeful shot-scale & angle variety (WS/MS/OTS/POV/ECU/LOW/HIGH), continuous creep/handheld motion
+// (zero frozen holds), real-time lightning flash sync for 3D shaders, and horror transitions (dipBlack/blink/vignettePulse).
 
 export const FPS = 30;
 export type V3 = [number, number, number];
-export type DaylightKey = "day" | "golden";
 export type HorrorLightKey = "night" | "candle" | "storm" | "eerie" | "blood";
-export type LightKey = DaylightKey | HorrorLightKey;
-export type ShotBase<TLight extends LightKey = DaylightKey> = { id: number; a: number; b: number; light: TLight };
+export type LightKey = HorrorLightKey;
+export type ShotScale = "EWS" | "WS" | "MS" | "MCU" | "CU" | "ECU" | "OTS" | "POV" | "LOW" | "HIGH";
+
+export type ShotBase<TLight extends LightKey = LightKey> = {
+  id: number;
+  a: number;
+  b: number;
+  light: TLight;
+  scale?: ShotScale;
+  note?: string;
+};
 
 export type ScreenBeat =
-  | { kind: "flash"; f: number; dur?: number; color?: string; peak?: number }
+  | { kind: "flash"; f: number; dur?: number; color?: string; peak?: number; blend?: "normal" | "screen" }
   | { kind: "lightning"; f: number; color?: string; peak?: number }
   | { kind: "blackout"; a: number; b: number; fadeIn?: number; fadeOut?: number; color?: string }
-  | { kind: "flicker"; a: number; b: number; seed?: number; strength?: number; color?: string };
+  | { kind: "dipBlack"; at: number; dur?: number; hold?: number; color?: string }
+  | { kind: "flicker"; a: number; b: number; seed?: number; strength?: number; color?: string }
+  | { kind: "vignettePulse"; a: number; b: number; freq?: number; strength?: number; color?: string }
+  | { kind: "aberration"; a: number; b: number; strength?: number; pulse?: boolean };
 
 export type Cam = { pos: V3; look: V3; fov: number; roll: number };
 export type ShotCam = Partial<Cam> & { pos: V3; look: V3 };
@@ -23,11 +34,14 @@ export type DofBeat = { f: number; dur?: number; cInf: number; focus?: (f: numbe
 export type FgProp = { a: number; b: number; kit: string; pos: V3; s?: number; yaw?: number };
 
 export const clamp01 = (x: number) => Math.max(0, Math.min(1, x));
+export const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 export const smooth = (x: number) => {
   const u = clamp01(x);
   return u * u * (3 - 2 * u);
 };
+export const smoothstep = (a: number, b: number, x: number) => smooth((x - a) / Math.max(1e-6, b - a));
 export const easeOut = (u: number) => 1 - (1 - clamp01(u)) ** 4;
+export const easeIn = (u: number) => clamp01(u) ** 3;
 /** Symmetric smootherstep ease: attack = release. */
 export const glide = (u: number) => {
   const x = clamp01(u);
@@ -92,12 +106,12 @@ export const dollyZoom = (pos: V3, look: V3, baseFov: number, k: number, rest: P
   return {
     pos: [look[0] + (pos[0] - look[0]) * safeK, look[1] + (pos[1] - look[1]) * safeK, look[2] + (pos[2] - look[2]) * safeK],
     look,
-    fov: Math.max(12, Math.min(95, rawFov)),
+    fov: Math.max(14, Math.min(92, rawFov)),
     ...rest,
   };
 };
 
-/** Deterministic handheld micro-drift (no random state): subtle uneasy breathing/sway in suspense holds. */
+/** Deterministic handheld micro-drift (no random state): organic uneasy breathing/sway in suspense holds. */
 export const handheld = (c: ShotCam, f: number, amp = 0.02, freq = 0.28, seed = 1): ShotCam => {
   const ph = seed * 1.73;
   const w = f * freq;
@@ -117,6 +131,65 @@ export const handheld = (c: ShotCam, f: number, amp = 0.02, freq = 0.28, seed = 
 export const snapZoom = (f: number, f0: number, dur: number, k0: number, k1: number) =>
   k0 + (k1 - k0) * easeOut((f - f0) / Math.max(1, dur));
 
+// ---------------- Cinematic Horror Shot Archetypes ----------------
+
+/** Over-The-Shoulder (OTS) framing: places camera behind & beside `subjectPos` looking past them toward `targetPos`. */
+export const camOTS = (
+  subjectPos: V3,
+  targetPos: V3,
+  side: -1 | 1 = 1,
+  backDist = 1.65,
+  sideOffset = 0.58,
+  camHeight = 1.52,
+  fov = 38,
+): ShotCam => {
+  const dx = targetPos[0] - subjectPos[0];
+  const dz = targetPos[2] - subjectPos[2];
+  const len = Math.hypot(dx, dz) || 1;
+  const fx = dx / len, fz = dz / len;
+  const rx = -fz, rz = fx;
+  const pos: V3 = [
+    subjectPos[0] - fx * backDist + rx * sideOffset * side,
+    subjectPos[1] + camHeight,
+    subjectPos[2] - fz * backDist + rz * sideOffset * side,
+  ];
+  const look: V3 = [
+    lerp(subjectPos[0], targetPos[0], 0.72),
+    lerp(subjectPos[1] + 1.15, targetPos[1], 0.78),
+    lerp(subjectPos[2], targetPos[2], 0.72),
+  ];
+  return { pos, look, fov };
+};
+
+/** Smooth orbital arc around `center` from azimuth `az0` to `az1` (radians), ideal for unsettling reveals. */
+export const camArc = (
+  center: V3,
+  radius: number,
+  az0: number,
+  az1: number,
+  y0: number,
+  y1: number,
+  u: number,
+  lookY = 1.15,
+  fov = 40,
+): ShotCam => {
+  const k = glide(u);
+  const az = lerp(az0, az1, k);
+  return {
+    pos: [center[0] + Math.sin(az) * radius, center[1] + lerp(y0, y1, k), center[2] + Math.cos(az) * radius],
+    look: [center[0], center[1] + lookY, center[2]],
+    fov,
+  };
+};
+
+/** Subjective POV framing (looking down into dark water, down a corridor, or up at a looming doorway) with breathing sway. */
+export const camPOV = (eyePos: V3, lookPos: V3, f: number, swayAmp = 0.024, fov = 48): ShotCam =>
+  handheld({ pos: eyePos, look: lookPos, fov }, f, swayAmp, 0.24, 31);
+
+/** Tight dread close-up / ECU with continuous slow push-in toward `targetPos`. */
+export const camECU = (targetPos: V3, offset: V3, f: number, f0: number, pushRate = 0.0022, fov = 32): ShotCam =>
+  dolly([targetPos[0] + offset[0], targetPos[1] + offset[1], targetPos[2] + offset[2]], targetPos, pushK(f, f0, pushRate), { fov });
+
 const hash01 = (n: number, seed = 1) => {
   const x = Math.sin(n * 12.9898 + seed * 78.233) * 43758.5453;
   return x - Math.floor(x);
@@ -130,6 +203,23 @@ export const flickerAt = (f: number, seed = 1, rate = 0.35, minVal = 0.18): numb
     return minVal + (1 - minVal) * (1 - dip * 0.85);
   }
   return 0.92 + 0.08 * hash01(Math.floor(f) + 11, seed + 5);
+};
+
+/** Stepped stop-motion time (6–8 fps) for supernatural entities while humans move smoothly at 30 fps (uncanny motion mismatch). */
+export const uncannyTime = (f: number, stepFrames = 4, fps = FPS): number =>
+  (Math.floor(f / Math.max(1, stepFrames)) * Math.max(1, stepFrames)) / fps;
+
+/** Sudden asymmetric 2-frame head/limb twitch burst (Silent Hill / Jacob's Ladder style): 0 most frames, violent snap on rare beats. */
+export const uncannyTwitch = (f: number, seed = 1, period = 22, amp = 1): number => {
+  const bucket = Math.floor(f / Math.max(6, period));
+  const triggerOff = Math.floor(hash01(bucket, seed + 13) * Math.max(1, period - 3));
+  const dt = f - (bucket * Math.max(6, period) + triggerOff);
+  if (dt === 0 || dt === 1) {
+    const sign = hash01(bucket, seed + 41) < 0.5 ? -1 : 1;
+    const mag = 0.65 + 0.35 * hash01(bucket, seed + 79);
+    return sign * mag * amp * (dt === 0 ? 1 : 0.72);
+  }
+  return 0;
 };
 
 /** Evaluate camera key list at frame `f`. */
@@ -201,23 +291,59 @@ export const evalLayers = (shots: ShotBase<LightKey>[], xfade: Record<number, nu
   return [{ id: shotAt(shots, f).id, alpha: 1 }];
 };
 
-const LIGHTNING_CURVE = [0.72, 0.24, 0.08, 0.56, 0.22, 0.08, 0.02];
+const LIGHTNING_CURVE = [1.0, 0.34, 0.12, 0.78, 0.30, 0.12, 0.04];
 
-/** Evaluate deterministic full-screen visual beats (flash, lightning, blackout, flicker) at frame `f`. */
-export const evalOverlays = (overlays: ScreenBeat[], f: number): { color: string; opacity: number; blend?: "normal" | "screen" }[] => {
-  const out: { color: string; opacity: number; blend?: "normal" | "screen" }[] = [];
+/** Evaluate 3D-lighting lightning intensity scalar in [0, 1] at frame `f` (drives real 3D shader illumination). */
+export const lightningAt = (overlays: ScreenBeat[], f: number): number => {
+  let peak = 0;
+  for (const ov of overlays) {
+    if (ov.kind !== "lightning") continue;
+    const dt = f - ov.f;
+    if (dt >= 0 && dt < LIGHTNING_CURVE.length) {
+      peak = Math.max(peak, clamp01((ov.peak ?? 0.85) * LIGHTNING_CURVE[dt]));
+    }
+  }
+  return peak;
+};
+
+/** Evaluate chromatic aberration intensity scalar (0..1.5) at frame `f` for uncanny entity proximity & shocks. */
+export const aberrationAt = (overlays: ScreenBeat[], f: number): number => {
+  let peak = 0;
+  for (const ov of overlays) {
+    if (ov.kind !== "aberration") continue;
+    if (f >= ov.a && f < ov.b) {
+      const env = Math.sin(clamp01((f - ov.a) / Math.max(1, ov.b - ov.a)) * Math.PI);
+      const base = (ov.strength ?? 0.75) * Math.min(1, env * 3.0);
+      const mod = ov.pulse ? 0.55 + 0.45 * Math.abs(Math.sin(f * 0.45)) : 1;
+      peak = Math.max(peak, base * mod);
+    }
+  }
+  return peak;
+};
+
+export type EvaluatedOverlay = {
+  color: string;
+  opacity: number;
+  blend?: "normal" | "screen";
+  radial?: boolean;
+};
+
+/** Evaluate deterministic full-screen visual beats (flash, lightning, blackout, dipBlack, flicker, vignettePulse). */
+export const evalOverlays = (overlays: ScreenBeat[], f: number): EvaluatedOverlay[] => {
+  const out: EvaluatedOverlay[] = [];
   for (const ov of overlays) {
     if (ov.kind === "flash") {
       const dur = Math.max(1, ov.dur ?? 4);
       const dt = f - ov.f;
       if (dt >= 0 && dt < dur) {
-        const opacity = clamp01((ov.peak ?? 1) * (1 - dt / dur) ** 1.4);
-        if (opacity > 0.005) out.push({ color: ov.color ?? "#ffffff", opacity, blend: "normal" });
+        const opacity = clamp01((ov.peak ?? 0.55) * (1 - dt / dur) ** 1.5);
+        if (opacity > 0.005) out.push({ color: ov.color ?? "#ffffff", opacity, blend: ov.blend ?? "screen" });
       }
     } else if (ov.kind === "lightning") {
+      // Subtle screen-blended sky sheen ONLY (bulk of lightning punch comes from real 3D shader uFlashAmt!)
       const dt = f - ov.f;
       if (dt >= 0 && dt < LIGHTNING_CURVE.length) {
-        const opacity = clamp01((ov.peak ?? 0.78) * LIGHTNING_CURVE[dt]);
+        const opacity = clamp01((ov.peak ?? 0.85) * LIGHTNING_CURVE[dt] * 0.28);
         if (opacity > 0.005) out.push({ color: ov.color ?? "#b8d8ff", opacity, blend: "screen" });
       }
     } else if (ov.kind === "blackout") {
@@ -228,15 +354,35 @@ export const evalOverlays = (overlays: ScreenBeat[], f: number): { color: string
         if (fi > 0 && f - ov.a < fi) alpha = Math.min(alpha, (f - ov.a + 1) / (fi + 1));
         if (fo > 0 && ov.b - f <= fo) alpha = Math.min(alpha, (ov.b - f) / (fo + 1));
         alpha = clamp01(alpha);
-        if (alpha > 0.005) out.push({ color: ov.color ?? "#000000", opacity: alpha, blend: "normal" });
+        if (alpha > 0.005) out.push({ color: ov.color ?? "#040308", opacity: alpha, blend: "normal" });
+      }
+    } else if (ov.kind === "dipBlack") {
+      const dur = Math.max(2, ov.dur ?? 10);
+      const hold = Math.max(0, ov.hold ?? 2);
+      const half = dur / 2;
+      const a = ov.at - half - hold / 2;
+      const b = ov.at + half + hold / 2;
+      if (f >= a && f <= b) {
+        let alpha = 1;
+        if (f < ov.at - hold / 2) alpha = smooth((f - a) / half);
+        else if (f > ov.at + hold / 2) alpha = smooth((b - f) / half);
+        if (alpha > 0.005) out.push({ color: ov.color ?? "#040308", opacity: clamp01(alpha), blend: "normal" });
       }
     } else if (ov.kind === "flicker") {
       if (f >= ov.a && f < ov.b) {
         const h = hash01(Math.floor(f), ov.seed ?? 1);
         if (h < 0.35) {
-          const opacity = clamp01((ov.strength ?? 0.65) * (1 - h / 0.35));
-          if (opacity > 0.005) out.push({ color: ov.color ?? "#000000", opacity, blend: "normal" });
+          const opacity = clamp01((ov.strength ?? 0.5) * (1 - h / 0.35));
+          if (opacity > 0.005) out.push({ color: ov.color ?? "#040308", opacity, blend: "normal" });
         }
+      }
+    } else if (ov.kind === "vignettePulse") {
+      if (f >= ov.a && f < ov.b) {
+        const freq = ov.freq ?? 1.4;
+        const pulse = 0.5 + 0.5 * Math.sin(((f - ov.a) / FPS) * Math.PI * 2 * freq);
+        const env = Math.sin(clamp01((f - ov.a) / Math.max(1, ov.b - ov.a)) * Math.PI);
+        const opacity = clamp01((ov.strength ?? 0.42) * pulse * Math.min(1, env * 2.5));
+        if (opacity > 0.005) out.push({ color: ov.color ?? "#040208", opacity, blend: "normal", radial: true });
       }
     }
   }

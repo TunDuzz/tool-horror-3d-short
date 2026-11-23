@@ -718,3 +718,148 @@ export const chainHD = () => ctex("chainHD", 256, 1024, (g) => {
   }
 });
 
+// ---------------- Horror Engine v2 Gothic HD painters ----------------
+
+/** Weathered dark Gothic wood planks: water-stained grain, deep plank seams, and fine ink cross-hatching. */
+export const darkPlanksHD = (key = "darkPlanksHD", baseCols = ["#58493c", "#4d4035", "#625244", "#453a31"]) =>
+  ctex(key, 1024, 1024, (g, r) => {
+    const S = 1024, B = 128, GAP = 7;
+    for (let i = 0; i < 8; i++) {
+      const y = i * B;
+      g.save();
+      g.beginPath();
+      g.rect(0, y, S, B);
+      g.clip();
+      g.fillStyle = jit(r, pick(r, baseCols), 0.12, 4, 0.12);
+      g.fillRect(0, y, S, B);
+      for (let k = 0; k < 6; k++) {
+        const x = U(r, 0, S), rad = U(r, 60, 170), dark = r() < 0.7;
+        wrapX(S, x - rad * 2.5, rad * 5, (xx) =>
+          blotch(g, xx + rad * 2.5, y + U(r, 20, B - 20), rad, 2.5, dark ? "18,14,20" : "130,112,95", dark ? 0.24 : 0.08));
+      }
+      for (let k = 0; k < 16; k++) {
+        grain(g, r, S, U(r, 0, S), y + U(r, 10, B - 10), U(r, 260, 900), U(r, 1.5, 5), U(r, 1.2, 2.8), "rgba(18,12,18,0.42)");
+      }
+      // Heavy Gothic ink hatching & wet black-mold rot stains near plank joints
+      g.strokeStyle = "rgba(8,4,12,0.42)";
+      g.lineWidth = 1.6;
+      for (let hx = 8; hx < S; hx += 13) {
+        if (r() < 0.62) {
+          g.beginPath();
+          g.moveTo(hx, y + GAP);
+          g.lineTo(hx - U(r, 7, 15), y + GAP + U(r, 18, 46));
+          g.stroke();
+        }
+      }
+      // Damp black ooze blotches & cracked splits
+      for (let m = 0; m < 4; m++) {
+        blotch(g, U(r, 0, S), y + U(r, 12, B - 12), U(r, 24, 65), U(r, 1.2, 2.6), "8,5,12", U(r, 0.22, 0.42));
+      }
+      // Plank seam & subtle damp highlight edge
+      g.fillStyle = "#141016";
+      g.fillRect(0, y, S, GAP);
+      g.fillStyle = "rgba(185,170,155,0.14)";
+      g.fillRect(0, y + GAP, S, 2);
+      const cut = U(r, 80, S - 80);
+      g.fillStyle = "#141016";
+      g.fillRect(cut, y, 4, B);
+      nail(g, cut - 18, y + 32, 3.5, "#1a151c");
+      nail(g, cut - 18, y + B - 28, 3.5, "#1a151c");
+      nail(g, cut + 20, y + 32, 3.5, "#1a151c");
+      nail(g, cut + 20, y + B - 28, 3.5, "#1a151c");
+      g.restore();
+    }
+  });
+
+/** Wet dark riverbank mud, matted moss, and roots (replaces bright flat cartoon grass on horror terrain). */
+export const mudBankHD = (key = "mudBankHD") =>
+  ctex(key, 512, 512, (g, r) => {
+    g.fillStyle = "#2b2f2c";
+    g.fillRect(0, 0, 512, 512);
+    for (let i = 0; i < 65; i++) {
+      const col = pick(r, ["26,34,28", "44,38,32", "18,22,20", "56,64,52"]);
+      blotch(g, U(r, 0, 512), U(r, 0, 512), U(r, 24, 72), U(r, 0.8, 1.8), col, U(r, 0.18, 0.36));
+    }
+    g.lineCap = "round";
+    for (let i = 0; i < 700; i++) {
+      const x = r() * 512, y = r() * 512, len = 6 + r() * 14;
+      g.strokeStyle = pick(r, ["#1c221e", "#3a4236", "#2c2822", "#474f40"]);
+      g.lineWidth = 1.4 + r() * 1.2;
+      g.beginPath();
+      g.moveTo(x, y);
+      g.quadraticCurveTo(x + (r() - 0.5) * 6, y - len * 0.5, x + (r() - 0.5) * 8, y - len);
+      g.stroke();
+    }
+  });
+
+/** Damp cracked Gothic stone / aged plaster wall with water streaks and ink-hatch crevices. */
+export const crackedPlasterHD = (key = "crackedPlasterHD", base = "#66625e") =>
+  ctex(key, 512, 512, (g, r) => {
+    g.fillStyle = base;
+    g.fillRect(0, 0, 512, 512);
+    for (let i = 0; i < 55; i++) {
+      const dark = r() < 0.65;
+      blotch(g, U(r, 0, 512), U(r, 0, 512), U(r, 22, 85), U(r, 0.6, 1.6), dark ? "24,20,26" : "150,145,140", dark ? 0.2 : 0.1);
+    }
+    // Heavy vertical damp black-mold & ichor streaks
+    for (let i = 0; i < 38; i++) {
+      const x = U(r, 0, 512), y0 = U(r, 0, 220), h = U(r, 110, 310);
+      const gr = g.createLinearGradient(x, y0, x, y0 + h);
+      gr.addColorStop(0, "rgba(10,8,14,0.44)");
+      gr.addColorStop(0.55, "rgba(14,12,18,0.24)");
+      gr.addColorStop(1, "rgba(14,12,18,0)");
+      g.fillStyle = gr;
+      g.fillRect(x, y0, U(r, 4, 20), h);
+    }
+    // Jagged dark hairline cracks + woodcut scratch clusters
+    g.strokeStyle = "rgba(10,6,14,0.84)";
+    g.lineCap = "round";
+    for (let c = 0; c < 15; c++) {
+      let x = U(r, 30, 482), y = U(r, 30, 482);
+      g.lineWidth = U(r, 1.4, 3.0);
+      g.beginPath();
+      g.moveTo(x, y);
+      for (let s = 0; s < 7; s++) {
+        x += U(r, -30, 30);
+        y += U(r, -20, 38);
+        g.lineTo(x, y);
+      }
+      g.stroke();
+    }
+  });
+
+/** Streaky, torn Gothic night stratus cloud (NO puffy cartoon cumulus). */
+export const horrorCloudHD = (seed: number, pal = { lit: "#3b547e", mid: "#243554", shade: "#111b2e" }) =>
+  ctex(`horrorCloud_${pal.lit}_${seed}`, 1024, 384, (g) => {
+    const r = rng(seed * 7919 + 41);
+    const W = 1024, H = 384;
+    const drawBand = (col: string, count: number, yBase: number, ySpread: number, rxMin: number, rxMax: number, ryMin: number, ryMax: number, blur: number) => {
+      g.save();
+      g.filter = `blur(${blur}px)`;
+      g.fillStyle = col;
+      for (let i = 0; i < count; i++) {
+        const cx = U(r, 120, W - 120);
+        const cy = yBase + U(r, -ySpread, ySpread);
+        const rx = U(r, rxMin, rxMax);
+        const ry = U(r, ryMin, ryMax);
+        g.beginPath();
+        g.ellipse(cx, cy, rx, ry, U(r, -0.09, 0.09), 0, TAU);
+        g.fill();
+      }
+      g.restore();
+    };
+    drawBand(pal.shade, 9, 215, 36, 110, 230, 14, 32, 14);
+    drawBand(pal.mid, 8, 195, 30, 95, 200, 12, 26, 12);
+    drawBand(pal.lit, 6, 175, 24, 70, 160, 8, 18, 10);
+    // Feather edges cleanly to zero alpha
+    g.globalCompositeOperation = "destination-in";
+    const m = g.createRadialGradient(W * 0.5, H * 0.5, W * 0.08, W * 0.5, H * 0.5, W * 0.48);
+    m.addColorStop(0, "rgba(0,0,0,0.88)");
+    m.addColorStop(0.65, "rgba(0,0,0,0.55)");
+    m.addColorStop(1, "rgba(0,0,0,0)");
+    g.fillStyle = m;
+    g.fillRect(0, 0, W, H);
+    g.globalCompositeOperation = "source-over";
+  });
+
+

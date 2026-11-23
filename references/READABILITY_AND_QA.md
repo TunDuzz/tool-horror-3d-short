@@ -1,35 +1,42 @@
-# Horror Readability Traps & QA Gate Reference
+# Art Director's Still Gate, Readability Traps & Automated QA Reference
 
-Verify every single item during the **Pre-Final Still Gate** (`read_file` on 100% of stills) and **Post-Render QA Gate** (`short_qa.py`).
+Verify **EVERY SINGLE ITEM** during the mandatory **Pre-Final Still Gate** (`read_file` on 100% of shots) AND **Post-Render QA Gate** (`short_qa.py`). Any single failure below is grounds to **REJECT and RE-ENGINEER** the shot before final render.
 
-## 1. Horror-Specific Visual Traps (Caught on Still Inspection)
+## 1. Art Director's Rejection Checklist (Must Inspect Visually on Stills!)
 
-1. **Neon Pasted-On Character in Night Scenes:**
-   - *Cause:* Custom unlit material on an ordinary character or overriding `uLightGain` back to `1.0`.
-   - *Fix:* Use standard `placePerson` with `night`/`candle`/`storm`/`eerie`/`blood` (`charGain 0.62–0.68`) and keep `unlit: true` strictly for glowing eyes or light spirits.
-2. **Background Pillar Ink Lines Cutting Through Translucent Ghosts:**
-   - *Cause:* Translucent `ghostMat` sets `depthWrite: false`, so `InkPass` draws opaque `#030303` edges of pillars/walls behind the ghost over the rendered ghost silhouette.
-   - *Fix:* Stage translucent ghosts inside open doorways, empty wall expanses, or dark recesses—avoid aligning a ghost's face with a high-contrast background edge.
-3. **Floor Plane Slicing a Crisp Line Across Mist (`fxMist`):**
-   - *Cause:* Placing a mist card too low (`center.y < height * 0.48`) lets the `y = 0` ground cut horizontally across the middle of the glow.
-   - *Fix:* Set mist card center `y >= h * 0.48` (e.g. `y: 0.92, h: 1.9`).
-4. **Cold Breath (`fxBreath`) Floating Behind Character's Head:**
-   - *Cause:* Hardcoding `+x` offset while `viewOf` set `mirror: true` (character turned left).
-   - *Fix:* Compute `const dir = view.mirror ? -1 : 1`, offset `x + dir * 0.24`, and call `fxBreath(p, u, dir)`.
-5. **Washed-Out Grey Lightning Flash:**
-   - *Cause:* Replacing `{ kind: "lightning" }` with a solid opaque white `flash`.
-   - *Fix:* Always use `{ kind: "lightning", f }` (renders with `mixBlendMode: "screen"` and double-strike decay so black outlines stay sharp).
-6. **Cut-Off Legs at Frame Bottom / Crushed Black Walls:**
-   - *Fix:* Frame either chest-up MCU or full body with visible boots + contact shadow; verify `p98 >= 0.50` and readable facial expression on stills at 50% display brightness.
+1. **REJECT: Static-Camera / Filter-Swap Jump-Cut:**
+   - *Symptom:* Two consecutive shots sit at roughly the same camera position/angle (only tinting `night` → `eerie` → `storm` → `blood`).
+   - *Fix:* Change camera vantage by `>= 30°` OR switch shot scale (`WS` → `OTS` → `LOW` → `MCU` → `ECU` → `Reverse WS`).
+2. **REJECT: Empty Horizon / Box-World Lego Set:**
+   - *Symptom:* Flat straight green/grey horizon bar, empty background in `9:16` narrow frame, or stacked rectangular boxes pretending to be roofs, boats, lamps, or trees.
+   - *Fix:* Place `addDistantRidge`, `addGnarledTree`, `addReedCluster`, and architecture **within visible horizontal FOV**, use `pitchedRoofGeo` / `taperedBoxGeo` / `addSampanHull` / `addStormLantern3D`, and frame wide shots with `addForegroundSilhouette` + `addVolumetricShaft`.
+3. **REJECT: Cartoonish / Comedy Proportions or Expressions:**
+   - *Symptom:* Giant round heads, stick legs, silly round `O` scream mouths, white cartoon grin teeth, or blue anime sweatdrops.
+   - *Fix:* Use Horror Engine v2 (`toon.ts`) Gothic proportions (`adult`, `elder`, `gaunt`, `kid`), recessed shadowed eye sockets, and dark ink hatching.
+4. **REJECT: Statue Acting / Action-Narration Mismatch:**
+   - *Symptom:* Narration describes *peering down, lunging at an ankle, fleeing, barring a door, or looking behind*, yet the character stands rigid in `idle` facing forward—or two struggling characters stand a meter apart without reaching.
+   - *Fix:* Bind every verb to a matching `Action` (`peer`, `recoil`, `lunge`, `emerge`, `flee`, `boltDoor`), pass continuous `time`/`shiver`/`wind`, and use `bodyBack` + `glance: -1 | 1` for over-the-shoulder twists.
+5. **REJECT: Early Monster Spoiler:**
+   - *Symptom:* The main ghost/monster is plainly visible in Shot 1 (Cold Hook).
+   - *Fix:* Keep Shot 1 atmospheric/mysterious; delay full entity reveal until the climax beat after `[DEAD SILENCE]`.
+6. **REJECT: Unmotivated Fake Lighting / Slicing Directional Shadows:**
+   - *Symptom:* A bright lantern or oil lamp sits beside a character whose face is lit from the wrong side, or a harsh black shadow line cuts vertically across a close-up face.
+   - *Fix:* Sync real dynamic `setLocalLights(...)` matching every practical lamp position; keep `actorShadow: false` on close-up dark scenes so lanterns & rim lighting sculpt faces cleanly.
+7. **REJECT: Perspective-Broken 2D FX / Floor-Sliced Mist:**
+   - *Symptom:* Water ripples (`fxWaterRipple`) or footprints (`fxWetFootprints`) standing upright facing camera like floating stickers; round white cotton-ball `fxBreath`; or `fxMist` sliced horizontally by a deck/floor plane.
+   - *Fix:* ALWAYS use `pushFlatDecal(...)` (`flat: true`) for ground/water decals; use Gothic Engine v2 feathered `fxMist` positioned cleanly above deck height; align `fxBreath` forward along character facing (`dir = view.mirror ? -1 : 1`).
+8. **REJECT: Translucent Ghost Bisected by Background Ink Lines:**
+   - *Fix:* Stage translucent `opacity < 1` ghosts inside open doorways, dark water, or fog voids—never straddling a high-contrast background pillar edge.
 
 ## 2. Strobe & Platform Safety
 
-- Never trigger rapid full-screen flashes faster than `2–3` strikes per second or sustained `> 1.5 s` strobing (`flicker` overlays should stay `strength <= 0.55` for `<= 0.6 s` or use gentle 3D lamp `flickerAt` instead of full-screen blackouts).
+- Never flash full-screen faster than `2–3` strikes per second or strobe `> 1.5 s`. Keep `flicker` strength `<= 0.52` and rely on 3D `setLocalLights` modulation instead of harsh full-screen strobes.
 
-## 3. Dark-Aware QA Gate (`extract_shots.py` + `short_qa.py`)
+## 3. Dark-Aware & Directing-Aware Automated QA (`extract_shots.py` + `short_qa.py`)
 
-- Always declare deliberate black transitions in `story.ts` using `OVERLAYS` (`{ kind: "blackout", a, b }`) or `BLACKOUTS = [[a, b]]`.
-- `extract_shots.py` writes those windows to `"planned_black"` in `shots.json` and suppresses boundary pop false positives.
-- `short_qa.py`:
-  - Auto-detects `16:9` (`320x180` analysis, `6x10` contact sheets) vs `9:16` (`180x320`, `10x6` sheets).
-  - Ignores `planned_black` frames while still catching any **unplanned black**, **unplanned white**, **frozen >= 12f**, or **`[WARN: crushed darks p98<0.35]`**.
+- Declare every deliberate black beat in `story.ts` via `OVERLAYS` (`blackout` or `dipBlack`) and label every shot's `scale` (`WS`, `OTS`, `LOW`, `MCU`, `ECU`, `CU`, `MS`, `POV`).
+- `extract_shots.py` emits `shots` (with `scale` + `light`), `planned`, and `planned_black` into `shots.json`.
+- `short_qa.py` automatically verifies:
+  - `0` unplanned black frames (`mean < 0.035`), `0` unplanned white frames (`mean > 0.93`), `0` frozen spans `>= 12f`, `0` unplanned `pops`.
+  - `DIRECTING_WARNS none` (automatically catches repeated consecutive `scale` AND static-camera filter jump-cuts with grayscale correlation `> 0.88` across cuts!).
+  - Dark-screen readability (`p98 >= 0.38`, `mean >= 0.08`) per shot + `6x10` / `10x6` contact sheets.
