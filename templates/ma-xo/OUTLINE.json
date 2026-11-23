@@ -1,0 +1,15 @@
+{
+  "title": "Ma Xó — Bát Sứt Sau Bếp Ông Táo",
+  "aspect": "9:16",
+  "audio_drone_hz": 43.65,
+  "parts": [
+    {
+      "part": 1,
+      "title": "Bát sứt sau bếp ông Táo",
+      "target_sec": 70,
+      "light": "candle",
+      "transition_out": "fade:0.5",
+      "cliffhanger": "Lan sống sót nhưng mãi mãi không thể rời khỏi căn nhà sau chạng vạng; mỗi nửa đêm cô lặng lẽ đặt bát cơm nguội sát xó bếp cho bàn tay phủ muội tro thò ra kéo vào."
+    }
+  ]
+}

@@ -60,13 +60,25 @@ W, H = (320, 180) if is_wide else (180, 320)
 raw = subprocess.run(["ffmpeg", "-v", "error", "-i", vid, "-vf", f"scale={W}:{H}:flags=area", "-f", "rawvideo", "-pix_fmt", "rgb24", "-"], capture_output=True).stdout
 F = np.frombuffer(raw, np.uint8).reshape(-1, H, W, 3)
 n = len(F)
-f32 = F.astype(np.float32) / 255
-luma = f32 @ np.array([0.2126, 0.7152, 0.0722], np.float32)
-mx, mn = f32.max(-1), f32.min(-1)
-sat = np.where(mx > 0.06, (mx - mn) / np.maximum(mx, 1e-6), 0)
-L = luma.reshape(n, -1)
-stats = {"mean": L.mean(1), "std": L.std(1), "p2": np.percentile(L, 2, 1), "p98": np.percentile(L, 98, 1), "sat": sat.reshape(n, -1).mean(1)}
-diff = np.abs(np.diff(F.astype(np.int16), axis=0)).mean(axis=(1, 2, 3))
+w_luma = np.array([0.2126, 0.7152, 0.0722], np.float32)
+stats = {k: np.empty(n, np.float32) for k in ("mean", "std", "p2", "p98", "sat")}
+diff = np.empty(max(0, n - 1), np.float32)
+CHUNK = 60
+for start in range(0, n, CHUNK):
+    end = min(n, start + CHUNK)
+    f32 = F[start:end].astype(np.float32) * (1.0 / 255.0)
+    lum = (f32 @ w_luma).reshape(end - start, -1)
+    mx, mn = f32.max(-1), f32.min(-1)
+    sat = np.where(mx > 0.06, (mx - mn) / np.maximum(mx, 1e-6), 0.0)
+    stats["mean"][start:end] = lum.mean(1)
+    stats["std"][start:end] = lum.std(1)
+    stats["p2"][start:end] = np.percentile(lum, 2, 1)
+    stats["p98"][start:end] = np.percentile(lum, 98, 1)
+    stats["sat"][start:end] = sat.reshape(end - start, -1).mean(1)
+    if end > start + 1:
+        diff[start:end - 1] = np.abs(np.diff(F[start:end].astype(np.int16), axis=0)).mean(axis=(1, 2, 3))
+    if end < n:
+        diff[end - 1] = np.abs(F[end].astype(np.int16) - F[end - 1].astype(np.int16)).mean()
 med = np.array([np.median(diff[max(0, i - 8):i + 9]) for i in range(len(diff))])
 pops = [i + 1 for i in range(len(diff)) if diff[i] > 3 * med[i] + 1.0 and (i + 1) not in planned]
 black = [i for i in range(n) if stats["mean"][i] < 0.035 and i not in planned_black_set]
@@ -97,8 +109,8 @@ for idx in range(1, len(shots)):
     cut_f = cur_s["a"]
     if 2 <= cut_f < n - 2 and cut_f not in planned_black_set:
         # Compare luminance structure (grayscale layout) across cut to catch static-angle filter jump-cuts
-        g_prev = luma[cut_f - 2]
-        g_cur = luma[cut_f + 2]
+        g_prev = (F[cut_f - 2].astype(np.float32) * (1.0 / 255.0)) @ w_luma
+        g_cur = (F[cut_f + 2].astype(np.float32) * (1.0 / 255.0)) @ w_luma
         corr = float(np.corrcoef(g_prev.ravel(), g_cur.ravel())[0, 1])
         if np.isfinite(corr) and corr > 0.88:
             directing_warns.append(f"shot {prev_s['id']}->{cur_s['id']} @f{cut_f} near-identical layout corr={corr:.2f} (static-camera jump-cut)")
