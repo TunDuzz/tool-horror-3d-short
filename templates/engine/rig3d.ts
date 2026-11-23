@@ -212,10 +212,10 @@ function buildCurvedFacePatchGeo(rx: number, ry: number, rz: number): THREE.Buff
   const uvs: number[] = [];
   const indices: number[] = [];
 
-  const azMax = 0.72; // ~41 deg left/right
-  const elMin = -0.66; // chin/mouth
-  const elMax = 0.50; // forehead below hairline
-  const pad = 1.028;
+  const azMax = 0.88; // ~50 deg left/right so almond eyes & brows fill the sculpted face naturally
+  const elMin = -0.64; // chin/mouth
+  const elMax = 0.46; // forehead below hairline
+  const pad = 1.024;
 
   for (let iv = 0; iv <= segV; iv++) {
     const v = iv / segV; // 0 bottom, 1 top
@@ -311,57 +311,89 @@ function buildHairMeshes(
 
   if (style === "bald" && !hairCurtain) return created;
 
-  // Base sculpted hair cap covering cranium & back of head
-  const cap = new THREE.SphereGeometry(1, 16, 12, 0, Math.PI * 2, 0, Math.PI * 0.60);
-  add(cap, [0, ry * 0.06, -rz * 0.06], [-0.18, 0, 0], [rx * 1.09, ry * 1.06, rz * 1.10], "hairCap");
+  // Base sculpted hair cap tilted BACKWARD so front hairline sits high on forehead (NEVER covering eyes!)
+  // while the back rim drops down cleanly over the occiput.
+  const cap = new THREE.SphereGeometry(1, 18, 12, 0, Math.PI * 2, 0, Math.PI * 0.48);
+  add(cap, [0, ry * 0.14, -rz * 0.08], [-0.46, 0, 0], [rx * 1.07, ry * 1.02, rz * 1.09], "hairCap");
+
+  // Clean rear nape coverage strictly behind the ears (Three.js theta=PI is -Z back, theta=0 is +Z front!)
+  const backNape = new THREE.CylinderGeometry(rx * 0.96, rx * 0.80, ry * 0.78, 12, 1, false, Math.PI * 0.56, Math.PI * 0.88);
+  add(backNape, [0, -ry * 0.14, -rz * 0.10], [0.06, 0, 0], [1.02, 1, 0.94], "hairNape");
 
   if (style === "shortParted") {
-    // Clean adult side-parted hair locks + back nape shell
-    add(new THREE.SphereGeometry(1, 12, 10), [-rx * 0.25, ry * 0.72, rz * 0.42], [0.22, 0.18, 0.28], [rx * 0.72, ry * 0.30, rz * 0.52], "hairFringeL");
-    add(new THREE.SphereGeometry(1, 12, 10), [rx * 0.44, ry * 0.68, rz * 0.36], [0.18, -0.22, -0.34], [rx * 0.54, ry * 0.28, rz * 0.46], "hairFringeR");
-    add(new THREE.CylinderGeometry(rx * 0.92, rx * 0.76, ry * 0.78, 12, 1, false, Math.PI * 0.65, Math.PI * 1.7), [0, -ry * 0.14, -rz * 0.14], [0.08, 0, 0], [1, 1, 0.95], "hairNape");
+    // Clean adult side-parted hair volume perched strictly above forehead hairline + subtle sideburns
+    add(new THREE.SphereGeometry(1, 12, 10), [-rx * 0.24, ry * 0.84, rz * 0.24], [0.12, 0.14, 0.20], [rx * 0.72, ry * 0.28, rz * 0.54], "hairFringeL");
+    add(new THREE.SphereGeometry(1, 12, 10), [rx * 0.44, ry * 0.80, rz * 0.18], [0.10, -0.18, -0.24], [rx * 0.54, ry * 0.26, rz * 0.48], "hairFringeR");
+    for (const s of [-1, 1]) {
+      add(new THREE.BoxGeometry(0.014, ry * 0.52, 0.026), [s * rx * 0.96, ry * 0.18, rz * 0.12], [0, 0, s * 0.06], [1, 1, 1], s < 0 ? "sideburnL" : "sideburnR");
+    }
   } else if (style === "spiky") {
     const tufts: [V3, V3, V3][] = [
-      [[0, ry * 1.12, 0.02], [-0.15, 0, 0], [0.042, 0.11, 0.042]],
-      [[-0.048, ry * 1.04, 0.02], [-0.10, 0, 0.38], [0.036, 0.095, 0.036]],
-      [[0.048, ry * 1.04, 0.01], [-0.08, 0, -0.38], [0.036, 0.095, 0.036]],
-      [[-0.03, ry * 1.06, -0.04], [-0.36, 0, 0.22], [0.034, 0.09, 0.034]],
-      [[0.03, ry * 1.06, -0.04], [-0.36, 0, -0.22], [0.034, 0.09, 0.034]],
+      [[0, ry * 1.10, 0.0], [-0.15, 0, 0], [0.042, 0.11, 0.042]],
+      [[-0.048, ry * 1.02, 0.0], [-0.10, 0, 0.38], [0.036, 0.095, 0.036]],
+      [[0.048, ry * 1.02, 0.0], [-0.08, 0, -0.38], [0.036, 0.095, 0.036]],
+      [[-0.03, ry * 1.04, -0.04], [-0.36, 0, 0.22], [0.034, 0.09, 0.034]],
+      [[0.03, ry * 1.04, -0.04], [-0.36, 0, -0.22], [0.034, 0.09, 0.034]],
     ];
     for (const [p, r, s] of tufts) add(new THREE.ConeGeometry(1, 1, 6), p, r, s, "hairTuft");
   } else if (style === "bun") {
     add(new THREE.SphereGeometry(rx * 0.58, 12, 10), [0, -ry * 0.06, -rz * 1.24], [0, 0, 0], [1.05, 0.92, 0.92], "hairBun");
   } else if (style === "messyFringe") {
+    add(new THREE.SphereGeometry(1, 14, 10), [0, ry * 0.76, rz * 0.04], [-0.14, 0, 0], [rx * 1.10, ry * 0.44, rz * 0.96], "hairCrown");
+    for (const s of [-1, 1]) {
+      add(new THREE.BoxGeometry(0.018, ry * 0.68, 0.044), [s * rx * 0.98, ry * 0.14, rz * 0.04], [0, 0, s * 0.08], [1, 1, 1], s < 0 ? "sideburnL" : "sideburnR");
+    }
     for (let i = 0; i < 5; i++) {
       const u = (i - 2) / 2;
-      add(
-        new THREE.ConeGeometry(0.026, 0.12 + (i % 2) * 0.03, 5),
-        [u * rx * 0.68, ry * 0.44 - Math.abs(u) * 0.02, rz * 0.88 - Math.abs(u) * 0.03],
-        [Math.PI + 0.18, 0, u * 0.24],
+      const m = add(
+        new THREE.ConeGeometry(0.026, 0.095 + (i % 2) * 0.028, 5),
+        [u * rx * 0.74, ry * 0.56 - Math.abs(u) * 0.02, rz * 0.82 - Math.abs(u) * 0.06],
+        [Math.PI + 0.18, 0, u * 0.26],
         [1, 1, 0.45],
         `hairBang_${i}`,
       );
+      m.userData.noOutline = true;
     }
   } else if (style === "longDraped") {
-    // Flowing rear hair sheet + left/right shoulder curtains
-    add(new THREE.CylinderGeometry(rx * 1.08, rx * 1.32, 0.44, 14, 1, false, Math.PI * 0.62, Math.PI * 1.76), [0, -0.18, -rz * 0.16], [0.08, 0, 0], [1, 1, 0.92], "hairBackCurtain");
-    add(new THREE.CylinderGeometry(0.028, 0.042, 0.36, 7), [-rx * 0.96, -0.12, rz * 0.15], [0.04, 0, 0.10], [0.7, 1, 1.2], "hairSideL");
-    add(new THREE.CylinderGeometry(0.028, 0.042, 0.36, 7), [rx * 0.96, -0.12, rz * 0.15], [0.04, 0, -0.10], [0.7, 1, 1.2], "hairSideR");
-  }
-
-  // Uncanny entity hanging hair curtain partially obscuring the face
-  if (hairCurtain) {
-    for (let i = 0; i < 7; i++) {
-      const u = (i - 3) / 3;
-      const len = 0.28 + (i % 3) * 0.06;
+    // Flowing rear hair sheet strictly behind head (-Z) + tapered side locks draping past jaw/shoulders
+    add(
+      new THREE.CylinderGeometry(rx * 1.06, rx * 1.28, 0.46, 14, 1, false, Math.PI * 0.54, Math.PI * 0.92),
+      [0, -0.18, -rz * 0.14],
+      [0.08, 0, 0],
+      [1.04, 1, 0.92],
+      "hairBackCurtain",
+    );
+    for (const s of [-1, 1]) {
       add(
-        new THREE.CylinderGeometry(0.015, 0.005, len, 5),
-        [u * rx * 0.82, ry * 0.35 - len * 0.42, rz * 0.94 - Math.abs(u) * 0.04],
-        [0.08, 0, u * 0.08],
-        [1, 1, 0.55],
-        `hairCurtain_${i}`,
+        new THREE.ConeGeometry(0.036, 0.42, 7),
+        [s * rx * 0.98, -0.14, rz * 0.16],
+        [Math.PI + 0.04, 0, s * -0.12],
+        [0.72, 1, 1.15],
+        s < 0 ? "hairSideL" : "hairSideR",
       );
     }
+  }
+
+  // Uncanny entity hanging hair curtain: organic parted curved locks (noOutline on inner wisps -> no comb/piano-key bars!)
+  if (hairCurtain) {
+    const strands: Array<[number, number, number, number]> = [
+      [-0.88, 0.36, 0.12, 0.024],
+      [-0.58, 0.30, 0.06, 0.020],
+      [-0.14, 0.21, -0.04, 0.015], // thin center wisp between eyes
+      [0.56, 0.32, -0.07, 0.021],
+      [0.86, 0.38, -0.13, 0.024],
+    ];
+    strands.forEach(([u, len, tiltZ, rad], i) => {
+      const m = add(
+        new THREE.ConeGeometry(rad, len, 6),
+        [u * rx * 0.88, ry * 0.52 - len * 0.46, rz * 0.86 - Math.abs(u) * 0.14],
+        [Math.PI + 0.06, 0, tiltZ],
+        [1, 1, 0.38],
+        `hairCurtain_${i}`,
+      );
+      // Inner face-framing wisps skip BackSide hull so they read as sharp dark hair locks rather than thick blocks
+      if (Math.abs(u) < 0.75) m.userData.noOutline = true;
+    });
   }
 
   return created;
@@ -406,7 +438,7 @@ export function createCharacter3D(cfg: CharacterConfig): Character3D {
   const headRx = 0.092 * hScale * (0.9 + 0.1 * gaunt);
   const headRy = 0.122 * hScale; // total head height = 0.244m
   const headRz = 0.104 * hScale;
-  const shoulderW = 0.195 * hScale * gaunt;
+  const shoulderW = 0.164 * hScale * gaunt;
   const upperArmLen = 0.285 * hScale * armS;
   const forearmLen = 0.265 * hScale * armS;
 
@@ -450,20 +482,41 @@ export function createCharacter3D(cfg: CharacterConfig): Character3D {
   pelvisGeo.scale(1.12, 0.78, 0.78);
   pelvis.add(mkMesh(pelvisGeo, botMat, "pelvisMesh"));
 
-  // Sculpted torso (smooth elliptical lathe tapering at waist, widening gently at shoulders)
+  // Sculpted torso with natural sloping shoulder yoke & trapezius (blends cleanly into arms!)
   const torsoPts = [
     new THREE.Vector2(0.01, -0.02 * hScale),
-    new THREE.Vector2(0.138 * hScale * gaunt, 0.0),
-    new THREE.Vector2(0.124 * hScale * gaunt, 0.14 * hScale),
-    new THREE.Vector2(0.168 * hScale * gaunt, 0.34 * hScale),
-    new THREE.Vector2(0.155 * hScale * gaunt, 0.45 * hScale),
-    new THREE.Vector2(0.066 * hScale * gaunt, 0.49 * hScale),
+    new THREE.Vector2(0.132 * hScale * gaunt, 0.0),
+    new THREE.Vector2(0.122 * hScale * gaunt, 0.13 * hScale),
+    new THREE.Vector2(0.172 * hScale * gaunt, 0.34 * hScale),
+    new THREE.Vector2(0.162 * hScale * gaunt, 0.42 * hScale),
+    new THREE.Vector2(0.118 * hScale * gaunt, 0.468 * hScale),
+    new THREE.Vector2(0.062 * hScale * gaunt, 0.492 * hScale),
     new THREE.Vector2(0.01, 0.50 * hScale),
   ];
   const torsoGeo = new THREE.LatheGeometry(torsoPts, 16);
-  torsoGeo.scale(1.08, 1, 0.66);
+  torsoGeo.scale(1.12, 1, 0.65);
   const torsoMesh = mkMesh(torsoGeo, topMat, "torsoMesh");
   spine.add(torsoMesh);
+
+  // Tailored 3D garment collar ring + waist belt/sash for clear silhouette separation from neck/skin
+  if (!isSil) {
+    const collarCol = new THREE.Color(topHex).multiplyScalar(0.76);
+    const collarMat = stylizedShade(new THREE.MeshLambertMaterial({ color: collarCol }));
+    disposables.push(collarMat);
+    const collarGeo = new THREE.CylinderGeometry(0.068 * hScale * gaunt, 0.088 * hScale * gaunt, 0.048 * hScale, 14);
+    collarGeo.scale(1.06, 1, 0.92);
+    const collar = mkMesh(collarGeo, collarMat, "garmentCollar");
+    collar.position.set(0, 0.478 * hScale, 0.004 * hScale);
+    spine.add(collar);
+
+    if (garment === "funeralRobe" || garment === "coat" || garment === "shirt") {
+      const beltGeo = new THREE.CylinderGeometry(0.132 * hScale * gaunt, 0.136 * hScale * gaunt, 0.036 * hScale, 14);
+      beltGeo.scale(1.12, 1, 0.68);
+      const belt = mkMesh(beltGeo, botMat, "waistBelt");
+      belt.position.set(0, 0.04 * hScale, 0);
+      spine.add(belt);
+    }
+  }
 
   // Long robe/coat/shroud lower skirt flare attached to pelvis
   if (garment === "funeralRobe" || garment === "coat" || garment === "hospitalGown" || garment === "shroud") {
@@ -549,27 +602,31 @@ export function createCharacter3D(cfg: CharacterConfig): Character3D {
   if (cfg.headbandCol && !isSil) {
     const bandMat = stylizedShade(new THREE.MeshLambertMaterial({ color: cfg.headbandCol }));
     disposables.push(bandMat);
-    const bandGeo = new THREE.TorusGeometry(headRx * 1.06, 0.018 * hScale, 8, 22);
+    const bandGeo = new THREE.TorusGeometry(headRx * 1.05, 0.015 * hScale, 8, 22);
     bandGeo.rotateX(Math.PI * 0.5);
-    bandGeo.scale(1.0, 1.35, headRz / headRx);
+    bandGeo.scale(1.0, 1.25, headRz / headRx);
     const band = mkMesh(bandGeo, bandMat, "headband");
-    band.position.set(0, headRy * 0.46, 0);
+    band.position.set(0, headRy * 0.54, -headRz * 0.04);
+    band.rotation.x = -0.18;
     head.add(band);
   }
 
-  // Arms & hands (15-bone upper body)
+  // Arms & hands (15-bone upper body — seated smoothly inside shoulder slope, never popped-out balloons!)
   const buildArm = (side: -1 | 1) => {
     const pfx = side < 0 ? "left" : "right";
     const shoulder = mkGroup(`${pfx}Shoulder`);
     const skewY = (ent?.shoulderSkew ?? 0) * side * 0.06;
-    shoulder.position.set(side * shoulderW, chestLen * 0.86 + skewY, 0);
+    shoulder.position.set(side * shoulderW, chestLen * 0.72 + skewY, 0);
     chest.add(shoulder);
 
     const upperArm = mkGroup(`${pfx}UpperArm`);
     shoulder.add(upperArm);
-    const shBall = mkMesh(new THREE.SphereGeometry(0.048 * hScale * gaunt, 10, 8), topMat, `${pfx}ShoulderCap`);
+    const shCapGeo = new THREE.SphereGeometry(0.040 * hScale * gaunt, 10, 8);
+    shCapGeo.scale(1.05, 0.85, 0.95);
+    const shBall = mkMesh(shCapGeo, topMat, `${pfx}ShoulderCap`);
+    shBall.position.set(-side * 0.008 * hScale, -0.008 * hScale, 0);
     upperArm.add(shBall);
-    upperArm.add(mkMesh(buildTaperedLimbGeo(0.044 * hScale * gaunt, 0.036 * hScale * gaunt, upperArmLen), topMat, `${pfx}UpperArmMesh`));
+    upperArm.add(mkMesh(buildTaperedLimbGeo(0.040 * hScale * gaunt, 0.032 * hScale * gaunt, upperArmLen), topMat, `${pfx}UpperArmMesh`));
 
     const forearm = mkGroup(`${pfx}Forearm`);
     forearm.position.set(0, -upperArmLen, 0);
@@ -681,8 +738,9 @@ export function createCharacter3D(cfg: CharacterConfig): Character3D {
     head.rotation.set(0, 0, 0);
     leftArm.shoulder.rotation.set(0, 0, 0);
     rightArm.shoulder.rotation.set(0, 0, 0);
-    leftArm.upperArm.rotation.set(0, 0, 0.06);
-    rightArm.upperArm.rotation.set(0, 0, -0.06);
+    // Note: Rz(a) maps hanging arm (0,-1,0) -> (+sin(a), -cos(a), 0): left (-X) flares outward with rotZ < 0, right (+X) with rotZ > 0!
+    leftArm.upperArm.rotation.set(0, 0, -0.09);
+    rightArm.upperArm.rotation.set(0, 0, 0.09);
     leftArm.forearm.rotation.set(-0.14, 0, 0);
     rightArm.forearm.rotation.set(-0.14, 0, 0);
     leftArm.hand.rotation.set(0, 0, 0);
@@ -708,18 +766,17 @@ export function createCharacter3D(cfg: CharacterConfig): Character3D {
     }
 
     if (action === "sitCrossLegged") {
-      // Cross-legged seated posture on floor/mat (like videomau vigil scene)
+      // Cross-legged seated posture on floor/mat (elbows naturally flared slightly outward, forearms resting on knees)
       pelvis.position.y = 0.14 * hScale;
-      spine.rotation.x = 0.08 + aliveBreath * 0.6;
+      spine.rotation.x = 0.09 + aliveBreath * 0.6;
       leftLeg.thigh.rotation.set(-1.42, 0.58, -0.25);
       rightLeg.thigh.rotation.set(-1.42, -0.58, 0.25);
       leftLeg.calf.rotation.set(2.05, 0, -0.28);
       rightLeg.calf.rotation.set(2.05, 0, 0.28);
-      // Forearms resting on knees
-      leftArm.upperArm.rotation.set(-0.36, 0, 0.22);
-      rightArm.upperArm.rotation.set(-0.36, 0, -0.22);
-      leftArm.forearm.rotation.set(-0.68, 0.28, 0);
-      rightArm.forearm.rotation.set(-0.68, -0.28, 0);
+      leftArm.upperArm.rotation.set(-0.24, 0, -0.22);
+      rightArm.upperArm.rotation.set(-0.24, 0, 0.22);
+      leftArm.forearm.rotation.set(-0.76, 0, 0.26);
+      rightArm.forearm.rotation.set(-0.76, 0, -0.26);
     } else if (action === "sitChair") {
       pelvis.position.y = 0.46 * hScale;
       spine.rotation.x = 0.05 + aliveBreath;
@@ -727,10 +784,10 @@ export function createCharacter3D(cfg: CharacterConfig): Character3D {
       rightLeg.thigh.rotation.set(-1.48, -0.08, 0);
       leftLeg.calf.rotation.set(1.48, 0, 0);
       rightLeg.calf.rotation.set(1.48, 0, 0);
-      leftArm.upperArm.rotation.set(-0.22, 0, 0.10);
-      rightArm.upperArm.rotation.set(-0.22, 0, -0.10);
-      leftArm.forearm.rotation.set(-0.92, 0.16, 0);
-      rightArm.forearm.rotation.set(-0.92, -0.16, 0);
+      leftArm.upperArm.rotation.set(-0.20, 0, -0.14);
+      rightArm.upperArm.rotation.set(-0.20, 0, 0.14);
+      leftArm.forearm.rotation.set(-0.92, 0, 0.16);
+      rightArm.forearm.rotation.set(-0.92, 0, -0.16);
     } else if (action === "walk" || action === "creep") {
       const freq = action === "creep" ? 3.2 : 5.2;
       const amp = action === "creep" ? 0.34 : 0.52;
@@ -749,50 +806,54 @@ export function createCharacter3D(cfg: CharacterConfig): Character3D {
     } else if (action === "peerForward") {
       spine.rotation.x = 0.24 + aliveBreath;
       neck.rotation.x = -0.14;
-      leftArm.upperArm.rotation.set(-0.35, 0, 0.12);
-      rightArm.upperArm.rotation.set(-0.62, 0, -0.10);
+      leftArm.upperArm.rotation.set(-0.35, 0, -0.12);
+      rightArm.upperArm.rotation.set(-0.62, 0, 0.10);
       rightArm.forearm.rotation.set(-0.78, 0, 0);
     } else if (action === "recoil") {
       pelvis.position.y = hipY - 0.04 * hScale;
       spine.rotation.x = -0.18;
-      leftArm.upperArm.rotation.set(-0.95, 0.22, 0.35);
-      rightArm.upperArm.rotation.set(-1.05, -0.22, -0.35);
+      leftArm.upperArm.rotation.set(-0.95, 0.22, -0.30);
+      rightArm.upperArm.rotation.set(-1.05, -0.22, 0.30);
       leftArm.forearm.rotation.set(-1.15, 0, 0);
       rightArm.forearm.rotation.set(-1.15, 0, 0);
     } else if (action === "holdPhone") {
-      rightArm.upperArm.rotation.set(-0.72, -0.18, -0.12);
+      rightArm.upperArm.rotation.set(-0.72, -0.18, 0.12);
       rightArm.forearm.rotation.set(-1.12, 0.22, 0);
-      leftArm.upperArm.rotation.set(-0.24, 0, 0.08);
+      leftArm.upperArm.rotation.set(-0.24, 0, -0.08);
       head.rotation.x = 0.28;
     } else if (action === "holdLantern") {
-      rightArm.upperArm.rotation.set(-0.68, 0, -0.12);
+      rightArm.upperArm.rotation.set(-0.68, 0, 0.12);
       rightArm.forearm.rotation.set(-0.85, 0, 0);
-      leftArm.upperArm.rotation.set(-0.12, 0, 0.08);
+      leftArm.upperArm.rotation.set(-0.12, 0, -0.08);
     } else if (action === "point") {
-      rightArm.upperArm.rotation.set(-1.35, -0.12, -0.06);
+      rightArm.upperArm.rotation.set(-1.35, -0.12, 0.08);
       rightArm.forearm.rotation.set(-0.12, 0, 0);
     } else if (action === "lunge") {
       pelvis.position.y = hipY - 0.08 * hScale;
       spine.rotation.x = 0.34;
-      leftArm.upperArm.rotation.set(-1.42, 0.14, 0.18);
-      rightArm.upperArm.rotation.set(-1.52, -0.14, -0.18);
+      leftArm.upperArm.rotation.set(-1.42, 0.14, -0.18);
+      rightArm.upperArm.rotation.set(-1.52, -0.14, 0.18);
       leftArm.forearm.rotation.set(-0.22, 0, 0);
       rightArm.forearm.rotation.set(-0.22, 0, 0);
     } else if (action === "loomingStill") {
-      // Uncanny rigid stillness: shoulders slightly hunched forward, long arms hanging dead straight
-      spine.rotation.x = 0.09;
-      leftArm.upperArm.rotation.set(0.06, 0, 0.04);
-      rightArm.upperArm.rotation.set(0.06, 0, -0.04);
-      leftArm.forearm.rotation.set(-0.08, 0, 0);
-      rightArm.forearm.rotation.set(-0.08, 0, 0);
+      // Uncanny hunched stillness: subtle asymmetric shoulder roll, long gaunt arms hanging eerily off-plumb
+      spine.rotation.x = 0.14;
+      leftArm.upperArm.rotation.set(-0.08, 0, -0.14);
+      rightArm.upperArm.rotation.set(0.04, 0, 0.16);
+      leftArm.forearm.rotation.set(-0.22, 0, 0.06);
+      rightArm.forearm.rotation.set(-0.16, 0, -0.08);
+      leftArm.hand.rotation.set(0.18, 0, -0.12);
+      rightArm.hand.rotation.set(0.24, 0, 0.14);
     } else if (action === "peekAroundDoor") {
       spine.rotation.z = -0.26;
       neck.rotation.z = (ent?.neckTiltDeg ? THREE.MathUtils.degToRad(ent.neckTiltDeg) : 0) - 0.18;
-      leftArm.upperArm.rotation.set(-0.85, 0, 0.30);
+      leftArm.upperArm.rotation.set(-0.85, 0, -0.28);
       leftArm.forearm.rotation.set(-0.65, 0, 0);
     } else if (action === "turnHead") {
-      spine.rotation.y = 0.22;
-      head.rotation.y = 0.52;
+      spine.rotation.y = 0.30;
+      head.rotation.y = 0.68;
+      leftArm.upperArm.rotation.set(-0.06, 0, -0.12);
+      rightArm.upperArm.rotation.set(0.08, 0, 0.14);
     }
 
     // Optional violent 2-frame uncanny neck twitch

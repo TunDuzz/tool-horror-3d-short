@@ -1,0 +1,233 @@
+{
+  "projectId": "horror-lab-v3",
+  "title": "HorrorLabV3 — 3-Archetype Dark-Horror POV Proof",
+  "totalFrames": 300,
+  "aspect": "9:16",
+  "header": {
+    "title": "CHỦ NHẬT · 01:06",
+    "subtitle": "Horror Engine v3 Look-Dev",
+    "badge": "PHIM NGẮN HƯ CẤU"
+  },
+  "locations": [
+    {
+      "id": "ruralFuneralRoom",
+      "archetype": "ruralThatchedHouse",
+      "dimensions": [6.4, 7.6, 4.3],
+      "ceilingType": "aFrameThatch",
+      "materials": {
+        "wall": "mottledPlasterTex",
+        "floor": "packedEarthTex",
+        "ceiling": "thatchRoofTex"
+      },
+      "practicalLights": ["oilLamp", "altarCandle", "phoneScreen"],
+      "heroProps": ["lacqueredCoffin", "ancestralPortraitAltar", "glassOilLamp", "boltedDoubleDoor"],
+      "signatureShadowBeat": "Cold moonlight strip under bolted double door blocked by two dark foot shadows"
+    },
+    {
+      "id": "hospitalCorridor",
+      "archetype": "hospitalMorgueWing",
+      "dimensions": [2.8, 16.0, 2.95],
+      "ceilingType": "flatConcrete",
+      "materials": {
+        "wall": "hospitalTileTex",
+        "floor": "vintagePatternTileTex",
+        "ceiling": "concreteCeilingTex"
+      },
+      "practicalLights": ["fluorescentTubeA", "fluorescentTubeB", "handheldFlashlight"],
+      "heroProps": ["steelGurney", "ivDripStand", "recessedWardDoors"],
+      "signatureShadowBeat": "Flickering fluorescent tube and flashlight SpotLight cone revealing gaunt figure down hallway"
+    },
+    {
+      "id": "foggyVillageAlley",
+      "archetype": "foggyVillageAlley",
+      "dimensions": [5.8, 26.0, 9.0],
+      "ceilingType": "openSky",
+      "materials": {
+        "wall": "brickWallTex",
+        "floor": "wetAsphaltTex",
+        "ceiling": "openSky"
+      },
+      "practicalLights": ["sodiumStreetLamp"],
+      "heroProps": ["concretePowerPole", "rustedTinEave", "woodenAlleyGate"],
+      "signatureShadowBeat": "Warm sodium streetlamp cone carving misty alley around turning silhouette"
+    }
+  ],
+  "beats": [
+    {
+      "beatId": "B1_FUNERAL_TALK",
+      "shotId": 1,
+      "a": 0,
+      "b": 50,
+      "peakFrame": 25,
+      "locationId": "ruralFuneralRoom",
+      "spokenLine": {
+        "speaker": "CHÚ BẢY",
+        "speakerColor": "#bfe0ff",
+        "text": "Các cụ cấm đếm người đấy.",
+        "highlight": ["cấm đếm người"]
+      },
+      "lightState": {
+        "preset": "warmLamp",
+        "lampsOn": ["oilLamp", "altarCandle"],
+        "doorMoonlight": true,
+        "feetShadow": false
+      },
+      "castStates": {
+        "chuBay": { "visible": true, "anchor": "NPC_SEAT", "pose": "sitCrossLegged", "expr": "uneasy", "lookAt": "POV_EYE" },
+        "doorEntity": { "visible": false, "anchor": "ENTITY_DOOR", "pose": "loomingStill" }
+      },
+      "propStates": {
+        "phone": { "visible": false, "state": "hidden" },
+        "door": { "visible": true, "state": "closedBolted" }
+      },
+      "cameraIntent": "POV seated facing non-chibi dark-horror Chu Bay with A-frame thatch roof, coffin, altar, and glowing oil lamp"
+    },
+    {
+      "beatId": "B2_WHIP_PHONE",
+      "shotId": 2,
+      "a": 50,
+      "b": 95,
+      "peakFrame": 78,
+      "locationId": "ruralFuneralRoom",
+      "spokenLine": {
+        "speaker": "TÙNG (TÔI)",
+        "speakerColor": "#f6f4ee",
+        "text": "Mười giờ mười... cô ngồi cạnh cháu mà?",
+        "highlight": ["ngồi cạnh cháu"]
+      },
+      "lightState": {
+        "preset": "warmLamp",
+        "lampsOn": ["oilLamp", "altarCandle", "phoneScreen"],
+        "doorMoonlight": true,
+        "feetShadow": false
+      },
+      "castStates": {
+        "chuBay": { "visible": true, "anchor": "NPC_SEAT", "pose": "sitCrossLegged", "expr": "wary", "lookAt": "POV_EYE" },
+        "doorEntity": { "visible": false, "anchor": "ENTITY_DOOR", "pose": "loomingStill" }
+      },
+      "propStates": {
+        "phone": {
+          "visible": true,
+          "state": "raised",
+          "detail": {
+            "clock": "01:06",
+            "notifTime": "01:06",
+            "notifSender": "Cô Lan",
+            "notifBody": "Cô ốm, hai tối nay cô ở nhà. Cô có nhắn cháu đâu?",
+            "notifFooter": "Gửi lúc 22:10 · 3 tiếng trước"
+          }
+        },
+        "door": { "visible": true, "state": "closedBolted" }
+      },
+      "cameraIntent": "7-frame Whip-Pan with motion blur turning to glowing Phone3D (01:06) in POV hands synced with notification card"
+    },
+    {
+      "beatId": "B3_DOOR_SHADOW",
+      "shotId": 3,
+      "a": 95,
+      "b": 128,
+      "peakFrame": 114,
+      "locationId": "ruralFuneralRoom",
+      "spokenLine": {
+        "speaker": "TÙNG (TÔI)",
+        "speakerColor": "#f6f4ee",
+        "text": "Ai... đứng ngoài cửa kia?",
+        "highlight": ["ngoài cửa"]
+      },
+      "lightState": {
+        "preset": "warmLamp",
+        "blendTo": "coldMoon",
+        "blendRange": [95, 108],
+        "lampsOn": [],
+        "doorMoonlight": true,
+        "feetShadow": true
+      },
+      "castStates": {
+        "chuBay": { "visible": false, "anchor": "NPC_SEAT", "pose": "sitCrossLegged" },
+        "doorEntity": { "visible": false, "anchor": "ENTITY_DOOR", "pose": "loomingStill", "eyeGlow": true }
+      },
+      "propStates": {
+        "phone": { "visible": false, "state": "hidden" },
+        "door": { "visible": true, "state": "closedBolted" }
+      },
+      "cameraIntent": "Lights out cold moonlight shift looking down at POV legs and bolted double door crack blocked by 2 dark foot shadows"
+    },
+    {
+      "beatId": "B4_ENTITY_LOOM",
+      "shotId": 4,
+      "a": 128,
+      "b": 160,
+      "peakFrame": 148,
+      "locationId": "ruralFuneralRoom",
+      "spokenLine": {
+        "speaker": "BÓNG NGƯỜI",
+        "speakerColor": "#f2b8c6",
+        "text": "Đếm tiếp đi cháu... còn thiếu một.",
+        "highlight": ["còn thiếu một"]
+      },
+      "lightState": {
+        "preset": "coldMoon",
+        "lampsOn": [],
+        "doorMoonlight": true,
+        "feetShadow": true
+      },
+      "castStates": {
+        "chuBay": { "visible": false, "anchor": "NPC_SEAT", "pose": "sitCrossLegged" },
+        "doorEntity": { "visible": true, "anchor": "ENTITY_DOOR", "pose": "loomingStill", "expr": "hollow", "eyeGlow": true }
+      },
+      "propStates": {
+        "phone": { "visible": false, "state": "hidden" },
+        "door": { "visible": true, "state": "closedBolted" }
+      },
+      "cameraIntent": "Cold moonlight tilt up onto tall gaunt crooked-neck silhouette entity with faint glowing eyes by doorway"
+    },
+    {
+      "beatId": "B5_HOSPITAL_CORRIDOR",
+      "shotId": 5,
+      "a": 160,
+      "b": 230,
+      "peakFrame": 198,
+      "locationId": "hospitalCorridor",
+      "spokenLine": {
+        "speaker": "TÙNG (TÔI)",
+        "speakerColor": "#f6f4ee",
+        "text": "Hành lang khoa cũ... đèn lại chớp rồi.",
+        "highlight": ["đèn lại chớp"]
+      },
+      "lightState": {
+        "preset": "fluorescent",
+        "lampsOn": ["fluorescentTubeA", "handheldFlashlight"]
+      },
+      "castStates": {
+        "wardEntity": { "visible": true, "anchor": "HOSP_ENTITY", "pose": "loomingStill", "expr": "deadStare", "eyeGlow": false }
+      },
+      "propStates": {
+        "flashlight": { "visible": true, "state": "aimed" }
+      },
+      "cameraIntent": "Hospital ceramic-tile corridor with flickering overhead fluorescent tube and POV flashlight beam illuminating gaunt entity"
+    },
+    {
+      "beatId": "B6_VILLAGE_ALLEY",
+      "shotId": 6,
+      "a": 230,
+      "b": 300,
+      "peakFrame": 268,
+      "locationId": "foggyVillageAlley",
+      "spokenLine": {
+        "speaker": "TÙNG (TÔI)",
+        "speakerColor": "#f6f4ee",
+        "text": "Cuối con ngõ... có ai vừa ngoái lại.",
+        "highlight": ["vừa ngoái lại"]
+      },
+      "lightState": {
+        "preset": "duskFog",
+        "lampsOn": ["sodiumStreetLamp"]
+      },
+      "castStates": {
+        "alleyFigure": { "visible": true, "anchor": "ALLEY_FIGURE", "pose": "turnHead", "expr": "dread", "lookAt": [0, 1.48, 1.35] }
+      },
+      "propStates": {},
+      "cameraIntent": "Wet asphalt rural night alley flanked by brick walls under warm sodium streetlamp pool with turning dark-horror figure"
+    }
+  ]
+}

@@ -16,9 +16,17 @@ story_path, out_path = sys.argv[1], sys.argv[2]
 src = open(story_path, encoding="utf-8").read()
 
 consts = {"FPS": 30.0}
+aliases = []
 for stmt in re.findall(r"(?:^|\n)\s*(?:export\s+)?const\s+[^;{]+;", src):
     for k, v in re.findall(r"\b([A-Za-z_]\w*)\s*(?::\s*number\s*)?=\s*(-?\d+(?:\.\d+)?)\b", stmt):
         consts[k] = float(v)
+    for k, ref in re.findall(r"\b([A-Za-z_]\w*)\s*(?::\s*number\s*)?=\s*([A-Za-z_]\w*)\s*(?:;|,|$)", stmt):
+        if ref not in ("true", "false", "null", "undefined"):
+            aliases.append((k, ref))
+for _ in range(4):
+    for k, ref in aliases:
+        if ref in consts and k not in consts:
+            consts[k] = consts[ref]
 fps = int(consts.get("FPS", 30))
 total_val = int(consts["TOTAL"]) if "TOTAL" in consts else None
 
@@ -169,6 +177,14 @@ if wp_arr:
             dur = resolve_num(dm.group(1), consts) if dm else 7
             whip_planned.append([max(0, f0 - 1), f0 + dur + 1])
 
+# Extract planned foreground POV prop-raise intervals (e.g. bright Phone3D / Flashlight3D entering close to lens)
+pov_planned = []
+pm_arr = re.search(r"(?:export\s+)?const\s+POV_MOTIONS[^=]*=\s*\[(.*?)\];", src, re.DOTALL)
+if pm_arr:
+    for a_tok, b_tok in re.findall(r"\[\s*([A-Za-z_]\w*|\d+)\s*,\s*([A-Za-z_]\w*|\d+)\s*\]", pm_arr.group(1)):
+        a0, b0 = resolve_num(a_tok, consts), resolve_num(b_tok, consts)
+        pov_planned.append([max(0, a0 - 1), b0 + 1])
+
 kicks = []
 k_m = re.search(r"(?:export\s+)?const\s+KICKS[^=]*=\s*\[(.*?)\];", src, re.DOTALL)
 if k_m:
@@ -187,7 +203,7 @@ if out_dir:
 payload = {
     "shots": shots,
     "xfade": xfade,
-    "planned": cuts + kicks + flashes + overlay_planned + whip_planned,
+    "planned": cuts + kicks + flashes + overlay_planned + whip_planned + pov_planned,
     "planned_black": planned_black,
     "whip_pans": whip_planned,
 }

@@ -52,8 +52,8 @@ function drawAlmondEye(
   spec: FaceSpec,
   def: (typeof EXPR_DEFAULTS)[FaceExpr],
 ) {
-  const rx = 52;
-  const ry = 25;
+  const rx = 68;
+  const ry = 32;
   const lid = clamp01(spec.lid ?? 0);
   const hollow = clamp01(spec.eyeHollow ?? def.hollow);
   const gazeX = Math.max(-1, Math.min(1, spec.gazeX ?? 0));
@@ -62,22 +62,22 @@ function drawAlmondEye(
 
   // 1. Soft orbital & under-eye dark hollow shading (smooth gradient, NOT a solid black block!)
   if (hollow > 0.02) {
-    const gr = g.createRadialGradient(cx, cy + 12, 10, cx, cy + 10, 74);
-    gr.addColorStop(0, `rgba(18, 12, 26, ${(0.44 * hollow).toFixed(3)})`);
-    gr.addColorStop(0.55, `rgba(24, 16, 34, ${(0.22 * hollow).toFixed(3)})`);
-    gr.addColorStop(1, "rgba(24, 16, 34, 0)");
+    const gr = g.createRadialGradient(cx, cy + 14, 12, cx, cy + 12, 94);
+    gr.addColorStop(0, `rgba(16, 10, 24, ${(0.56 * hollow).toFixed(3)})`);
+    gr.addColorStop(0.55, `rgba(22, 14, 32, ${(0.28 * hollow).toFixed(3)})`);
+    gr.addColorStop(1, "rgba(22, 14, 32, 0)");
     g.fillStyle = gr;
     g.beginPath();
-    g.ellipse(cx, cy + 10, 74, 48, 0, 0, Math.PI * 2);
+    g.ellipse(cx, cy + 12, 94, 58, 0, 0, Math.PI * 2);
     g.fill();
 
     // Subtle crisp tired under-eye bag crease
-    g.strokeStyle = `rgba(18, 12, 24, ${(0.42 * hollow).toFixed(3)})`;
-    g.lineWidth = 3.2;
+    g.strokeStyle = `rgba(16, 10, 22, ${(0.48 * hollow).toFixed(3)})`;
+    g.lineWidth = 4.0;
     g.lineCap = "round";
     g.beginPath();
-    g.moveTo(cx - rx * 0.72, cy + ry + 11);
-    g.quadraticCurveTo(cx, cy + ry + 20, cx + rx * 0.78, cy + ry + 9);
+    g.moveTo(cx - rx * 0.72, cy + ry + 12);
+    g.quadraticCurveTo(cx, cy + ry + 23, cx + rx * 0.78, cy + ry + 10);
     g.stroke();
   }
 
@@ -153,10 +153,10 @@ function drawAlmondEye(
     }
 
     // Iris & contracted pupil (horror intensity driven by small cold pupils!)
-    const ix = cx + gazeX * 18;
-    const iy = cy + gazeY * 7;
-    const irisR = 19 * (0.48 + 0.52 * pupilScale);
-    const pupilR = Math.max(4.5, irisR * (0.56 + 0.14 * (1 - pupilScale)));
+    const ix = cx + gazeX * 20;
+    const iy = cy + gazeY * 8;
+    const irisR = 23 * (0.48 + 0.52 * pupilScale);
+    const pupilR = Math.max(5.5, irisR * (0.56 + 0.14 * (1 - pupilScale)));
 
     g.fillStyle = "#221d26";
     g.beginPath();
@@ -198,7 +198,7 @@ function drawAlmondEye(
   g.strokeStyle = INK;
   g.lineCap = "round";
   g.lineJoin = "round";
-  g.lineWidth = 7.5;
+  g.lineWidth = 10.0;
   g.beginPath();
   g.moveTo(innerX, cy + 3);
   g.bezierCurveTo(
@@ -208,7 +208,7 @@ function drawAlmondEye(
   );
   g.stroke();
 
-  g.lineWidth = 4.0;
+  g.lineWidth = 5.2;
   g.beginPath();
   g.moveTo(outerX, cy - 2);
   g.bezierCurveTo(
@@ -220,10 +220,10 @@ function drawAlmondEye(
 
   // Subtle upper eyelid crease
   g.strokeStyle = "rgba(18, 12, 24, 0.55)";
-  g.lineWidth = 2.6;
+  g.lineWidth = 3.2;
   g.beginPath();
-  g.moveTo(cx - side * rx * 0.72, cy - ry - 5);
-  g.quadraticCurveTo(cx, cy - ry - 13, cx + side * rx * 0.78, cy - ry - 4);
+  g.moveTo(cx - side * rx * 0.72, cy - ry - 6);
+  g.quadraticCurveTo(cx, cy - ry - 15, cx + side * rx * 0.78, cy - ry - 5);
   g.stroke();
 }
 
@@ -235,49 +235,49 @@ function drawEyebrow(
   spec: FaceSpec,
   def: (typeof EXPR_DEFAULTS)[FaceExpr],
 ) {
-  const by = cy - 48 - def.browLift;
-  const tilt = def.browTilt * 24;
-  const innerX = cx - side * 46;
-  const outerX = cx + side * 52;
+  const by = cy - 56 - def.browLift;
+  const tilt = def.browTilt * 26;
+  const innerX = cx - side * 56;
+  const outerX = cx + side * 66;
   const innerY = by - tilt;
-  const outerY = by + tilt * 0.55 + 4;
+  const outerY = by + tilt * 0.55 + 5;
 
   g.strokeStyle = spec.browCol ?? INK;
-  g.lineWidth = 10.5;
+  g.lineWidth = 13.5;
   g.lineCap = "round";
   g.beginPath();
   g.moveTo(innerX, innerY);
-  g.quadraticCurveTo(cx + side * 6, (innerY + outerY) * 0.5 - 8, outerX, outerY);
+  g.quadraticCurveTo(cx + side * 6, (innerY + outerY) * 0.5 - 9, outerX, outerY);
   g.stroke();
 }
 
 function drawMouth(g: CanvasRenderingContext2D, mouth: MouthShape) {
   const cx = 256;
-  const cy = 382;
+  const cy = 370;
   g.strokeStyle = INK;
   g.lineCap = "round";
   g.lineJoin = "round";
 
   if (mouth === "closed") {
-    g.lineWidth = 6.5;
+    g.lineWidth = 8.0;
     g.beginPath();
-    g.moveTo(cx - 34, cy + 2);
-    g.quadraticCurveTo(cx, cy - 2, cx + 34, cy + 2);
+    g.moveTo(cx - 48, cy + 2);
+    g.quadraticCurveTo(cx, cy - 3, cx + 48, cy + 2);
     g.stroke();
   } else if (mouth === "tense") {
-    g.lineWidth = 6.5;
+    g.lineWidth = 8.0;
     g.beginPath();
-    g.moveTo(cx - 42, cy + 7);
-    g.quadraticCurveTo(cx, cy - 4, cx + 42, cy + 7);
+    g.moveTo(cx - 56, cy + 9);
+    g.quadraticCurveTo(cx, cy - 5, cx + 56, cy + 9);
     g.stroke();
   } else if (mouth === "parted" || mouth === "talkE") {
-    const h = mouth === "talkE" ? 13 : 9;
-    const w = mouth === "talkE" ? 36 : 26;
+    const h = mouth === "talkE" ? 15 : 11;
+    const w = mouth === "talkE" ? 46 : 34;
     g.fillStyle = "#1a0b12";
     g.beginPath();
     g.ellipse(cx, cy + 4, w, h, 0, 0, Math.PI * 2);
     g.fill();
-    g.lineWidth = 5.5;
+    g.lineWidth = 6.5;
     g.stroke();
   } else if (mouth === "talkA" || mouth === "talkO") {
     const w = mouth === "talkO" ? 20 : 32;
@@ -351,10 +351,10 @@ export function drawFace2D(g: CanvasRenderingContext2D, spec: FaceSpec): void {
     g.stroke();
   }
 
-  drawAlmondEye(g, 168, 224, -1, spec, def);
-  drawAlmondEye(g, 344, 224, 1, spec, def);
-  drawEyebrow(g, 168, 224, -1, spec, def);
-  drawEyebrow(g, 344, 224, 1, spec, def);
+  drawAlmondEye(g, 148, 222, -1, spec, def);
+  drawAlmondEye(g, 364, 222, 1, spec, def);
+  drawEyebrow(g, 148, 222, -1, spec, def);
+  drawEyebrow(g, 364, 222, 1, spec, def);
 
   // Subtle age / gaunt cheekbone lines if requested
   if (spec.ageLines) {

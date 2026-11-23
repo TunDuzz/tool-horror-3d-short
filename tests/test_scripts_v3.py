@@ -156,7 +156,8 @@ class TestScriptsV3(unittest.TestCase):
             open(story_ts, "w", encoding="utf-8").write(
                 """
 export const FPS = 30;
-export const TOTAL = 120;
+export const DEMO_FRAMES = 120;
+export const TOTAL = DEMO_FRAMES;
 export const SHOTS = [
   { id: 1, a: 0, b: 60, light: "warmLamp", scale: "POV" },
   { id: 2, a: 60, b: TOTAL, light: "coldMoon", scale: "POV_TURN" },
@@ -164,6 +165,7 @@ export const SHOTS = [
 export const WHIP_PANS = [
   { f0: 52, dur: 7, fromLook: [0, 1, -2], toLook: [2, 1, 0] },
 ];
+export const POV_MOTIONS: [number, number][] = [[59, 69]];
 export const CAMS = {
   1: [{ f: 0, s: (f: number) => whipPan([0, 1.1, 2], { f0: 52, dur: 7, fromLook: [0,1,-2], toLook: [2,1,0] }, f) }],
   2: [{ f: 60, s: () => ({ pos: [0, 1.1, 2], look: [2, 1, 0] }) }],
@@ -172,9 +174,11 @@ export const CAMS = {
             )
             res = subprocess.run([sys.executable, EXTRACT, story_ts, shots_json], capture_output=True, text=True)
             self.assertEqual(res.returncode, 0, msg=res.stdout + res.stderr)
-            data = json.load(open(shots_json, encoding="utf-8"))
+            with open(shots_json, encoding="utf-8") as fp:
+                data = json.load(fp)
             planned = data["planned"]
             self.assertTrue(any(a <= 52 and b >= 59 for a, b in planned), f"whipPan [52,59] missing from planned={planned}")
+            self.assertTrue(any(a <= 59 and b >= 69 for a, b in planned), f"POV_MOTIONS [59,69] missing from planned={planned}")
 
     def test_v3_valid_lights_synced_in_horror_story_and_validate_continuity(self):
         for p in (HORROR_STORY, HORROR_STORY_COMP, VALIDATE_CONT):

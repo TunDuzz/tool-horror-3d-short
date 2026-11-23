@@ -193,22 +193,22 @@ export function createPhone3D(initial: PhoneScreenState = { clock: "00:58" }): P
   screen.userData.noOutline = true;
   group.add(screen);
 
-  // Subtle slender fingers wrapping left bezel (local to phone so grip never drifts!)
+  // Slender fingers curling neatly around left bezel edge (never obstructing lockscreen text!)
   const skinMat = stylizedShade(new THREE.MeshLambertMaterial({ color: "#ccb6a0" }));
   for (let i = 0; i < 4; i++) {
-    const fGeo = new THREE.CapsuleGeometry(0.0092, 0.022, 5, 8);
+    const fGeo = new THREE.CapsuleGeometry(0.0072, 0.015, 5, 8);
     fGeo.rotateZ(Math.PI * 0.5);
     const fm = new THREE.Mesh(fGeo, skinMat);
     fm.name = `phoneGripFinger_${i}`;
-    fm.position.set(-0.041, 0.024 - i * 0.024, 0.006);
+    fm.position.set(-0.046, 0.018 - i * 0.020, 0.005);
     group.add(fm);
   }
-  // Slender right thumb resting diagonally across lower-right corner
-  const thumbGeo = new THREE.CapsuleGeometry(0.010, 0.044, 5, 8);
+  // Slender right thumb resting cleanly on right bezel edge
+  const thumbGeo = new THREE.CapsuleGeometry(0.0085, 0.036, 5, 8);
   const thumb = new THREE.Mesh(thumbGeo, skinMat);
   thumb.name = "phoneGripThumb";
-  thumb.position.set(0.036, -0.044, 0.012);
-  thumb.rotation.set(0.12, -0.15, 0.68);
+  thumb.position.set(0.044, -0.042, 0.008);
+  thumb.rotation.set(0.10, -0.14, 0.56);
   group.add(thumb);
 
   attachOutlineRig(group, { pxWidth: 4.5, minWorld: 0.0009, maxWorld: 0.008, color: "#06060a" });
@@ -315,10 +315,10 @@ export function createFlashlight3D(): Flashlight3D {
     return {
       pos: [wp.x, wp.y, wp.z],
       target: [wp.x + dir.x * 8, wp.y + dir.y * 8, wp.z + dir.z * 8],
-      color: [2.2 * power, 2.1 * power, 1.85 * power],
+      color: [1.42 * power, 1.38 * power, 1.24 * power],
       distance: 13.5,
       angleDeg: 24,
-      penumbra: 0.52,
+      penumbra: 0.54,
     };
   };
 
@@ -502,15 +502,17 @@ export function createPovRig3D(
   const buildPovArm = (side: -1 | 1) => {
     const arm = new THREE.Group();
     arm.name = side < 0 ? "povLeftArm" : "povRightArm";
-    const forearm = new THREE.Mesh(new THREE.CapsuleGeometry(0.036, 0.34, 6, 10), sleeveMat);
-    forearm.rotation.x = Math.PI * 0.5;
-    forearm.position.set(0, 0, 0.20);
-    const wrist = new THREE.Mesh(new THREE.CylinderGeometry(0.028, 0.032, 0.05, 10).rotateX(Math.PI * 0.5), skinMat);
-    wrist.position.set(0, 0, 0.02);
+    // Forearm & wrist sit behind the held prop (-Z is away from camera) and slope downward-outward toward shoulder
+    const forearm = new THREE.Mesh(new THREE.CapsuleGeometry(0.032, 0.34, 6, 10), sleeveMat);
+    forearm.position.set(side * 0.072, -0.21, -0.02);
+    forearm.rotation.set(-0.22, 0, side * 0.30);
+    const wrist = new THREE.Mesh(new THREE.CylinderGeometry(0.024, 0.028, 0.065, 10), skinMat);
+    wrist.position.set(side * 0.014, -0.068, -0.032);
+    wrist.rotation.set(-0.18, 0, side * 0.22);
     const hand = new THREE.Group();
     hand.name = side < 0 ? "povLeftHand" : "povRightHand";
-    const palm = new THREE.Mesh(new THREE.BoxGeometry(0.056, 0.024, 0.072), skinMat);
-    palm.position.set(0, -0.008, -0.02);
+    const palm = new THREE.Mesh(new THREE.BoxGeometry(0.044, 0.044, 0.018), skinMat);
+    palm.position.set(0, -0.024, -0.038);
     hand.add(palm);
     arm.add(forearm, wrist, hand);
     armsRoot.add(arm);
@@ -540,21 +542,19 @@ export function createPovRig3D(
     // Default resting positions tucked cleanly just below camera edge unless raised
     left.arm.position.set(-0.24 + swayX, -0.44 + lRaise * 0.24 + swayY, -0.28 - lRaise * 0.08);
     left.arm.rotation.set(0.18 - lRaise * 0.22, 0.26, -0.12);
-    left.arm.visible = lRaise > 0.02 || pose.propMode === "phone";
+    left.arm.visible = lRaise > 0.02;
 
     if (pose.propMode === "phone") {
-      // Raised centered-right smartphone framing (matching videomau sec_056 with slender horror fingers!)
+      // Raised centered-right smartphone framing (unobstructed screen + wrist sloping cleanly to bottom-right!)
       const k = Math.max(0.001, rRaise);
       right.arm.visible = k > 0.02;
-      right.arm.position.set(0.03 + swayX, -0.34 + k * 0.28 + swayY, -0.34);
-      right.arm.rotation.set(0.14 * (1 - k), -0.08, 0.04);
-      // Left arm cradles underside/left when reading phone
-      left.arm.visible = k > 0.35;
-      left.arm.position.set(-0.14 + swayX, -0.36 + k * 0.22 + swayY, -0.36);
-      left.arm.rotation.set(0.12, 0.38, -0.10);
+      right.arm.position.set(0.035 + swayX, -0.34 + k * 0.26 + swayY, -0.34);
+      right.arm.rotation.set(0.12 * (1 - k), -0.06, 0.03);
+      // Keep left arm tucked out of phone screen unless explicitly raised separately
+      left.arm.visible = false;
     } else if (pose.propMode === "flashlight") {
       right.arm.visible = rRaise > 0.02;
-      right.arm.position.set(0.17 + swayX, -0.30 + rRaise * 0.16 + swayY, -0.32);
+      right.arm.position.set(0.16 + swayX, -0.26 + rRaise * 0.14 + swayY, -0.33);
       right.arm.rotation.set(0.04, -0.05, 0);
     } else if (pose.propMode === "lamp") {
       right.arm.visible = rRaise > 0.02;
