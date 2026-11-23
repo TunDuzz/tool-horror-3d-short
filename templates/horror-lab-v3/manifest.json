@@ -5,7 +5,7 @@
   "aspect": "9:16",
   "header": {
     "title": "CHỦ NHẬT · 01:06",
-    "subtitle": "Horror Engine v3 Look-Dev",
+    "subtitle": "Horror Engine v4 Look-Dev",
     "badge": "PHIM NGẮN HƯ CẤU"
   },
   "locations": [
@@ -173,13 +173,13 @@
       },
       "castStates": {
         "chuBay": { "visible": false, "anchor": "NPC_SEAT", "pose": "sitCrossLegged" },
-        "doorEntity": { "visible": true, "anchor": "ENTITY_DOOR", "pose": "loomingStill", "expr": "hollow", "eyeGlow": true }
+        "doorEntity": { "visible": true, "anchor": "ENTITY_DOOR", "pose": "jawUnlatch", "expr": "hollow", "eyeGlow": false }
       },
       "propStates": {
         "phone": { "visible": false, "state": "hidden" },
         "door": { "visible": true, "state": "closedBolted" }
       },
-      "cameraIntent": "Cold moonlight tilt up onto tall gaunt crooked-neck silhouette entity with faint glowing eyes by doorway"
+      "cameraIntent": "Close-up cold moonlight chiaroscuro on tall cadaver entity with snapped tendon neck, hollow skull sockets, weeping sanpaku eyes, and dislocated crooked-tooth jaw"
     },
     {
       "beatId": "B5_HOSPITAL_CORRIDOR",
@@ -199,12 +199,12 @@
         "lampsOn": ["fluorescentTubeA", "handheldFlashlight"]
       },
       "castStates": {
-        "wardEntity": { "visible": true, "anchor": "HOSP_ENTITY", "pose": "loomingStill", "expr": "deadStare", "eyeGlow": false }
+        "wardEntity": { "visible": true, "anchor": "HOSP_ENTITY", "pose": "stalkLoom", "expr": "deadStare", "eyeGlow": false }
       },
       "propStates": {
         "flashlight": { "visible": true, "state": "aimed" }
       },
-      "cameraIntent": "Hospital ceramic-tile corridor with flickering overhead fluorescent tube and POV flashlight beam illuminating gaunt entity"
+      "cameraIntent": "Abandoned decaying hospital corridor with broken tiles, torn warning poster, hanging wires, and POV flashlight spotlighting body-horror entity with exposed ribs, unhinged jaw, and extra arms"
     },
     {
       "beatId": "B6_VILLAGE_ALLEY",

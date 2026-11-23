@@ -1,6 +1,8 @@
-// Horror Engine v3: Unified Remotion + Three.js + Post-processing + POV Narrative HUD player.
+// Horror Engine v4: Unified Remotion + Three.js + Post-processing + POV Narrative HUD player.
 // Builds postprocessing.EffectComposer synchronously so Remotion frameloop="never" renders every frame cleanly.
-// Chain: RenderPass (MSAA 4) -> InkPass (arch layer 0) -> LensBlur -> WhipMotionBlur -> [Bloom (thr 0.92) + NEUTRAL ToneMap] -> [Grade + subtle Grain] -> HorrorHUD DOM overlay.
+// Default ("semiReal" — Style B Silent Hill / Chilla's Art indie 3D):
+//   RenderPass (MSAA 4) -> OpaqueNormalPass -> SSAOEffect (crevice depth) -> LensBlur -> WhipMotionBlur -> [Bloom + NEUTRAL ToneMap] -> [Grade + Analog Grain] -> HorrorHUD.
+// Optional "painterly" (Style A) / "comic" (v3) modes enable architectural InkPass cleanly.
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
@@ -12,7 +14,9 @@ import {
   BloomEffect,
   EffectComposer as PostComposer,
   EffectPass,
+  NormalPass,
   RenderPass,
+  SSAOEffect,
   ToneMappingEffect,
   ToneMappingMode,
 } from "postprocessing";
@@ -28,12 +32,54 @@ import {
   evalOverlays,
   lightningAt,
 } from "./camera";
-import { InkOptions, InkPass, noInkFallback } from "./ink";
+import { InkOptions, InkPass, NOINK, noInkFallback } from "./ink";
 import { WhipMotionBlurEffect } from "./motionblur";
 import { LensBlur, GrainEffect } from "./lensblur";
 import { GradeEffect, GRADES, GRADE_STRENGTH, gradeFor } from "./grade";
 import { setLightningFlash } from "./shade";
 import { HorrorHUD, type HorrorHudConfig } from "./HorrorHUD";
+
+export type RenderStyle = "semiReal" | "painterly" | "comic";
+
+/** NormalPass that temporarily hides non-opaque / non-depth-writing FX (flashlight cones, halos, smoke, decals) so SSAO only occludes solid 3D geometry. */
+class OpaqueNormalPass extends NormalPass {
+  override render(
+    renderer: THREE.WebGLRenderer,
+    inputBuffer: THREE.WebGLRenderTarget | null,
+    outputBuffer: THREE.WebGLRenderTarget | null,
+    deltaTime?: number,
+    stencilTest?: boolean,
+  ) {
+    const hidden: THREE.Object3D[] = [];
+    this.scene.traverse((o) => {
+      if (!o.visible) return;
+      const m = o as THREE.Mesh;
+      if (
+        (o as THREE.Sprite).isSprite ||
+        (o as THREE.Points).isPoints ||
+        (o as THREE.Line).isLine ||
+        o.userData.noSSAO ||
+        o.userData.isOutline
+      ) {
+        o.visible = false;
+        hidden.push(o);
+        return;
+      }
+      if (m.isMesh) {
+        const mats = Array.isArray(m.material) ? m.material : [m.material];
+        if (mats.some((x) => x && (x.depthWrite === false || (x.transparent && x.alphaTest <= 0)))) {
+          o.visible = false;
+          hidden.push(o);
+        }
+      }
+    });
+    try {
+      super.render(renderer, inputBuffer, outputBuffer, deltaTime, stencilTest);
+    } finally {
+      for (const o of hidden) o.visible = true;
+    }
+  }
+}
 
 export interface ShortWorld {
   root: THREE.Object3D;
@@ -53,8 +99,10 @@ export type ShortPlayerProps<TAssets = undefined> = {
   flashes?: number[];
   overlays?: ScreenBeat[];
   hud?: HorrorHudConfig;
+  renderStyle?: RenderStyle;
   inkOptions?: InkOptions;
   grainAmount?: number;
+  ssao?: boolean;
   draft?: boolean;
   width?: number;
   height?: number;
@@ -63,6 +111,7 @@ export type ShortPlayerProps<TAssets = undefined> = {
 
 type PostToggles = {
   ink: boolean;
+  ssao: boolean;
   lens: boolean;
   pre: boolean;
   motionBlur: boolean;
@@ -71,8 +120,9 @@ type PostToggles = {
   grain: boolean;
 };
 
-const toggles = (grainAmount = 0): PostToggles => ({
-  ink: true,
+const toggles = (renderStyle: RenderStyle, ssaoEnabled: boolean, grainAmount = 0): PostToggles => ({
+  ink: renderStyle !== "semiReal",
+  ssao: ssaoEnabled,
   lens: true,
   pre: true,
   motionBlur: true,
@@ -143,9 +193,11 @@ type InnerProps<TAssets> = {
   overlays: ScreenBeat[];
   assets: TAssets;
   createWorld: (assets: TAssets) => ShortWorld;
+  renderStyle: RenderStyle;
   inkOptions?: InkOptions;
-  grainAmount?: number;
-  draft?: boolean;
+  grainAmount: number;
+  ssao: boolean;
+  draft: boolean;
 };
 
 function Inner<TAssets>({
@@ -157,9 +209,11 @@ function Inner<TAssets>({
   overlays,
   assets,
   createWorld,
+  renderStyle,
   inkOptions,
-  grainAmount = 0.008,
-  draft = false,
+  grainAmount,
+  ssao,
+  draft,
 }: InnerProps<TAssets>) {
   const f = useCurrentFrame();
   const { camera, scene, gl, size } = useThree();
@@ -178,20 +232,46 @@ function Inner<TAssets>({
   const glSize = useMemo(() => new THREE.Vector2(), []);
   const appliedSize = useRef({ width: -1, height: -1, pixelRatio: -1 });
   const grainOn = grainAmount > 0;
-  const on = useMemo(() => toggles(grainOn ? 1 : 0), [grainOn]);
+  const ssaoOn = ssao && !draft;
+  const on = useMemo(() => toggles(renderStyle, ssaoOn, grainOn ? 1 : 0), [renderStyle, ssaoOn, grainOn]);
 
-  const fx = useMemo(
-    () => ({
-      ink: new InkPass(scene, camera as THREE.PerspectiveCamera),
+  const fx = useMemo(() => {
+    const normalPass = new OpaqueNormalPass(scene, camera, { resolutionScale: 0.75 });
+    const ssaoFx = new SSAOEffect(camera, normalPass.texture, {
+      blendFunction: BlendFunction.MULTIPLY,
+      samples: 16,
+      rings: 7,
+      radius: 0.088,
+      intensity: renderStyle === "semiReal" ? 2.45 : 1.85,
+      luminanceInfluence: 0.42,
+      bias: 0.024,
+      fade: 0.015,
+      color: new THREE.Color("#040308"),
+      worldDistanceThreshold: 26,
+      worldDistanceFalloff: 8,
+      worldProximityThreshold: 1.5,
+      worldProximityFalloff: 0.65,
+      resolutionScale: 0.75,
+    });
+    const ink = new InkPass(
+      scene,
+      camera as THREE.PerspectiveCamera,
+      renderStyle === "painterly"
+        ? { widthNear: 2.8, widthFar: 1.2, strength: 0.74, creaseScale: 0.68 }
+        : undefined,
+    );
+    return {
+      normalPass,
+      ssao: ssaoFx,
+      ink,
       lens: new LensBlur({ maxCoC: 20, nearScale: 1.2 }),
       motionBlur: new WhipMotionBlurEffect({ thresholdPx: 2.5, maxUv: 0.055 }),
       bloom: makeBloom(),
       tone: new ToneMappingEffect({ mode: ToneMappingMode.NEUTRAL }),
       grade: new GradeEffect(GRADES.warmLamp, GRADE_STRENGTH.warmLamp),
-      grain: new GrainEffect({ amount: 0.008, cellPx: 1.4 }),
-    }),
-    [camera, scene],
-  );
+      grain: new GrainEffect({ amount: grainAmount, cellPx: renderStyle === "semiReal" ? 1.55 : 1.35 }),
+    };
+  }, [camera, scene, renderStyle, grainAmount]);
 
   if (inkOptions) fx.ink.set(inkOptions);
   if (grainOn) fx.grain.amount = grainAmount;
@@ -200,6 +280,10 @@ function Inner<TAssets>({
     const c = new PostComposer(gl, { frameBufferType: THREE.HalfFloatType, multisampling: draft ? 0 : 4 });
     c.autoRenderToScreen = true;
     c.addPass(new RenderPass(scene, camera));
+    if (on.ssao) {
+      c.addPass(fx.normalPass);
+      c.addPass(new EffectPass(camera, fx.ssao));
+    }
     if (on.ink) c.addPass(fx.ink);
     if (on.lens && on.pre) c.addPass(new EffectPass(camera, fx.lens.pre));
     if (on.lens) c.addPass(new EffectPass(camera, fx.lens.main));
@@ -223,6 +307,10 @@ function Inner<TAssets>({
       gl.autoClear = prevAutoClear;
       gl.toneMapping = prevToneMapping;
       composer.dispose();
+      if (!on.ssao) {
+        fx.normalPass.dispose();
+        fx.ssao.dispose();
+      }
       if (!on.ink) fx.ink.dispose();
       if (!on.lens) fx.lens.dispose();
       else if (!on.pre) fx.lens.pre.dispose();
@@ -253,6 +341,7 @@ function Inner<TAssets>({
 
   const cam = camera as THREE.PerspectiveCamera;
   cam.aspect = width / Math.max(1, height);
+  cam.layers.enable(NOINK);
   setLightningFlash(lightningAt(overlays, f));
   target.copy(world.update(id, f, cam, scene));
   noInkFallback(world.root);
@@ -287,9 +376,11 @@ type ShotViewProps<TAssets> = {
   overlays: ScreenBeat[];
   assets: TAssets;
   createWorld: (assets: TAssets) => ShortWorld;
+  renderStyle: RenderStyle;
   inkOptions?: InkOptions;
-  grainAmount?: number;
-  draft?: boolean;
+  grainAmount: number;
+  ssao: boolean;
+  draft: boolean;
 };
 
 function ShotView<TAssets>({
@@ -302,9 +393,11 @@ function ShotView<TAssets>({
   overlays,
   assets,
   createWorld,
+  renderStyle,
   inkOptions,
   grainAmount,
-  draft = false,
+  ssao,
+  draft,
 }: ShotViewProps<TAssets>) {
   const dpr = dprOverride();
   return (
@@ -332,8 +425,10 @@ function ShotView<TAssets>({
           overlays={overlays}
           assets={assets}
           createWorld={createWorld}
+          renderStyle={renderStyle}
           inkOptions={inkOptions}
-          grainAmount={grainAmount ?? 0.008}
+          grainAmount={grainAmount}
+          ssao={ssao}
           draft={draft}
         />
       </ThreeCanvas>
@@ -350,8 +445,10 @@ export function ShortPlayer<TAssets = undefined>({
   flashes = [],
   overlays = [],
   hud,
+  renderStyle = "semiReal",
   inkOptions,
-  grainAmount = 0.008,
+  grainAmount,
+  ssao = true,
   draft,
   width,
   height,
@@ -360,6 +457,7 @@ export function ShortPlayer<TAssets = undefined>({
   const f = useCurrentFrame();
   const vc = useVideoConfig();
   const isDraft = draft ?? !!(getInputProps() as { draft?: boolean })?.draft;
+  const resolvedGrain = grainAmount ?? (renderStyle === "semiReal" ? 0.018 : 0.008);
   const w = width ?? vc.width;
   const h = height ?? vc.height;
   const { ready, assets } = useLoadedAssets(loadAssets);
@@ -385,8 +483,10 @@ export function ShortPlayer<TAssets = undefined>({
           overlays={overlays}
           assets={assets as TAssets}
           createWorld={createWorld}
+          renderStyle={renderStyle}
           inkOptions={inkOptions}
-          grainAmount={grainAmount}
+          grainAmount={resolvedGrain}
+          ssao={ssao}
           draft={isDraft}
         />
       ))}

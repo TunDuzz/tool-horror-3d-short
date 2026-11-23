@@ -50,6 +50,9 @@ VALID_POSES = {
     "loomingStill",
     "peekAroundDoor",
     "turnHead",
+    "stalkLoom",
+    "jawUnlatch",
+    "crawler",
 }
 VALID_EXPRS = {
     "calm",

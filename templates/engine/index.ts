@@ -1,4 +1,4 @@
-// Barrel export for Horror Engine v3 ("3D Stylized Dark-Horror POV").
+// Barrel export for Horror Engine v4 ("Gritty Semi-Realistic Dark & Body Horror POV").
 export * from "./camera";
 export * from "./lights";
 export * from "./manifest";
@@ -11,6 +11,7 @@ export * from "./grade";
 export * from "./paint";
 export * from "./build";
 export * from "./face2d";
+export * from "./bodyHorror";
 export * from "./rig3d";
 export * from "./povRig";
 export * from "./fx3d";

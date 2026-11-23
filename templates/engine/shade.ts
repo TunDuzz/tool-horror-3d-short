@@ -116,10 +116,33 @@ if (!LFB.includes("directLight.color *= sunVis")) throw new Error("shade.ts: thr
 
 const VERT_WORLD_POS = /* glsl */ `
   vec4 tWp = vec4( transformed, 1.0 );
+  vec3 tWn = objectNormal;
   #ifdef USE_INSTANCING
     tWp = instanceMatrix * tWp;
+    tWn = mat3( instanceMatrix ) * tWn;
   #endif
   vToneWorldPos = ( modelMatrix * tWp ).xyz;
+  vToneWorldNormal = normalize( mat3( modelMatrix ) * tWn );
+`;
+
+const NOISE_GLSL = /* glsl */ `
+float h31( vec3 p ) {
+  p = fract( p * vec3( 443.897, 441.423, 437.195 ) );
+  p += dot( p, p.yzx + 19.19 );
+  return fract( ( p.x + p.y ) * p.z );
+}
+float vnoise3( vec3 p ) {
+  vec3 i = floor( p );
+  vec3 f = fract( p );
+  f = f * f * ( 3.0 - 2.0 * f );
+  return mix(
+    mix( mix( h31( i ), h31( i + vec3( 1, 0, 0 ) ), f.x ),
+         mix( h31( i + vec3( 0, 1, 0 ) ), h31( i + vec3( 1, 1, 0 ) ), f.x ), f.y ),
+    mix( mix( h31( i + vec3( 0, 0, 1 ) ), h31( i + vec3( 1, 0, 1 ) ), f.x ),
+         mix( h31( i + vec3( 0, 1, 1 ) ), h31( i + vec3( 1, 1, 1 ) ), f.x ), f.y ),
+    f.z
+  );
+}
 `;
 
 const STYLIZED_SHADE = /* glsl */ `
@@ -127,58 +150,75 @@ const STYLIZED_SHADE = /* glsl */ `
   vec3 upV = normalize( ( viewMatrix * vec4( 0.0, 1.0, 0.0, 0.0 ) ).xyz );
   float facing = max( dot( geometryNormal, geometryViewDir ), 0.0 );
   vec3 alb = max( mix( vec3( dot( diffuseColor.rgb, vec3( 0.2126, 0.7152, 0.0722 ) ) ), diffuseColor.rgb, uSat ), 0.0 );
+
+  // Horror Engine v4: World-space micro-weathering & rising-damp grime (kills smooth CG plastic look!)
+  if ( GRIME_K > 0.001 ) {
+    float coarseN = vnoise3( vToneWorldPos * 2.1 );
+    float fineN = vnoise3( vToneWorldPos * 14.5 + vec3( 7.3, 2.1, 5.9 ) );
+    float microGrit = 1.0 + ( ( coarseN - 0.5 ) * 0.16 + ( fineN - 0.5 ) * 0.11 ) * GRIME_K;
+    float wallMask = 1.0 - smoothstep( 0.55, 0.86, abs( vToneWorldNormal.y ) );
+    float dampBand = 1.0 - smoothstep( 0.02, 0.58 + coarseN * 0.32, max( 0.0, vToneWorldPos.y ) );
+    float dampDark = mix( 1.0, 0.70 + 0.14 * fineN, wallMask * dampBand * GRIME_K );
+    alb *= microGrit * dampDark;
+  }
+
   float skyK = mix( uSideK, 1.0, 0.5 + 0.5 * dot( geometryNormal, upV ) );
 
   float sunTerm = 0.0;
   vec3 lit = uLitCol;
+  vec3 specSum = vec3( 0.0 );
   #if NUM_DIR_LIGHTS > 0
     vec3 sunV = directionalLights[ 0 ].direction;
     float ndl = dot( geometryNormal, sunV );
     sunTerm = sunVis * smoothstep( uWrapLo, uWrapHi, ndl );
     lit = uLitCol * mix( 1.0, max( ndl, 0.0 ), uLambert );
+    #ifdef USE_STYLIZED_SPEC
+      vec3 halfD = normalize( sunV + geometryViewDir );
+      float dsp = pow( max( dot( geometryNormal, halfD ), 0.0 ), max( shininess, 10.0 ) );
+      specSum += specular * uLitCol * sunVis * dsp * 0.55;
+    #endif
   #endif
 
   vec3 baseDiff = alb * ( mix( uShadeCol, lit, sunTerm ) * skyK + uBounce * facing * clamp( 1.0 - dot( geometryNormal, upV ), 0.0, 1.0 ) * ( 1.0 - sunTerm ) )
     + uShadeLift * LIFT_K * ( 1.0 - sunTerm );
 
-  // Subtle 3D stylized rim highlight separating dark silhouettes from shadowed backgrounds
-  float fres = pow( clamp( 1.0 - facing, 0.0, 1.0 ), 2.6 );
-  vec3 rimDiff = alb * uRimCol * uRimStrength * fres * ( 0.30 + 0.70 * sunTerm );
+  // Chiaroscuro rim highlight separating dark silhouettes & bumped contours from deep shadows
+  float fres = pow( clamp( 1.0 - facing, 0.0, 1.0 ), 2.8 );
+  vec3 rimDiff = alb * uRimCol * uRimStrength * fres * ( 0.24 + 0.76 * sunTerm );
 
-  // 6 real local dynamic PointLights (oil lamps, candles, phone screen glow, streetlamps) + stylized Phong specular sheen
+  // 6 real local dynamic PointLights (oil lamps, candles, phone screen glow, streetlamps) + Phong wet/gritty specular
   vec3 fragV = -vViewPosition;
   vec3 ptSum = vec3( 0.0 );
-  vec3 specSum = vec3( 0.0 );
   for ( int i = 0; i < 6; i++ ) {
     float r = uPtRad[ i ];
     if ( r > 0.01 ) {
       float d = length( uPtPos[ i ] - vToneWorldPos );
-      float att = pow( clamp( 1.0 - d / r, 0.0, 1.0 ), 1.85 ) * 1.32;
+      float att = pow( clamp( 1.0 - d / r, 0.0, 1.0 ), 1.90 ) * 1.38;
       vec3 lDir = normalize( ( viewMatrix * vec4( uPtPos[ i ], 1.0 ) ).xyz - fragV );
-      float pndl = 0.24 + 0.76 * smoothstep( -0.22, 0.68, dot( geometryNormal, lDir ) );
+      float pndl = 0.16 + 0.84 * smoothstep( -0.14, 0.72, dot( geometryNormal, lDir ) );
       ptSum += uPtCol[ i ] * att * pndl;
       #ifdef USE_STYLIZED_SPEC
         vec3 halfV = normalize( lDir + geometryViewDir );
         float sp = pow( max( dot( geometryNormal, halfV ), 0.0 ), max( shininess, 8.0 ) );
-        specSum += specular * uPtCol[ i ] * att * sp * 0.65;
+        specSum += specular * uPtCol[ i ] * att * sp * 0.78;
       #endif
     }
   }
 
-  // 1 real dynamic SpotLight cone (handheld flashlight / narrow doorway light shaft)
+  // 1 real dynamic SpotLight cone (handheld flashlight / narrow doorway light shaft) — stark chiaroscuro relief on bumps without neon blowout!
   if ( uSpDist > 0.01 ) {
     vec3 toFragW = vToneWorldPos - uSpPos;
     float sd = length( toFragW );
     if ( sd < uSpDist && sd > 0.001 ) {
-      float satt = pow( clamp( 1.0 - sd / uSpDist, 0.0, 1.0 ), 1.55 ) * 1.65;
+      float satt = pow( clamp( 1.0 - sd / uSpDist, 0.0, 1.0 ), 1.65 ) * 1.28;
       float cone = smoothstep( uSpCosOut, uSpCosIn, dot( toFragW / sd, uSpDir ) );
       vec3 lDir = normalize( ( viewMatrix * vec4( uSpPos, 1.0 ) ).xyz - fragV );
-      float sndl = 0.18 + 0.82 * smoothstep( -0.15, 0.58, dot( geometryNormal, lDir ) );
+      float sndl = 0.10 + 0.90 * smoothstep( -0.08, 0.68, dot( geometryNormal, lDir ) );
       ptSum += uSpCol * satt * cone * sndl;
       #ifdef USE_STYLIZED_SPEC
         vec3 halfS = normalize( lDir + geometryViewDir );
-        float ssp = pow( max( dot( geometryNormal, halfS ), 0.0 ), max( shininess, 10.0 ) );
-        specSum += specular * uSpCol * satt * cone * ssp * 0.72;
+        float ssp = pow( max( dot( geometryNormal, halfS ), 0.0 ), max( shininess, 12.0 ) );
+        specSum += specular * uSpCol * satt * cone * ssp * 0.42;
       #endif
     }
   }
@@ -186,7 +226,7 @@ const STYLIZED_SHADE = /* glsl */ `
   // Real 3D lightning flash
   vec3 flashDiff = vec3( 0.0 );
   if ( uFlashAmt > 0.001 ) {
-    float fndl = 0.32 + 0.68 * smoothstep( -0.15, 0.65, dot( geometryNormal, normalize( vec3( 0.22, 0.88, 0.42 ) ) ) );
+    float fndl = 0.28 + 0.72 * smoothstep( -0.15, 0.65, dot( geometryNormal, normalize( vec3( 0.22, 0.88, 0.42 ) ) ) );
     flashDiff = alb * uFlashCol * uFlashAmt * 1.45 * fndl;
   }
 
@@ -201,27 +241,32 @@ const STYLIZED_SHADE = /* glsl */ `
 const DECL =
   "#include <common>\n" +
   "varying vec3 vToneWorldPos;\n" +
+  "varying vec3 vToneWorldNormal;\n" +
   "uniform vec3 uLitCol; uniform vec3 uShadeCol; uniform vec3 uShadeLift; uniform float uLambert; uniform float uSideK;\n" +
   "uniform float uWrapLo; uniform float uWrapHi; uniform vec3 uRimCol; uniform float uRimStrength; uniform vec3 uBounce; uniform float uSat;\n" +
   "uniform vec3 uPtPos[6]; uniform vec3 uPtCol[6]; uniform float uPtRad[6];\n" +
   "uniform vec3 uSpPos; uniform vec3 uSpDir; uniform vec3 uSpCol; uniform float uSpDist; uniform float uSpCosIn; uniform float uSpCosOut;\n" +
-  "uniform float uFlashAmt; uniform vec3 uFlashCol;";
+  "uniform float uFlashAmt; uniform vec3 uFlashCol;\n" +
+  NOISE_GLSL;
 
-/** Upgrade Lambert / Phong material to Horror Engine v3.5 soft stylized shading with 6 PointLights + 1 SpotLight + Phong specular sheen. */
-export function stylizedShade<T extends THREE.MeshLambertMaterial | THREE.MeshPhongMaterial>(m: T, liftK = 1): T {
+/**
+ * Upgrade Lambert / Phong material to Horror Engine v4 gritty chiaroscuro shading with bumpMap normal relief,
+ * world-space micro-weathering & rising-damp wall grime, 6 PointLights + 1 SpotLight + wet Phong specular.
+ */
+export function stylizedShade<T extends THREE.MeshLambertMaterial | THREE.MeshPhongMaterial>(m: T, liftK = 1, grimeK = 1): T {
   const isPhong = m instanceof THREE.MeshPhongMaterial;
   m.onBeforeCompile = (sh) => {
     Object.assign(sh.uniforms, TONE, DYNAMIC_LIGHTS);
     sh.vertexShader = sh.vertexShader
-      .replace("#include <common>", "#include <common>\nvarying vec3 vToneWorldPos;")
+      .replace("#include <common>", "#include <common>\nvarying vec3 vToneWorldPos;\nvarying vec3 vToneWorldNormal;")
       .replace("#include <project_vertex>", "#include <project_vertex>\n" + VERT_WORLD_POS);
     const specDef = isPhong ? "#define USE_STYLIZED_SPEC\n" : "";
     sh.fragmentShader = sh.fragmentShader
-      .replace("#include <common>", specDef + DECL + `\n#define LIFT_K ${liftK.toFixed(3)}`)
+      .replace("#include <common>", specDef + DECL + `\n#define LIFT_K ${liftK.toFixed(3)}\n#define GRIME_K ${grimeK.toFixed(3)}`)
       .replace("#include <lights_fragment_begin>", "float sunVis = 1.0;\n" + LFB)
       .replace("#include <lights_fragment_end>", "#include <lights_fragment_end>\n" + STYLIZED_SHADE);
   };
-  m.customProgramCacheKey = () => `stylizedShadeV35_${isPhong ? "p" : "l"}_${liftK.toFixed(3)}`;
+  m.customProgramCacheKey = () => `stylizedShadeV40_${isPhong ? "p" : "l"}_${liftK.toFixed(3)}_${grimeK.toFixed(3)}`;
   return m;
 }
 

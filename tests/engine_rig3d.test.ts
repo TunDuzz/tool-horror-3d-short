@@ -40,23 +40,36 @@ test("createCharacter3D builds 20 named sockets with non-chibi adult horror prop
   npc.dispose();
 });
 
-test("createCharacter3D isolates all meshes onto NOINK with BackSide Inverted-Hull outlines", () => {
-  const npc = createCharacter3D({ id: "iso", hairStyle: "messyFringe", garment: "shirt" });
-  let meshCount = 0;
-  let outlineCount = 0;
-  npc.group.traverse((o) => {
+test("createCharacter3D isolates all meshes onto NOINK, defaults to Style B (outlineMode='off'), and creates BackSide Inverted-Hull outlines when outlineMode='cleanBold' or 'grittyThin'", () => {
+  // Style B default (no cartoon BackSide outline shells, still strictly isolated onto NOINK)
+  const npcB = createCharacter3D({ id: "isoB", hairStyle: "messyFringe", garment: "shirt" });
+  let meshCountB = 0;
+  let outlineCountB = 0;
+  npcB.group.traverse((o) => {
     const m = o as THREE.Mesh;
     if (!m.isMesh) return;
-    meshCount++;
+    meshCountB++;
+    assert.equal(m.layers.mask, 1 << NOINK, `Mesh ${m.name} must be on NOINK layer`);
+    if (m.userData.isOutline) outlineCountB++;
+  });
+  assert.ok(meshCountB >= 12);
+  assert.equal(outlineCountB, 0, "Style B default must not generate cartoon BackSide outlines");
+  npcB.dispose();
+
+  // Style A / cleanBold opt-in generates BackSide Inverted-Hull outlines cleanly
+  const npcA = createCharacter3D({ id: "isoA", hairStyle: "messyFringe", garment: "shirt", outlineMode: "grittyThin" });
+  let outlineCountA = 0;
+  npcA.group.traverse((o) => {
+    const m = o as THREE.Mesh;
+    if (!m.isMesh) return;
     assert.equal(m.layers.mask, 1 << NOINK, `Mesh ${m.name} must be on NOINK layer`);
     if (m.userData.isOutline) {
-      outlineCount++;
+      outlineCountA++;
       assert.equal((m.material as THREE.Material).side, THREE.BackSide);
     }
   });
-  assert.ok(meshCount >= 12);
-  assert.ok(outlineCount >= 6);
-  npc.dispose();
+  assert.ok(outlineCountA >= 6);
+  npcA.dispose();
 });
 
 test("EntityConfig overrides scale arms, tilt neck, and create HDR emissive pinpoint eyes", () => {

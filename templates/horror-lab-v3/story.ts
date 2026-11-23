@@ -41,10 +41,10 @@ export const ANCHORS = {
   DOUBLE_DOOR: [-1.35, 0.0, -3.65] as V3,
   ENTITY_DOOR: [-1.32, 0.0, -2.55] as V3,
 
-  // Location 2: Old Hospital Corridor
-  HOSP_POV_FEET: [0.0, 0.0, 2.2] as V3,
-  HOSP_POV_EYE: [0.0, 1.54, 2.2] as V3,
-  HOSP_ENTITY: [0.18, 0.0, -5.2] as V3,
+  // Location 2: Old Hospital Corridor (frames torn warning poster, broken tiles, hanging cables, looming Body Horror entity & sharp flashlight!)
+  HOSP_POV_FEET: [0.0, 0.0, 0.96] as V3,
+  HOSP_POV_EYE: [0.0, 1.44, 0.96] as V3,
+  HOSP_ENTITY: [0.06, 0.0, -2.55] as V3,
 
   // Location 3: Foggy Rural Village Alley
   ALLEY_LAMP: [1.75, 0.0, -6.2] as V3,
@@ -113,10 +113,10 @@ export const CAMS: Record<number, CamKey[]> = {
       f: 128,
       s: (f) =>
         povBreath(
-          dolly([-0.75, 1.14, 0.15], [-1.32, 1.48, -2.55], pushK(f, 128, 0.0024), { fov: 52 }),
+          dolly([-0.94, 1.54, -0.78], [-1.32, 1.72, -2.55], pushK(f, 128, 0.0022), { fov: 46 }),
           f,
-          0.012,
-          0.18,
+          0.011,
+          0.16,
           23,
         ),
     },
@@ -126,10 +126,10 @@ export const CAMS: Record<number, CamKey[]> = {
       f: 160,
       s: (f) =>
         povBreath(
-          dolly(ANCHORS.HOSP_POV_EYE, [0.10, 1.38, -5.2], pushK(f, 160, 0.0022), { fov: 54 }),
+          dolly(ANCHORS.HOSP_POV_EYE, [0.0, 1.34, -2.55], pushK(f, 160, 0.0014), { fov: 58 }),
           f,
-          0.014,
-          0.16,
+          0.011,
+          0.14,
           31,
         ),
     },
@@ -163,7 +163,8 @@ export const DOF: DofBeat[] = [
   { f: 0, cInf: 3.5, focus: () => [-0.14, 0.96, 0.14] },
   { f: 50, dur: 6, cInf: 4.5, focus: () => [0.02, 1.0, 1.55] },
   { f: 95, dur: 6, cInf: 2.0 },
-  { f: 160, cInf: 2.5, focus: () => [0.18, 1.45, -5.2] },
+  { f: 128, dur: 4, cInf: 1.8, focus: () => [-1.32, 1.72, -2.55] },
+  { f: 160, cInf: 1.1, focus: () => [0.04, 1.40, -2.55] },
   { f: 230, cInf: 3.0, focus: () => [-0.18, 1.45, -3.35] },
 ];
 

@@ -1208,5 +1208,666 @@ export const garmentFoldTex = (key = "garmentFoldTex", base = "#8a847c") =>
     for (let i = 0; i < 16; i++) blotch(g, U(r, 0, 512), U(r, 0, 512), U(r, 20, 64), 0.9, "24,20,26", 0.08);
   });
 
+// ---------------- Horror Engine v4: Paired 1024px Albedo + BumpMap Gritty Surface Library ----------------
+// Eliminates plastic smooth surfaces in Style B (Semi-Realistic Indie 3D) by pairing every wall, floor,
+// timber, fabric, hair, human-skin, and cadaver-skin texture with a 1:1 matched linear height BumpMap.
+
+export type TexturePair = {
+  map: THREE.Texture;
+  bumpMap: THREE.Texture;
+};
+
+const pairCache = new Map<string, TexturePair>();
+
+export const pairTex = (
+  key: string,
+  w: number,
+  h: number,
+  draw: (gCol: CanvasRenderingContext2D, gBump: CanvasRenderingContext2D, r: () => number) => void,
+): TexturePair => {
+  let p = pairCache.get(key);
+  if (!p) {
+    let map: THREE.CanvasTexture;
+    let bumpMap: THREE.CanvasTexture;
+    if (typeof document !== "undefined" && typeof document.createElement === "function") {
+      const cvCol = document.createElement("canvas");
+      cvCol.width = w;
+      cvCol.height = h;
+      const cvBump = document.createElement("canvas");
+      cvBump.width = w;
+      cvBump.height = h;
+      const gCol = cvCol.getContext("2d")!;
+      const gBump = cvBump.getContext("2d")!;
+      gBump.fillStyle = "#808080";
+      gBump.fillRect(0, 0, w, h);
+      draw(gCol, gBump, rng(key.length * 197 + key.charCodeAt(0) * 17 + 31));
+      map = new THREE.CanvasTexture(cvCol);
+      bumpMap = new THREE.CanvasTexture(cvBump);
+    } else {
+      map = new THREE.CanvasTexture(null as unknown as HTMLCanvasElement);
+      bumpMap = new THREE.CanvasTexture(null as unknown as HTMLCanvasElement);
+    }
+    map.colorSpace = THREE.SRGBColorSpace;
+    bumpMap.colorSpace = THREE.NoColorSpace;
+    for (const t of [map, bumpMap]) {
+      t.anisotropy = 8;
+      t.wrapS = t.wrapT = THREE.RepeatWrapping;
+    }
+    p = { map, bumpMap };
+    pairCache.set(key, p);
+  }
+  return p;
+};
+
+/** Clone a TexturePair with synchronized UV repeat on both map and bumpMap. */
+export const repPair = (p: TexturePair, x: number, y: number): TexturePair => ({
+  map: rep(p.map, x, y),
+  bumpMap: rep(p.bumpMap, x, y),
+});
+
+/** Helper: draw jagged organic polygon path onto a CanvasRenderingContext2D. */
+function traceJaggedBlob(g: CanvasRenderingContext2D, cx: number, cy: number, rx: number, ry: number, r: () => number, pts = 14) {
+  g.beginPath();
+  for (let i = 0; i < pts; i++) {
+    const a = (i / pts) * TAU;
+    const j = U(r, 0.65, 1.25);
+    const px = cx + Math.cos(a) * rx * j;
+    const py = cy + Math.sin(a) * ry * j;
+    if (i === 0) g.moveTo(px, py);
+    else g.lineTo(px, py);
+  }
+  g.closePath();
+}
+
+/** 1. Peeling aged Vietnamese rural lime-plaster exposing raw red brick patches, branching cracks & water-leak mold (1024px Albedo+Bump). */
+export const mottledPlasterPair = (key = "v4_mottledPlasterPair", base = "#7c7566"): TexturePair =>
+  pairTex(key, 1024, 1024, (g, gb, r) => {
+    const S = 1024;
+    g.fillStyle = base;
+    g.fillRect(0, 0, S, S);
+    gb.fillStyle = "#989898";
+    gb.fillRect(0, 0, S, S);
+
+    // Coarse hand-troweled plaster tooth + mottled mold & damp blotches
+    for (let i = 0; i < 110; i++) {
+      const x = U(r, 0, S), y = U(r, 0, S), rad = U(r, 24, 120);
+      const dark = r() < 0.72;
+      const col = dark ? (r() < 0.5 ? "36,34,26" : "28,22,26") : "164,158,138";
+      const a = dark ? U(r, 0.14, 0.36) : U(r, 0.08, 0.16);
+      blotch(g, x, y, rad, U(r, 0.7, 1.4), col, a);
+      blotch(gb, x, y, rad * 0.8, U(r, 0.7, 1.4), dark ? "118,118,118" : "186,186,186", U(r, 0.15, 0.30));
+    }
+
+    // Vertical dark ceiling leak & grime drip streaks
+    for (let i = 0; i < 42; i++) {
+      const x = U(r, 0, S), y0 = U(r, 0, 260), h = U(r, 140, 480), w = U(r, 6, 30);
+      const gr = g.createLinearGradient(x, y0, x, y0 + h);
+      gr.addColorStop(0, "rgba(18,18,16,0.46)");
+      gr.addColorStop(0.5, "rgba(26,24,20,0.22)");
+      gr.addColorStop(1, "rgba(26,24,20,0)");
+      g.fillStyle = gr;
+      g.fillRect(x, y0, w, h);
+    }
+
+    // Fine mineral grit / lime pits in both Albedo & Bump
+    for (let i = 0; i < 2400; i++) {
+      const px = r() * S, py = r() * S, sz = U(r, 1.5, 4.2);
+      const dk = r() < 0.55;
+      g.fillStyle = dk ? "rgba(18,16,14,0.24)" : "rgba(204,198,182,0.16)";
+      g.fillRect(px, py, sz, sz);
+      gb.fillStyle = dk ? "rgba(75,75,75,0.42)" : "rgba(205,205,205,0.34)";
+      gb.fillRect(px, py, sz, sz);
+    }
+
+    // 3 jagged peeled-plaster craters revealing recessed dark weathered red brick & mortar underneath!
+    const brickCols = ["#6b362b", "#592c24", "#783f32", "#4e261f"];
+    const craters: Array<[number, number, number, number]> = [
+      [260, 310, 128, 92],
+      [770, 220, 114, 84],
+      [640, 760, 136, 96],
+    ];
+    for (const [cx, cy, rx, ry] of craters) {
+      const seedPt = Array.from({ length: 14 }, (_, i) => {
+        const a = (i / 14) * TAU;
+        const j = U(r, 0.70, 1.24);
+        return [cx + Math.cos(a) * rx * j, cy + Math.sin(a) * ry * j] as const;
+      });
+      const traceC = (ctx: CanvasRenderingContext2D) => {
+        ctx.beginPath();
+        seedPt.forEach(([x, y], i) => (i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y)));
+        ctx.closePath();
+      };
+      // Outer fractured plaster lip highlight + shadow
+      g.save();
+      traceC(g);
+      g.strokeStyle = "rgba(14,10,10,0.85)";
+      g.lineWidth = 9;
+      g.stroke();
+      g.clip();
+      g.fillStyle = "#2b2524";
+      g.fillRect(cx - rx * 1.4, cy - ry * 1.4, rx * 2.8, ry * 2.8);
+
+      gb.save();
+      traceC(gb);
+      gb.strokeStyle = "#242424";
+      gb.lineWidth = 10;
+      gb.stroke();
+      gb.clip();
+      gb.fillStyle = "#2a2a2a";
+      gb.fillRect(cx - rx * 1.4, cy - ry * 1.4, rx * 2.8, ry * 2.8);
+
+      // Draw exposed individual bricks inside peeled crater
+      const bw = 54, bh = 26;
+      for (let by = Math.floor((cy - ry * 1.4) / bh) * bh; by < cy + ry * 1.4; by += bh) {
+        const off = ((Math.round(by / bh) % 2) * bw) * 0.5;
+        for (let bx = Math.floor((cx - rx * 1.4) / bw) * bw - off; bx < cx + rx * 1.4; bx += bw) {
+          g.fillStyle = jit(r, pick(r, brickCols), 0.14, 4, 0.14);
+          g.fillRect(bx + 3, by + 3, bw - 6, bh - 6);
+          gb.fillStyle = "#626262";
+          gb.fillRect(bx + 3, by + 3, bw - 6, bh - 6);
+        }
+      }
+      g.restore();
+      gb.restore();
+    }
+
+    // Deep branching plaster fracture cracks (carved sharply into BumpMap!)
+    g.lineCap = "round";
+    gb.lineCap = "round";
+    for (let c = 0; c < 18; c++) {
+      let x = U(r, 60, S - 60), y = U(r, 60, S - 60);
+      const w = U(r, 2.0, 4.4);
+      const pts: Array<[number, number]> = [[x, y]];
+      for (let s = 0; s < 7; s++) {
+        x += U(r, -54, 54);
+        y += U(r, 12, 68);
+        pts.push([x, y]);
+      }
+      for (const [ctx, col, lw] of [
+        [g, "rgba(14,10,12,0.86)", w],
+        [gb, "#121212", w * 2.1],
+      ] as const) {
+        ctx.strokeStyle = col;
+        ctx.lineWidth = lw;
+        ctx.beginPath();
+        pts.forEach(([px, py], i) => (i === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py)));
+        ctx.stroke();
+      }
+    }
+  });
+
+/** 2. Decaying hospital ceramic wall tiles with cracked/missing tiles exposing raw dark cement & grimy grout (1024px Albedo+Bump). */
+export const hospitalTilePair = (key = "v4_hospitalTilePair"): TexturePair =>
+  pairTex(key, 1024, 1024, (g, gb, r) => {
+    const S = 1024;
+    const N = 8;
+    const ts = S / N;
+    g.fillStyle = "#1c2322";
+    g.fillRect(0, 0, S, S);
+    gb.fillStyle = "#1c1c1c";
+    gb.fillRect(0, 0, S, S);
+
+    const cols = ["#798d86", "#6f827c", "#83968e", "#657872", "#758780"];
+    const missing = new Set(["1,5", "2,5", "2,6", "6,2", "5,7"]);
+
+    for (let ty = 0; ty < N; ty++) {
+      for (let tx = 0; tx < N; tx++) {
+        const x = tx * ts, y = ty * ts;
+        if (missing.has(`${tx},${ty}`)) {
+          // Missing fallen ceramic tile exposing rough pitted dark cement mortar bed
+          g.fillStyle = "#2b2f2e";
+          g.fillRect(x + 2, y + 2, ts - 4, ts - 4);
+          gb.fillStyle = "#303030";
+          gb.fillRect(x + 2, y + 2, ts - 4, ts - 4);
+          for (let k = 0; k < 55; k++) {
+            const px = x + U(r, 6, ts - 6), py = y + U(r, 6, ts - 6), sz = U(r, 3, 11);
+            g.fillStyle = r() < 0.5 ? "rgba(12,14,14,0.45)" : "rgba(76,82,78,0.32)";
+            g.fillRect(px, py, sz, sz);
+            gb.fillStyle = r() < 0.5 ? "#1c1c1c" : "#4c4c4c";
+            gb.fillRect(px, py, sz, sz);
+          }
+          continue;
+        }
+        g.fillStyle = jit(r, pick(r, cols), 0.10, 3, 0.12);
+        g.fillRect(x + 4, y + 4, ts - 8, ts - 8);
+        // Beveled ceramic tile height in BumpMap
+        gb.fillStyle = "#c8c8c8";
+        gb.fillRect(x + 5, y + 5, ts - 10, ts - 10);
+        gb.strokeStyle = "#888888";
+        gb.lineWidth = 4;
+        gb.strokeRect(x + 5, y + 5, ts - 10, ts - 10);
+
+        // Subtle glaze edge sheen & grime drip from top grout
+        g.fillStyle = "rgba(240,250,245,0.08)";
+        g.fillRect(x + 5, y + 5, ts - 10, 6);
+        if (r() < 0.45) {
+          const gr = g.createLinearGradient(0, y + 4, 0, y + ts - 4);
+          gr.addColorStop(0, "rgba(24,26,22,0.34)");
+          gr.addColorStop(0.45, "rgba(38,34,24,0.12)");
+          gr.addColorStop(1, "rgba(24,26,22,0)");
+          g.fillStyle = gr;
+          g.fillRect(x + 4, y + 4, ts - 8, ts - 8);
+        }
+
+        // Fractured crack across ~24% of tiles
+        if (r() < 0.24) {
+          const x0 = x + U(r, 8, ts - 8), y0 = y + 4;
+          const xm = x + U(r, 16, ts - 16), ym = y + ts * U(r, 0.35, 0.65);
+          const x1 = x + U(r, 8, ts - 8), y1 = y + ts - 4;
+          for (const [ctx, col, lw] of [
+            [g, "rgba(14,16,16,0.82)", 2.8],
+            [gb, "#161616", 5.2],
+          ] as const) {
+            ctx.strokeStyle = col;
+            ctx.lineWidth = lw;
+            ctx.beginPath();
+            ctx.moveTo(x0, y0);
+            ctx.lineTo(xm, ym);
+            ctx.lineTo(x1, y1);
+            ctx.stroke();
+          }
+        }
+      }
+    }
+
+    // Heavy grime, mildew & dried rust smudges across tile expanse
+    for (let i = 0; i < 48; i++) {
+      const x = U(r, 0, S), y = U(r, 0, S), rad = U(r, 26, 98);
+      const rust = r() < 0.30;
+      blotch(g, x, y, rad, U(r, 0.6, 1.5), rust ? "66,34,22" : "20,28,26", U(r, 0.14, 0.34));
+    }
+  });
+
+/** 3. Weathered Vietnamese painted concrete alley wall with flaking paint, moss base & vertical rust streaks (1024px Albedo+Bump). */
+export const paintedConcretePair = (key = "v4_paintedConcretePair", topCol = "#7d807a", dadoCol = "#3c4844"): TexturePair =>
+  pairTex(key, 1024, 1024, (g, gb, r) => {
+    const S = 1024;
+    g.fillStyle = topCol;
+    g.fillRect(0, 0, S, 580);
+    g.fillStyle = dadoCol;
+    g.fillRect(0, 580, S, S - 580);
+    g.fillStyle = "#1f2424";
+    g.fillRect(0, 574, S, 12);
+    gb.fillStyle = "#929292";
+    gb.fillRect(0, 0, S, S);
+    gb.fillStyle = "#626262";
+    gb.fillRect(0, 574, S, 12);
+
+    // Pitted concrete aggregate noise
+    for (let i = 0; i < 3200; i++) {
+      const px = r() * S, py = r() * S, sz = U(r, 1.5, 4.5);
+      const dk = r() < 0.55;
+      g.fillStyle = dk ? "rgba(16,18,18,0.22)" : "rgba(195,198,190,0.14)";
+      g.fillRect(px, py, sz, sz);
+      gb.fillStyle = dk ? "rgba(65,65,65,0.45)" : "rgba(210,210,210,0.38)";
+      gb.fillRect(px, py, sz, sz);
+    }
+
+    // Flaking paint blisters exposing dark cement underneath
+    for (let i = 0; i < 14; i++) {
+      const cx = U(r, 70, S - 70), cy = U(r, 80, S - 80), rx = U(r, 24, 72), ry = U(r, 18, 56);
+      const seedR = rng(i * 109 + 7);
+      traceJaggedBlob(g, cx, cy, rx, ry, seedR, 12);
+      g.fillStyle = "#484a48";
+      g.fill();
+      g.strokeStyle = "rgba(14,16,16,0.72)";
+      g.lineWidth = 4;
+      g.stroke();
+
+      const seedR2 = rng(i * 109 + 7);
+      traceJaggedBlob(gb, cx, cy, rx, ry, seedR2, 12);
+      gb.fillStyle = "#3a3a3a";
+      gb.fill();
+      gb.strokeStyle = "#d8d8d8";
+      gb.lineWidth = 4;
+      gb.stroke();
+    }
+
+    // Green-black tropical algae/moss creeping upward from wall bottom + rust rain streaks
+    const mossG = g.createLinearGradient(0, S, 0, S - 360);
+    mossG.addColorStop(0, "rgba(18,28,18,0.78)");
+    mossG.addColorStop(0.55, "rgba(26,38,24,0.34)");
+    mossG.addColorStop(1, "rgba(26,38,24,0)");
+    g.fillStyle = mossG;
+    g.fillRect(0, S - 360, S, 360);
+
+    for (let i = 0; i < 38; i++) {
+      const x = U(r, 0, S), y0 = U(r, 0, 320), h = U(r, 160, 520), w = U(r, 5, 22);
+      const rust = r() < 0.35;
+      const gr = g.createLinearGradient(x, y0, x, y0 + h);
+      gr.addColorStop(0, rust ? "rgba(82,40,24,0.42)" : "rgba(16,20,18,0.44)");
+      gr.addColorStop(1, "rgba(16,20,18,0)");
+      g.fillStyle = gr;
+      g.fillRect(x, y0, w, h);
+    }
+  });
+
+/** 4. Rough weathered village brick wall with deep recessed mortar joints & damp moss crevices (1024px Albedo+Bump). */
+export const brickWallPair = (key = "v4_brickWallPair"): TexturePair =>
+  pairTex(key, 1024, 1024, (g, gb, r) => {
+    const S = 1024;
+    g.fillStyle = "#2d2928";
+    g.fillRect(0, 0, S, S);
+    gb.fillStyle = "#1c1c1c";
+    gb.fillRect(0, 0, S, S);
+
+    const cols = ["#6e3e33", "#5f352c", "#7a4638", "#532e27", "#673a30"];
+    const rows = 16, colsN = 8;
+    const bh = S / rows, bw = S / colsN;
+    for (let row = 0; row < rows; row++) {
+      for (let c = 0; c < colsN; c++) {
+        const x = c * bw + (row % 2) * (bw * 0.5) + 4;
+        const y = row * bh + 4;
+        const col = jit(r, pick(r, cols), 0.16, 4, 0.14);
+        const bhVal = Math.round(U(r, 165, 232));
+        for (const ox of [0, -S]) {
+          g.fillStyle = col;
+          g.fillRect(x + ox, y, bw - 8, bh - 8);
+          g.fillStyle = "rgba(255,225,200,0.07)";
+          g.fillRect(x + ox, y, bw - 8, 5);
+          gb.fillStyle = `rgb(${bhVal},${bhVal},${bhVal})`;
+          gb.fillRect(x + ox + 1, y + 1, bw - 10, bh - 10);
+          // Rough clay pitting inside each brick
+          for (let k = 0; k < 6; k++) {
+            const px = x + ox + U(r, 4, bw - 14), py = y + U(r, 4, bh - 14);
+            g.fillStyle = "rgba(18,12,12,0.28)";
+            g.fillRect(px, py, U(r, 4, 14), U(r, 3, 8));
+            gb.fillStyle = "#7a7a7a";
+            gb.fillRect(px, py, U(r, 4, 14), U(r, 3, 8));
+          }
+        }
+      }
+    }
+    for (let i = 0; i < 36; i++) {
+      blotch(g, U(r, 0, S), U(r, 0, S), U(r, 32, 110), U(r, 0.7, 1.4), r() < 0.55 ? "18,24,18" : "16,14,18", U(r, 0.16, 0.36));
+    }
+  });
+
+/** 5. Coarse pebbled wet night asphalt with jagged tarmac cracks & damp tracks (1024px Albedo+Bump). */
+export const wetAsphaltPair = (key = "v4_wetAsphaltPair"): TexturePair =>
+  pairTex(key, 1024, 1024, (g, gb, r) => {
+    const S = 1024;
+    g.fillStyle = "#252830";
+    g.fillRect(0, 0, S, S);
+    gb.fillStyle = "#808080";
+    gb.fillRect(0, 0, S, S);
+
+    for (let i = 0; i < 65; i++) {
+      const dark = r() < 0.65;
+      blotch(g, U(r, 0, S), U(r, 0, S), U(r, 30, 125), U(r, 0.7, 1.8), dark ? "14,16,22" : "66,74,88", U(r, 0.14, 0.30));
+    }
+    // Coarse gravel aggregate relief in both Albedo & Bump
+    for (let i = 0; i < 5500; i++) {
+      const x = r() * S, y = r() * S, sz = U(r, 1.5, 4.0);
+      const hi = r() < 0.45;
+      g.fillStyle = hi ? "rgba(110,118,132,0.22)" : "rgba(10,12,18,0.44)";
+      g.fillRect(x, y, sz, sz);
+      gb.fillStyle = hi ? "rgba(218,218,218,0.52)" : "rgba(38,38,38,0.54)";
+      gb.fillRect(x, y, sz, sz);
+    }
+    // Deep jagged tarmac cracks
+    g.lineCap = "round";
+    gb.lineCap = "round";
+    for (let c = 0; c < 12; c++) {
+      let x = U(r, 40, S - 40), y = U(r, 40, S - 40);
+      const pts: Array<[number, number]> = [[x, y]];
+      for (let s = 0; s < 8; s++) {
+        x += U(r, -48, 48);
+        y += U(r, 25, 85);
+        pts.push([x, y]);
+      }
+      for (const [ctx, col, lw] of [
+        [g, "rgba(8,9,14,0.88)", U(r, 2.2, 4.4)],
+        [gb, "#0e0e0e", 7.0],
+      ] as const) {
+        ctx.strokeStyle = col;
+        ctx.lineWidth = lw;
+        ctx.beginPath();
+        pts.forEach(([px, py], i) => (i === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py)));
+        ctx.stroke();
+      }
+    }
+  });
+
+/** 6. Deep-grained aged dark timber boards with plank seams, knots & splinters (1024px Albedo+Bump). */
+export const darkTimberPair = (key = "v4_darkTimberPair", cols = ["#443129", "#3a2923", "#4e382f", "#32231e"]): TexturePair =>
+  pairTex(key, 1024, 1024, (g, gb, r) => {
+    const S = 1024;
+    const bw = 128;
+    for (let i = 0; i < 8; i++) {
+      const x = i * bw;
+      g.fillStyle = jit(r, pick(r, cols), 0.12, 3, 0.12);
+      g.fillRect(x, 0, bw, S);
+      gb.fillStyle = `rgb(${Math.round(U(r, 138, 178))},${Math.round(U(r, 138, 178))},${Math.round(U(r, 138, 178))})`;
+      gb.fillRect(x, 0, bw, S);
+      // Heavy wood grain grooves
+      for (let k = 0; k < 22; k++) {
+        const gx = x + U(r, 8, bw - 8);
+        const c1 = gx + U(r, -10, 10), c2 = gx + U(r, -10, 10);
+        g.strokeStyle = k % 3 === 0 ? "rgba(12,8,10,0.44)" : "rgba(92,68,54,0.22)";
+        g.lineWidth = U(r, 1.8, 4.2);
+        g.beginPath(); g.moveTo(gx, 0); g.bezierCurveTo(c1, 340, c2, 680, gx, S); g.stroke();
+        gb.strokeStyle = k % 3 === 0 ? "rgba(52,52,52,0.65)" : "rgba(205,205,205,0.45)";
+        gb.lineWidth = U(r, 2.0, 4.5);
+        gb.beginPath(); gb.moveTo(gx, 0); gb.bezierCurveTo(c1, 340, c2, 680, gx, S); gb.stroke();
+      }
+      // Deep plank separation groove
+      g.fillStyle = "#110c0f";
+      g.fillRect(x, 0, 6, S);
+      gb.fillStyle = "#101010";
+      gb.fillRect(x, 0, 8, S);
+    }
+  });
+
+/** 7. Rugged coarse-woven garment fabric (fine micro-weave thread grain + soft cloth folds + wear, ZERO loud plaid grid!) (512px Albedo+Bump). */
+export const wovenFabricPair = (key = "v4_wovenFabricPair", baseHex = "#3d4248"): TexturePair =>
+  pairTex(`${key}_${baseHex}`, 512, 512, (g, gb, r) => {
+    const S = 512;
+    g.fillStyle = baseHex;
+    g.fillRect(0, 0, S, S);
+    gb.fillStyle = "#808080";
+    gb.fillRect(0, 0, S, S);
+
+    // Fine realistic cotton/canvas micro-weave (low contrast in albedo, tactile tooth in bumpMap!)
+    for (let y = 0; y < S; y += 3) {
+      g.fillStyle = y % 6 === 0 ? "rgba(0,0,0,0.055)" : "rgba(255,255,255,0.025)";
+      g.fillRect(0, y, S, 1.5);
+      gb.fillStyle = y % 6 === 0 ? "#666666" : "#9c9c9c";
+      gb.fillRect(0, y, S, 1.5);
+    }
+    for (let x = 0; x < S; x += 3) {
+      g.fillStyle = x % 6 === 0 ? "rgba(0,0,0,0.045)" : "rgba(255,255,255,0.02)";
+      g.fillRect(x, 0, 1.5, S);
+      gb.fillStyle = x % 6 === 0 ? "rgba(96,96,96,0.45)" : "rgba(164,164,164,0.45)";
+      gb.fillRect(x, 0, 1.5, S);
+    }
+    // Natural draped cloth folds & weathered wear mottling
+    for (let i = 0; i < 10; i++) {
+      const x = i * 52 + U(r, -14, 14);
+      const gr = g.createLinearGradient(x - 28, 0, x + 28, 0);
+      gr.addColorStop(0, "rgba(0,0,0,0)");
+      gr.addColorStop(0.5, "rgba(8,6,10,0.24)");
+      gr.addColorStop(1, "rgba(0,0,0,0)");
+      g.fillStyle = gr;
+      g.fillRect(x - 28, 0, 56, S);
+      const gbr = gb.createLinearGradient(x - 24, 0, x + 24, 0);
+      gbr.addColorStop(0, "rgba(128,128,128,0)");
+      gbr.addColorStop(0.5, "rgba(68,68,68,0.42)");
+      gbr.addColorStop(1, "rgba(128,128,128,0)");
+      gb.fillStyle = gbr;
+      gb.fillRect(x - 24, 0, 48, S);
+    }
+    for (let i = 0; i < 32; i++) {
+      blotch(g, U(r, 0, S), U(r, 0, S), U(r, 18, 72), U(r, 0.7, 1.5), "16,14,16", U(r, 0.08, 0.20));
+    }
+  });
+
+/** 8. Fibrous directional hair strands texture with specular strand-ridge BumpMap (512px Albedo+Bump). */
+export const hairStrandPair = (key = "v4_hairStrandPair", baseHex = "#1a171c"): TexturePair =>
+  pairTex(`${key}_${baseHex}`, 512, 512, (g, gb, r) => {
+    const S = 512;
+    g.fillStyle = baseHex;
+    g.fillRect(0, 0, S, S);
+    gb.fillStyle = "#686868";
+    gb.fillRect(0, 0, S, S);
+    for (let i = 0; i < 420; i++) {
+      const x = r() * S;
+      const hi = r() < 0.35;
+      const w = U(r, 1.2, 3.2);
+      const dx = U(r, -14, 14);
+      g.strokeStyle = hi ? "rgba(145,126,112,0.22)" : "rgba(6,5,9,0.55)";
+      g.lineWidth = w;
+      g.beginPath(); g.moveTo(x, 0); g.quadraticCurveTo(x + dx, S * 0.5, x + U(r, -8, 8), S); g.stroke();
+      gb.strokeStyle = hi ? "#dcdcdc" : "#262626";
+      gb.lineWidth = w * 1.4;
+      gb.beginPath(); gb.moveTo(x, 0); gb.quadraticCurveTo(x + dx, S * 0.5, x + U(r, -8, 8), S); gb.stroke();
+    }
+  });
+
+/** 9. Weathered realistic human skin with subtle pore tooth & mottled undertones (512px Albedo+Bump). */
+export const humanSkinPair = (key = "v4_humanSkinPair", baseHex = "#bfa288"): TexturePair =>
+  pairTex(`${key}_${baseHex}`, 512, 512, (g, gb, r) => {
+    const S = 512;
+    g.fillStyle = baseHex;
+    g.fillRect(0, 0, S, S);
+    gb.fillStyle = "#808080";
+    gb.fillRect(0, 0, S, S);
+    for (let i = 0; i < 48; i++) {
+      blotch(g, U(r, 0, S), U(r, 0, S), U(r, 20, 72), U(r, 0.7, 1.4), r() < 0.55 ? "118,68,58" : "76,62,68", U(r, 0.04, 0.11));
+    }
+    for (let i = 0; i < 2400; i++) {
+      const px = r() * S, py = r() * S, sz = U(r, 1.2, 2.8);
+      const dk = r() < 0.5;
+      g.fillStyle = dk ? "rgba(54,32,26,0.10)" : "rgba(235,212,190,0.07)";
+      g.fillRect(px, py, sz, sz);
+      gb.fillStyle = dk ? "rgba(96,96,96,0.45)" : "rgba(164,164,164,0.45)";
+      gb.fillRect(px, py, sz, sz);
+    }
+  });
+
+/** 10. Visceral decaying cadaver skin: livor-mortis mottling, branching subcutaneous purple-black veins, dry cracks & optional dried blood (1024px Albedo+Bump). */
+export const cadaverSkinPair = (key = "v4_cadaverSkinPair", baseHex = "#9e9ea6", bloodLevel = 0.45): TexturePair =>
+  pairTex(`${key}_${baseHex}_${Math.round(bloodLevel * 10)}`, 1024, 1024, (g, gb, r) => {
+    const S = 1024;
+    g.fillStyle = baseHex;
+    g.fillRect(0, 0, S, S);
+    gb.fillStyle = "#7e7e7e";
+    gb.fillRect(0, 0, S, S);
+
+    // Pallid corpse mottling + bruised violet-grey livor mortis blotches
+    for (let i = 0; i < 95; i++) {
+      const x = U(r, 0, S), y = U(r, 0, S), rad = U(r, 28, 124);
+      const col = r() < 0.45 ? "46,34,54" : r() < 0.75 ? "62,68,64" : "188,186,192";
+      blotch(g, x, y, rad, U(r, 0.7, 1.5), col, U(r, 0.12, 0.30));
+      blotch(gb, x, y, rad * 0.7, U(r, 0.7, 1.5), r() < 0.5 ? "106,106,106" : "152,152,152", 0.24);
+    }
+
+    // Dry taut parchment skin pitting & fine necrosis creases
+    for (let i = 0; i < 3600; i++) {
+      const px = r() * S, py = r() * S, sz = U(r, 1.5, 4.0);
+      const dk = r() < 0.58;
+      g.fillStyle = dk ? "rgba(24,18,30,0.22)" : "rgba(218,218,224,0.12)";
+      g.fillRect(px, py, sz, sz);
+      gb.fillStyle = dk ? "rgba(58,58,58,0.48)" : "rgba(196,196,196,0.42)";
+      gb.fillRect(px, py, sz, sz);
+    }
+
+    // Branching bulging subcutaneous dark purple-black veins (raised in BumpMap!)
+    g.lineCap = "round";
+    gb.lineCap = "round";
+    for (let v = 0; v < 46; v++) {
+      let x = U(r, 40, S - 40), y = U(r, 40, S - 40);
+      let ang = U(r, 0, TAU);
+      const w0 = U(r, 2.2, 5.2);
+      for (let seg = 0; seg < 6; seg++) {
+        const len = U(r, 24, 62);
+        const nx = x + Math.cos(ang) * len;
+        const ny = y + Math.sin(ang) * len;
+        const lw = w0 * (1 - seg * 0.12);
+        g.strokeStyle = `rgba(38, 18, 42, ${(0.58 - seg * 0.06).toFixed(2)})`;
+        g.lineWidth = lw;
+        g.beginPath(); g.moveTo(x, y); g.lineTo(nx, ny); g.stroke();
+        // Raised bulging vein ridge in bumpMap
+        gb.strokeStyle = `rgba(232, 232, 232, ${(0.72 - seg * 0.08).toFixed(2)})`;
+        gb.lineWidth = lw * 1.45;
+        gb.beginPath(); gb.moveTo(x, y); gb.lineTo(nx, ny); gb.stroke();
+        // Forking capillary twig
+        if (seg >= 1 && r() < 0.55) {
+          const fAng = ang + (r() < 0.5 ? -1 : 1) * U(r, 0.4, 0.95);
+          const fx = nx + Math.cos(fAng) * len * 0.6;
+          const fy = ny + Math.sin(fAng) * len * 0.6;
+          g.lineWidth = Math.max(1.0, lw * 0.5);
+          g.beginPath(); g.moveTo(nx, ny); g.lineTo(fx, fy); g.stroke();
+          gb.lineWidth = Math.max(1.5, lw * 0.8);
+          gb.beginPath(); gb.moveTo(nx, ny); gb.lineTo(fx, fy); gb.stroke();
+        }
+        x = nx;
+        y = ny;
+        ang += U(r, -0.55, 0.55);
+      }
+    }
+
+    // Dried dark crimson-brown blood seepage & necrosis stains scaled by bloodLevel
+    if (bloodLevel > 0.02) {
+      const nStains = Math.round(16 + bloodLevel * 38);
+      for (let i = 0; i < nStains; i++) {
+        const x = U(r, 0, S), y = U(r, 0, S);
+        blotch(g, x, y, U(r, 14, 64) * (0.6 + bloodLevel * 0.7), U(r, 0.5, 1.8), "68,12,14", U(r, 0.22, 0.54) * bloodLevel);
+        // Vertical dark drip trail
+        if (r() < 0.5) {
+          const h = U(r, 35, 145) * bloodLevel;
+          g.fillStyle = `rgba(54,8,10,${(0.48 * bloodLevel).toFixed(2)})`;
+          g.fillRect(x - 2, y, U(r, 2.5, 6.5), h);
+        }
+      }
+    }
+  });
+
+/** 11. Filthy shredded hospital gown / burial shroud cloth with grime & dried blood stains (1024px Albedo+Bump). */
+export const tatteredGownPair = (key = "v4_tatteredGownPair", baseHex = "#8c8b84", bloodLevel = 0.55): TexturePair =>
+  pairTex(`${key}_${baseHex}_${Math.round(bloodLevel * 10)}`, 1024, 1024, (g, gb, r) => {
+    const S = 1024;
+    g.fillStyle = baseHex;
+    g.fillRect(0, 0, S, S);
+    gb.fillStyle = "#808080";
+    gb.fillRect(0, 0, S, S);
+
+    // Coarse dirty linen weave
+    for (let y = 0; y < S; y += 8) {
+      g.fillStyle = y % 16 === 0 ? "rgba(0,0,0,0.14)" : "rgba(255,255,255,0.06)";
+      g.fillRect(0, y, S, 3);
+      gb.fillStyle = y % 16 === 0 ? "#5a5a5a" : "#aeaeae";
+      gb.fillRect(0, y, S, 4);
+    }
+    for (let x = 0; x < S; x += 8) {
+      gb.fillStyle = x % 16 === 0 ? "rgba(66,66,66,0.5)" : "rgba(198,198,198,0.5)";
+      gb.fillRect(x, 0, 4, S);
+    }
+    // Deep vertical hanging cloth fold shadows
+    for (let i = 0; i < 12; i++) {
+      const x = i * 86 + U(r, -20, 20);
+      const gr = g.createLinearGradient(x - 36, 0, x + 36, 0);
+      gr.addColorStop(0, "rgba(0,0,0,0)");
+      gr.addColorStop(0.5, "rgba(14,12,14,0.34)");
+      gr.addColorStop(1, "rgba(0,0,0,0)");
+      g.fillStyle = gr;
+      g.fillRect(x - 36, 0, 72, S);
+    }
+    // Sweat/mud/mold filth gradients toward lower hem & chest
+    for (let i = 0; i < 60; i++) {
+      blotch(g, U(r, 0, S), U(r, 0, S), U(r, 34, 130), U(r, 0.7, 1.7), "28,24,20", U(r, 0.14, 0.36));
+    }
+    // Seeping dried dark crimson blood blotches & splatter
+    if (bloodLevel > 0.02) {
+      const count = Math.round(14 + bloodLevel * 34);
+      for (let i = 0; i < count; i++) {
+        const bx = U(r, 80, S - 80), by = U(r, 120, S - 80);
+        blotch(g, bx, by, U(r, 20, 96) * (0.5 + bloodLevel * 0.8), U(r, 0.6, 1.8), "68,10,12", U(r, 0.28, 0.62) * bloodLevel);
+        blotch(g, bx + U(r, -16, 16), by + U(r, -16, 16), U(r, 10, 42), 1.0, "34,5,7", U(r, 0.34, 0.68) * bloodLevel);
+      }
+    }
+  });
+
+
 
 

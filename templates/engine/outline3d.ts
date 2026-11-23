@@ -5,19 +5,38 @@
 import * as THREE from "three";
 import { NOINK } from "./ink";
 
+export type OutlineMode = "off" | "grittyThin" | "cleanBold";
+
 export type OutlineOpts = {
+  mode?: OutlineMode;
   color?: string;
-  pxWidth?: number; // target outline thickness in px at 1080 short-edge resolution (default 6.0)
+  pxWidth?: number; // target outline thickness in px at 1080 short-edge resolution (default 6.0 for cleanBold, 3.0 for grittyThin)
   minWorld?: number; // minimum extrusion in metres (prevents vanishing on thin close-up fingers)
   maxWorld?: number; // maximum extrusion in metres (prevents ballooning far away)
 };
 
 const DEF_OPTS: Required<OutlineOpts> = {
+  mode: "cleanBold",
   color: "#06060a",
   pxWidth: 6.0,
   minWorld: 0.0014,
   maxWorld: 0.032,
 };
+
+function resolveOutlineOpts(opts: OutlineOpts): Required<OutlineOpts> {
+  const mode: OutlineMode = opts.mode ?? (opts.pxWidth === 0 ? "off" : "cleanBold");
+  if (mode === "grittyThin") {
+    return {
+      ...DEF_OPTS,
+      pxWidth: 3.0,
+      minWorld: 0.0009,
+      maxWorld: 0.016,
+      ...opts,
+      mode,
+    };
+  }
+  return { ...DEF_OPTS, ...opts, mode };
+}
 
 /**
  * Compute angle-weighted smooth normals (Thürmer & Wüthrich) across coincident vertex positions (1e-4 quantization)
@@ -167,17 +186,7 @@ function maxWorldForGeometry(geo: THREE.BufferGeometry, baseMax: number, overrid
  * use `attachOutlineRig` so each outline mesh is parented directly to its own moving bone mesh.
  */
 export function attachOutline(target: THREE.Object3D, opts: OutlineOpts = {}): THREE.Group {
-  const o = { ...DEF_OPTS, ...opts };
-  const matCache = new Map<string, THREE.ShaderMaterial>();
-  const getMat = (maxW: number, pxW: number) => {
-    const key = `${pxW.toFixed(2)}:${maxW.toFixed(4)}`;
-    let m = matCache.get(key);
-    if (!m) {
-      m = createOutlineMaterial({ ...o, pxWidth: pxW, maxWorld: maxW, minWorld: Math.min(o.minWorld, maxW) });
-      matCache.set(key, m);
-    }
-    return m;
-  };
+  const o = resolveOutlineOpts(opts);
   const outlines = new THREE.Group();
   outlines.name = "InvertedHullOutlines";
   outlines.layers.set(NOINK);
@@ -190,6 +199,21 @@ export function attachOutline(target: THREE.Object3D, opts: OutlineOpts = {}): T
     if (m.userData.noOutline || m.userData.isOutline) return;
     meshes.push(m);
   });
+
+  if (o.mode === "off" || o.pxWidth <= 0) {
+    return outlines;
+  }
+
+  const matCache = new Map<string, THREE.ShaderMaterial>();
+  const getMat = (maxW: number, pxW: number) => {
+    const key = `${pxW.toFixed(2)}:${maxW.toFixed(4)}`;
+    let m = matCache.get(key);
+    if (!m) {
+      m = createOutlineMaterial({ ...o, pxWidth: pxW, maxWorld: maxW, minWorld: Math.min(o.minWorld, maxW) });
+      matCache.set(key, m);
+    }
+    return m;
+  };
 
   target.updateMatrixWorld(true);
   const invTarget = new THREE.Matrix4().copy(target.matrixWorld).invert();
@@ -217,9 +241,24 @@ export function attachOutline(target: THREE.Object3D, opts: OutlineOpts = {}): T
  * Attach smooth-normal Inverted-Hull outlines directly as children of every animated bone Mesh in `root`.
  * Moves automatically with every hierarchical bone rotation without needing manual matrix sync.
  * Automatically scales maxWorld down on thin sub-parts (e.g. fingers, ankles) to prevent distant paddle blowout.
+ * When `opts.mode === "off"` (Horror Engine v4 Style B semi-realistic default), meshes are still isolated onto
+ * `NOINK` cleanly without generating cartoon BackSide outline shells.
  */
 export function attachOutlineRig(root: THREE.Object3D, opts: OutlineOpts = {}): THREE.Mesh[] {
-  const o = { ...DEF_OPTS, ...opts };
+  const o = resolveOutlineOpts(opts);
+  const meshes: THREE.Mesh[] = [];
+  root.traverse((obj) => {
+    const m = obj as THREE.Mesh;
+    if (!m.isMesh) return;
+    m.layers.set(NOINK);
+    if (m.userData.noOutline || m.userData.isOutline) return;
+    meshes.push(m);
+  });
+
+  if (o.mode === "off" || o.pxWidth <= 0) {
+    return [];
+  }
+
   const matCache = new Map<string, THREE.ShaderMaterial>();
   const getMat = (maxW: number, pxW: number) => {
     const key = `${pxW.toFixed(2)}:${maxW.toFixed(4)}`;
@@ -230,14 +269,6 @@ export function attachOutlineRig(root: THREE.Object3D, opts: OutlineOpts = {}): 
     }
     return m;
   };
-  const meshes: THREE.Mesh[] = [];
-  root.traverse((obj) => {
-    const m = obj as THREE.Mesh;
-    if (!m.isMesh) return;
-    m.layers.set(NOINK);
-    if (m.userData.noOutline || m.userData.isOutline) return;
-    meshes.push(m);
-  });
 
   const created: THREE.Mesh[] = [];
   for (const m of meshes) {

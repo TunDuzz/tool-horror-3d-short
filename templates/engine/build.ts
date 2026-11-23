@@ -6,25 +6,25 @@ import { flickerAt, type V3 } from "./camera";
 import { rng } from "./paint";
 import { stylizedShade } from "./shade";
 import { NOINK } from "./ink";
-import { attachOutlineRig } from "./outline3d";
+import { attachOutlineRig, type OutlineMode } from "./outline3d";
 
 export type Kit = Record<string, THREE.Object3D>;
 export const V = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
 
 // ---------------- materials (shared, cached) ----------------
 const mats = new Map<string, THREE.Material>();
-export const lam = (key: string, make: () => THREE.MeshLambertMaterialParameters, liftK = 1): THREE.MeshLambertMaterial => {
+export const lam = (key: string, make: () => THREE.MeshLambertMaterialParameters, liftK = 1, grimeK = 1): THREE.MeshLambertMaterial => {
   let m = mats.get(key) as THREE.MeshLambertMaterial | undefined;
   if (!m) {
-    m = stylizedShade(new THREE.MeshLambertMaterial(make()), liftK);
+    m = stylizedShade(new THREE.MeshLambertMaterial(make()), liftK, grimeK);
     mats.set(key, m);
   }
   return m;
 };
-export const phong = (key: string, make: () => THREE.MeshPhongMaterialParameters, liftK = 1): THREE.MeshPhongMaterial => {
+export const phong = (key: string, make: () => THREE.MeshPhongMaterialParameters, liftK = 1, grimeK = 1): THREE.MeshPhongMaterial => {
   let m = mats.get(key) as THREE.MeshPhongMaterial | undefined;
   if (!m) {
-    m = stylizedShade(new THREE.MeshPhongMaterial(make()), liftK);
+    m = stylizedShade(new THREE.MeshPhongMaterial(make()), liftK, grimeK);
     mats.set(key, m);
   }
   return m;
@@ -1047,15 +1047,16 @@ export function addGlassOilLamp3D(
   parent: THREE.Object3D,
   pos: V3,
   scale = 1.0,
+  outlineMode: OutlineMode = "off",
 ): { group: THREE.Group; flameMat: THREE.MeshBasicMaterial; setLit: (lit: boolean, frame: number) => void } {
   const group = new THREE.Group();
   group.name = "GlassOilLamp3D";
   group.position.set(...pos);
   group.scale.setScalar(scale);
 
-  const footMat = lam("v3_oillamp_foot", () => ({ color: "#4e5662" }));
-  const bulbMat = phong("v3_oillamp_bulb", () => ({ color: "#c9985a", specular: "#ffe2aa", shininess: 42 }));
-  const collarMat = phong("v3_oillamp_collar", () => ({ color: "#8a6d3f", specular: "#e0c482", shininess: 48 }));
+  const footMat = lam("v3_oillamp_foot", () => ({ color: "#4e5662" }), 1, 0.3);
+  const bulbMat = phong("v3_oillamp_bulb", () => ({ color: "#c9985a", specular: "#ffe2aa", shininess: 48 }), 1, 0.2);
+  const collarMat = phong("v3_oillamp_collar", () => ({ color: "#8a6d3f", specular: "#e0c482", shininess: 54 }), 1, 0.2);
   const glassMat = new THREE.MeshBasicMaterial({
     color: "#f2ece2",
     transparent: true,
@@ -1076,6 +1077,7 @@ export function addGlassOilLamp3D(
   const flame = new THREE.Mesh(new THREE.ConeGeometry(0.016, 0.062, 8), flameMat);
   flame.position.y = 0.198;
   flame.userData.noOutline = true;
+  flame.userData.noSSAO = true;
 
   const chimneyPts = [
     new THREE.Vector2(0.032, 0.165),
@@ -1086,9 +1088,10 @@ export function addGlassOilLamp3D(
   ];
   const chimney = new THREE.Mesh(new THREE.LatheGeometry(chimneyPts, 16), glassMat);
   chimney.userData.noOutline = true;
+  chimney.userData.noSSAO = true;
 
   group.add(foot, bulb, collar, flame, chimney);
-  attachOutlineRig(group, { pxWidth: 4.8, minWorld: 0.001, maxWorld: 0.012, color: "#06060a" });
+  attachOutlineRig(group, { mode: outlineMode, pxWidth: 4.8, minWorld: 0.001, maxWorld: 0.012, color: "#06060a" });
   parent.add(group);
 
   const setLit = (lit: boolean, frame: number) => {
@@ -1107,14 +1110,15 @@ export function addIncenseBurner3D(
   parent: THREE.Object3D,
   pos: V3,
   scale = 1.0,
+  outlineMode: OutlineMode = "off",
 ): { group: THREE.Group; tipMat: THREE.MeshBasicMaterial } {
   const group = new THREE.Group();
   group.name = "IncenseBurner3D";
   group.position.set(...pos);
   group.scale.setScalar(scale);
 
-  const bowlMat = phong("v3_incense_bowl", () => ({ color: "#c2b698", specular: "#ece4cf", shininess: 28 }));
-  const stickMat = lam("v3_incense_stick", () => ({ color: "#3d2c24" }));
+  const bowlMat = phong("v3_incense_bowl", () => ({ color: "#c2b698", specular: "#ece4cf", shininess: 28 }), 1, 0.4);
+  const stickMat = lam("v3_incense_stick", () => ({ color: "#3d2c24" }), 1, 0.3);
   const tipMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(2.6, 0.75, 0.28), toneMapped: false });
 
   const bowl = new THREE.Mesh(new THREE.CylinderGeometry(0.078, 0.056, 0.095, 16), bowlMat);
@@ -1128,9 +1132,10 @@ export function addIncenseBurner3D(
     const tip = new THREE.Mesh(new THREE.SphereGeometry(0.0065, 6, 6), tipMat);
     tip.position.set(sx - Math.sin(rz) * 0.12, 0.30, sz);
     tip.userData.noOutline = true;
+    tip.userData.noSSAO = true;
     group.add(st, tip);
   }
-  attachOutlineRig(group, { pxWidth: 4.2, minWorld: 0.001, maxWorld: 0.010, color: "#06060a" });
+  attachOutlineRig(group, { mode: outlineMode, pxWidth: 4.2, minWorld: 0.001, maxWorld: 0.010, color: "#06060a" });
   parent.add(group);
   return { group, tipMat };
 }
@@ -1394,15 +1399,20 @@ export function addWallSwitch3D(parent: THREE.Object3D, pos: V3, yaw = 0): THREE
 }
 
 /** Traditional footed ceramic offering plate with sculpted fruit + 3 tiny tea cups (for ancestral altars). */
-export function addAltarOfferingPlate3D(parent: THREE.Object3D, pos: V3, scale = 1.0): THREE.Group {
+export function addAltarOfferingPlate3D(
+  parent: THREE.Object3D,
+  pos: V3,
+  scale = 1.0,
+  outlineMode: OutlineMode = "off",
+): THREE.Group {
   const g = new THREE.Group();
   g.name = "AltarOfferingPlate3D";
   g.position.set(...pos);
   g.scale.setScalar(scale);
 
-  const ceramicMat = phong("v3_altar_ceramic", () => ({ color: "#bfb7a6", specular: "#efe9d8", shininess: 36 }));
-  const fruitAMat = phong("v3_altar_fruit_a", () => ({ color: "#768446", specular: "#bcc884", shininess: 24 }));
-  const fruitBMat = phong("v3_altar_fruit_b", () => ({ color: "#b67432", specular: "#f2ba74", shininess: 28 }));
+  const ceramicMat = phong("v3_altar_ceramic", () => ({ color: "#bfb7a6", specular: "#efe9d8", shininess: 36 }), 1, 0.3);
+  const fruitAMat = phong("v3_altar_fruit_a", () => ({ color: "#768446", specular: "#bcc884", shininess: 24 }), 1, 0.2);
+  const fruitBMat = phong("v3_altar_fruit_b", () => ({ color: "#b67432", specular: "#f2ba74", shininess: 28 }), 1, 0.2);
 
   const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.032, 0.056, 0.062, 12), ceramicMat);
   stem.position.y = 0.031;
@@ -1426,8 +1436,394 @@ export function addAltarOfferingPlate3D(parent: THREE.Object3D, pos: V3, scale =
     cup.position.set(cx, 0.014, 0.145);
     g.add(cup);
   }
-  attachOutlineRig(g, { pxWidth: 4.0, minWorld: 0.001, maxWorld: 0.008, color: "#06060a" });
+  attachOutlineRig(g, { mode: outlineMode, pxWidth: 4.0, minWorld: 0.001, maxWorld: 0.008, color: "#06060a" });
   parent.add(g);
   return g;
 }
+
+// ---------------- Horror Engine v4: Environmental Decay & Clutter Kit (100% Neutral) ----------------
+
+/** Weathered wooden shuttered window with ajar leaves, broken/missing slats, and cold moonlight glow pane behind. */
+export function addBrokenShutterWindow3D(
+  parent: THREE.Object3D,
+  pos: V3,
+  yaw = 0,
+  opts: { width?: number; height?: number; moonGlow?: boolean; frameMat?: THREE.Material } = {},
+): THREE.Group {
+  const w = opts.width ?? 1.12;
+  const h = opts.height ?? 1.24;
+  const g = new THREE.Group();
+  g.name = "BrokenShutterWindow3D";
+  g.position.set(...pos);
+  g.rotation.y = yaw;
+
+  const woodMat = opts.frameMat ?? lam("v4_shutter_wood", () => ({ color: "#342620" }));
+  const slatMat = lam("v4_shutter_slat", () => ({ color: "#4a3c35" }));
+  const b = new Batch();
+  const ft = 0.075;
+  const fd = 0.12;
+  // Outer recessed timber frame & sill
+  b.add(boxGeo(V(-w * 0.5 - ft, -h * 0.5, -fd * 0.5), V(-w * 0.5, h * 0.5 + ft, fd * 0.5), 1), woodMat);
+  b.add(boxGeo(V(w * 0.5, -h * 0.5, -fd * 0.5), V(w * 0.5 + ft, h * 0.5 + ft, fd * 0.5), 1), woodMat);
+  b.add(boxGeo(V(-w * 0.5 - ft, h * 0.5, -fd * 0.5), V(w * 0.5 + ft, h * 0.5 + ft, fd * 0.5), 1), woodMat);
+  b.add(boxGeo(V(-w * 0.5 - ft - 0.04, -h * 0.5 - ft, -fd * 0.5 - 0.02), V(w * 0.5 + ft + 0.04, -h * 0.5, fd * 0.5 + 0.05), 1), woodMat);
+  // Central vertical mullion & cross bar
+  b.add(boxGeo(V(-0.025, -h * 0.5, -0.02), V(0.025, h * 0.5, 0.02), 1), woodMat);
+  b.build(g, true);
+
+  // Two ajar wooden slatted shutter leaves with broken / missing slats!
+  const leafW = w * 0.48;
+  const buildLeaf = (side: -1 | 1, openRad: number, brokenIndices: number[]) => {
+    const piv = new THREE.Group();
+    piv.position.set(side * w * 0.5, 0, 0.02);
+    piv.rotation.y = openRad;
+    const lb = new Batch();
+    const x0 = side < 0 ? 0 : -leafW;
+    const x1 = side < 0 ? leafW : 0;
+    // Stile & rail border
+    lb.add(boxGeo(V(x0, -h * 0.48, -0.016), V(x0 + 0.05, h * 0.48, 0.016), 1), woodMat);
+    lb.add(boxGeo(V(x1 - 0.05, -h * 0.48, -0.016), V(x1, h * 0.48, 0.016), 1), woodMat);
+    lb.add(boxGeo(V(x0, h * 0.43, -0.016), V(x1, h * 0.48, 0.016), 1), woodMat);
+    lb.add(boxGeo(V(x0, -h * 0.48, -0.016), V(x1, -h * 0.43, 0.016), 1), woodMat);
+    // Louvered slats (skipping broken slots & tilting splintered slat)
+    const slats = 10;
+    for (let i = 0; i < slats; i++) {
+      if (brokenIndices.includes(i)) continue;
+      const sy = -h * 0.39 + (i / (slats - 1)) * (h * 0.78);
+      const tilt = i === brokenIndices[0] + 1 ? 0.14 * side : 0;
+      const m = new THREE.Matrix4().compose(
+        V((x0 + x1) * 0.5, sy, 0),
+        new THREE.Quaternion().setFromEuler(new THREE.Euler(0.32, 0, tilt)),
+        V(leafW - 0.09, 0.048, 0.014),
+      );
+      lb.add(new THREE.BoxGeometry(1, 1, 1), slatMat, m);
+    }
+    lb.build(piv, true);
+    g.add(piv);
+  };
+  buildLeaf(-1, 0.32, [2, 3]);
+  buildLeaf(1, -0.62, [6]);
+
+  // Cold night sky / moonlight backing glow panel behind frame
+  if (opts.moonGlow !== false) {
+    const skyMat = new THREE.MeshBasicMaterial({
+      color: new THREE.Color(0.55, 0.72, 1.05),
+      toneMapped: false,
+    });
+    const pane = new THREE.Mesh(new THREE.PlaneGeometry(w, h), skyMat);
+    pane.position.set(0, 0, -0.045);
+    pane.layers.set(NOINK);
+    pane.userData.noSSAO = true;
+    g.add(pane);
+  }
+
+  parent.add(g);
+  return g;
+}
+
+/** Bundle of chaotic sagging dark electrical cables hanging along ceilings, hallways, or alley walls. */
+export function addHangingCables3D(
+  parent: THREE.Object3D,
+  from: V3,
+  to: V3,
+  count = 4,
+  sag = 0.42,
+  seed = 11,
+): THREE.Group {
+  const g = new THREE.Group();
+  g.name = "HangingCables3D";
+  const r = rng(seed * 317 + 19);
+  const mat = lam("v4_cable_dark", () => ({ color: "#121318" }), 1, 0.2);
+  const a = V(...from);
+  const b = V(...to);
+
+  for (let c = 0; c < count; c++) {
+    const wire = new Strand(12, 0.011 + r() * 0.008, 0.011 + r() * 0.008, mat, 1, false, false);
+    const pts: THREE.Vector3[] = [];
+    const sagC = sag * (0.65 + r() * 0.85);
+    const offX = (r() - 0.5) * 0.16;
+    const offY = (r() - 0.5) * 0.12;
+    const offZ = (r() - 0.5) * 0.16;
+    for (let i = 0; i < 12; i++) {
+      const u = i / 11;
+      const p = a.clone().lerp(b, u);
+      const curve = Math.sin(u * Math.PI);
+      p.x += offX * curve;
+      p.y += offY * curve - sagC * curve;
+      p.z += offZ * curve;
+      pts.push(p);
+    }
+    wire.set(pts);
+    wire.mesh.layers.set(NOINK);
+    wire.mesh.userData.noSSAO = true;
+    g.add(wire.mesh);
+  }
+  parent.add(g);
+  return g;
+}
+
+let cobwebTexCache: THREE.CanvasTexture | null = null;
+function getCobwebTex(): THREE.CanvasTexture {
+  if (cobwebTexCache) return cobwebTexCache;
+  if (typeof document !== "undefined" && typeof document.createElement === "function") {
+    const cv = document.createElement("canvas");
+    cv.width = 256;
+    cv.height = 256;
+    const g = cv.getContext("2d")!;
+    g.strokeStyle = "rgba(215, 212, 206, 0.72)";
+    g.lineCap = "round";
+    // Radial spokes from top-left corner (0,0)
+    const spokes = 8;
+    for (let i = 0; i <= spokes; i++) {
+      const a = (i / spokes) * Math.PI * 0.5;
+      g.lineWidth = i === 0 || i === spokes ? 2.2 : 1.3;
+      g.beginPath();
+      g.moveTo(4, 4);
+      g.lineTo(4 + Math.cos(a) * 244, 4 + Math.sin(a) * 244);
+      g.stroke();
+    }
+    // Sagging concentric silk rings
+    g.lineWidth = 1.1;
+    for (let ring = 1; ring <= 8; ring++) {
+      const rad = ring * 27;
+      g.beginPath();
+      for (let i = 0; i < spokes; i++) {
+        const a0 = (i / spokes) * Math.PI * 0.5;
+        const a1 = ((i + 1) / spokes) * Math.PI * 0.5;
+        const am = (a0 + a1) * 0.5;
+        const x0 = 4 + Math.cos(a0) * rad, y0 = 4 + Math.sin(a0) * rad;
+        const x1 = 4 + Math.cos(a1) * rad, y1 = 4 + Math.sin(a1) * rad;
+        const xm = 4 + Math.cos(am) * rad * 0.86, ym = 4 + Math.sin(am) * rad * 0.86;
+        if (i === 0) g.moveTo(x0, y0);
+        g.quadraticCurveTo(xm, ym, x1, y1);
+      }
+      g.stroke();
+    }
+    cobwebTexCache = new THREE.CanvasTexture(cv);
+  } else {
+    cobwebTexCache = new THREE.CanvasTexture(null as unknown as HTMLCanvasElement);
+  }
+  cobwebTexCache.colorSpace = THREE.SRGBColorSpace;
+  return cobwebTexCache;
+}
+
+/** Translucent corner cobweb mesh tucked into ceiling rafters, door lintels, and wall corners (NOINK, noSSAO). */
+export function addCobwebCluster3D(
+  parent: THREE.Object3D,
+  pos: V3,
+  rotEuler: V3 = [0, 0, 0],
+  scale = 0.65,
+  opacity = 0.42,
+): THREE.Mesh {
+  const mat = new THREE.MeshBasicMaterial({
+    map: getCobwebTex(),
+    transparent: true,
+    opacity,
+    depthWrite: false,
+    side: THREE.DoubleSide,
+  });
+  const mesh = new THREE.Mesh(new THREE.PlaneGeometry(scale, scale), mat);
+  mesh.name = "CobwebCluster3D";
+  mesh.position.set(...pos);
+  mesh.rotation.set(...rotEuler);
+  mesh.layers.set(NOINK);
+  mesh.userData.noOutline = true;
+  mesh.userData.noSSAO = true;
+  parent.add(mesh);
+  return mesh;
+}
+
+/** Torn, curling weathered wall poster / warning notice / talisman with stained edges & bent 3D geometry. */
+export function addPeelingPaperDecal3D(
+  parent: THREE.Object3D,
+  pos: V3,
+  rotEuler: V3 = [0, 0, 0],
+  opts: { width?: number; height?: number; header?: string; subtext?: string; biohazard?: boolean; seed?: number } = {},
+): THREE.Mesh {
+  const w = opts.width ?? 0.46;
+  const h = opts.height ?? 0.62;
+  const header = opts.header ?? "CẢNH BÁO";
+  const subtext = opts.subtext ?? "KHU VỰC CÁCH LY";
+  let tex: THREE.CanvasTexture;
+  if (typeof document !== "undefined" && typeof document.createElement === "function") {
+    const cv = document.createElement("canvas");
+    cv.width = 384;
+    cv.height = 512;
+    const g = cv.getContext("2d")!;
+    const r = rng((opts.seed ?? 13) * 199 + 7);
+    // Aged yellow-grey torn paper silhouette with missing bite on bottom-right
+    g.clearRect(0, 0, 384, 512);
+    g.save();
+    g.beginPath();
+    g.moveTo(14, 10);
+    g.lineTo(372, 16);
+    g.lineTo(368, 285);
+    g.lineTo(318, 326);
+    g.lineTo(342, 368);
+    g.lineTo(366, 488);
+    g.lineTo(240, 496);
+    g.lineTo(188, 466);
+    g.lineTo(126, 498);
+    g.lineTo(18, 484);
+    g.closePath();
+    g.fillStyle = "#b8b09a";
+    g.fill();
+    g.clip();
+    // Grime & water stains
+    for (let i = 0; i < 28; i++) {
+      g.fillStyle = `rgba(34,26,20,${(0.08 + r() * 0.18).toFixed(2)})`;
+      g.beginPath();
+      g.arc(r() * 384, r() * 512, 18 + r() * 68, 0, Math.PI * 2);
+      g.fill();
+    }
+    // Red-rust header band
+    g.fillStyle = "#5b241d";
+    g.fillRect(18, 22, 348, 86);
+    g.fillStyle = "#e6dcc8";
+    g.font = "900 48px sans-serif";
+    g.textAlign = "center";
+    g.fillText(header, 192, 82);
+    // Optional hazard triangle / symbol
+    if (opts.biohazard !== false) {
+      g.strokeStyle = "#261f1c";
+      g.lineWidth = 10;
+      g.beginPath();
+      g.moveTo(192, 146);
+      g.lineTo(272, 276);
+      g.lineTo(112, 276);
+      g.closePath();
+      g.stroke();
+      g.fillStyle = "#261f1c";
+      g.font = "900 78px sans-serif";
+      g.fillText("!", 192, 256);
+    }
+    g.fillStyle = "#241e1a";
+    g.font = "bold 26px sans-serif";
+    g.fillText(subtext, 192, 344);
+    g.fillStyle = "rgba(36,30,26,0.68)";
+    for (let li = 0; li < 4; li++) {
+      g.fillRect(46, 376 + li * 24, 290 - li * 22, 7);
+    }
+    g.restore();
+    tex = new THREE.CanvasTexture(cv);
+  } else {
+    tex = new THREE.CanvasTexture(null as unknown as HTMLCanvasElement);
+  }
+  tex.colorSpace = THREE.SRGBColorSpace;
+
+  // Slightly subdivided plane with curling bottom-right peeling corner
+  const geo = new THREE.PlaneGeometry(w, h, 4, 4);
+  const p = geo.attributes.position;
+  for (let i = 0; i < p.count; i++) {
+    const px = p.getX(i), py = p.getY(i);
+    if (px > 0 && py < 0) {
+      const curl = (px / (w * 0.5)) * (-py / (h * 0.5));
+      p.setZ(i, curl * 0.035);
+    }
+  }
+  geo.computeVertexNormals();
+  const mat = stylizedShade(
+    new THREE.MeshLambertMaterial({ map: tex, transparent: true, alphaTest: 0.2, side: THREE.DoubleSide }),
+    1,
+    0.4,
+  );
+  const mesh = new THREE.Mesh(geo, mat);
+  mesh.name = "PeelingPaperDecal3D";
+  mesh.position.set(...pos);
+  mesh.rotation.set(...rotEuler);
+  mesh.layers.set(NOINK);
+  mesh.userData.noOutline = true;
+  mesh.userData.noSSAO = true;
+  parent.add(mesh);
+  return mesh;
+}
+
+/** Jagged dark weed tufts & wild grass blades growing out of cracked alley walls and curbs. */
+export function addOvergrownWeeds3D(
+  b: Batch,
+  mat: THREE.Material,
+  x: number,
+  y: number,
+  z: number,
+  count = 9,
+  height = 0.34,
+  seed = 7,
+  spread = 0.28,
+): void {
+  const r = rng(Math.abs(Math.floor(seed * 617)) + 23);
+  const U = (a: number, c: number) => a + (c - a) * r();
+  for (let i = 0; i < count; i++) {
+    const ox = U(-spread, spread), oz = U(-spread, spread);
+    const h = height * U(0.55, 1.35);
+    const lean = U(0.08, 0.24);
+    const az = U(0, Math.PI * 2);
+    const p0 = V(x + ox, y - 0.02, z + oz);
+    const p1 = V(p0.x + Math.cos(az) * lean * 0.45, y + h * 0.52, p0.z + Math.sin(az) * lean * 0.45);
+    const p2 = V(p0.x + Math.cos(az) * lean, y + h, p0.z + Math.sin(az) * lean);
+    const rad = U(0.008, 0.016);
+    addLimbSeg(b, mat, p0, p1, rad, rad * 0.65, 4);
+    addLimbSeg(b, mat, p1, p2, rad * 0.65, rad * 0.15, 3);
+  }
+}
+
+/** Segmented chipped & slightly crooked concrete curbstone blocks running along alley walls. */
+export function addCrackedCurbstone3D(
+  b: Batch,
+  mat: THREE.Material,
+  x: number,
+  z0: number,
+  z1: number,
+  width = 0.22,
+  height = 0.13,
+  seed = 5,
+): void {
+  const r = rng(seed * 431 + 11);
+  const U = (a: number, c: number) => a + (c - a) * r();
+  const minZ = Math.min(z0, z1), maxZ = Math.max(z0, z1);
+  let z = minZ;
+  while (z < maxZ - 0.2) {
+    const len = Math.min(U(0.75, 1.35), maxZ - z);
+    const gap = U(0.015, 0.045);
+    const h = height * U(0.86, 1.08);
+    const tiltZ = U(-0.04, 0.04);
+    const tiltX = U(-0.025, 0.025);
+    const m = new THREE.Matrix4().compose(
+      V(x + U(-0.015, 0.015), h * 0.5 - 0.01, z + len * 0.5),
+      new THREE.Quaternion().setFromEuler(new THREE.Euler(tiltX, U(-0.02, 0.02), tiltZ)),
+      V(width, h, Math.max(0.2, len - gap)),
+    );
+    b.add(new THREE.BoxGeometry(1, 1, 1), mat, m);
+    z += len;
+  }
+}
+
+/** Scattered broken brick fragments, splintered wood slats & small rubble pieces grounding wall corners. */
+export function addScatteredDebris3D(
+  b: Batch,
+  brickMat: THREE.Material,
+  woodMat: THREE.Material,
+  center: V3,
+  radius = 0.85,
+  count = 8,
+  seed = 17,
+): void {
+  const r = rng(seed * 503 + 29);
+  const U = (a: number, c: number) => a + (c - a) * r();
+  const [cx, cy, cz] = center;
+  for (let i = 0; i < count; i++) {
+    const a = U(0, Math.PI * 2);
+    const d = Math.sqrt(r()) * radius;
+    const isWood = r() < 0.38;
+    const sx = isWood ? U(0.18, 0.44) : U(0.08, 0.16);
+    const sy = isWood ? U(0.016, 0.030) : U(0.045, 0.08);
+    const sz = isWood ? U(0.04, 0.085) : U(0.06, 0.11);
+    const m = new THREE.Matrix4().compose(
+      V(cx + Math.cos(a) * d, cy + sy * 0.46, cz + Math.sin(a) * d),
+      new THREE.Quaternion().setFromEuler(new THREE.Euler(U(-0.18, 0.18), U(0, Math.PI * 2), U(-0.18, 0.18))),
+      V(sx, sy, sz),
+    );
+    b.add(new THREE.BoxGeometry(1, 1, 1), isWood ? woodMat : brickMat, m);
+  }
+}
+
 

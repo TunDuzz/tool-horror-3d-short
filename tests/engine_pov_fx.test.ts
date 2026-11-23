@@ -27,7 +27,7 @@ import {
   addAltarOfferingPlate3D,
 } from "../templates/engine/build.ts";
 
-test("createPovRig3D builds NOINK outlined POV lowerBody + armsRoot and aligns deterministically to camera", () => {
+test("createPovRig3D isolates meshes onto NOINK, defaults to Style B (outlineMode='off'), supports outlineMode='grittyThin', and aligns deterministically to camera", () => {
   const pov = createPovRig3D({ sleeveCol: "#d8d1c2", pantsCol: "#1a1b24" });
   const cam = new THREE.PerspectiveCamera(56, 9 / 16, 0.08, 100);
   cam.position.set(0.2, 1.05, 1.8);
@@ -48,7 +48,15 @@ test("createPovRig3D builds NOINK outlined POV lowerBody + armsRoot and aligns d
     if (m.userData.isOutline) outlineCount++;
   });
   assert.ok(meshCount >= 10);
-  assert.ok(outlineCount >= 4);
+  assert.equal(outlineCount, 0);
+
+  const povA = createPovRig3D({ outlineMode: "grittyThin" });
+  let olA = 0;
+  povA.group.traverse((o) => {
+    const m = o as THREE.Mesh;
+    if (m.isMesh && m.userData.isOutline) olA++;
+  });
+  assert.ok(olA >= 4);
 });
 
 test("diegetic 3D props (Phone3D, Flashlight3D, HandheldOilLamp3D, PaperProp3D) produce valid lights and toggle cleanly", () => {

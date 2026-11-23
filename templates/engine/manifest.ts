@@ -83,7 +83,10 @@ export type PoseAction =
   | "holdLantern"
   | "lunge"
   | "loomingStill"
-  | "peekAroundDoor";
+  | "peekAroundDoor"
+  | "stalkLoom"
+  | "jawUnlatch"
+  | "crawler";
 
 export type FaceExpr =
   | "calm"

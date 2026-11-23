@@ -6,7 +6,8 @@ import * as THREE from "three";
 import { FPS, clamp01, flickerAt, type V3 } from "./camera";
 import { NOINK } from "./ink";
 import type { LocalLight, SpotLightCfg } from "./lights";
-import { attachOutlineRig } from "./outline3d";
+import { attachOutlineRig, type OutlineMode } from "./outline3d";
+import { humanSkinPair, wovenFabricPair } from "./paint";
 import { stylizedShade } from "./shade";
 
 export type PhoneScreenState = {
@@ -158,11 +159,14 @@ function drawPhoneCanvas(cv: HTMLCanvasElement, state: PhoneScreenState) {
 }
 
 /** Create a 3D diegetic smartphone with live HDR-emissive Canvas2D lockscreen & synced PointLight emitter. */
-export function createPhone3D(initial: PhoneScreenState = { clock: "00:58" }): Phone3D {
+export function createPhone3D(
+  initial: PhoneScreenState = { clock: "00:58" },
+  outlineMode: OutlineMode = "off",
+): Phone3D {
   const group = new THREE.Group();
   group.name = "Phone3D";
 
-  const bodyMat = stylizedShade(new THREE.MeshPhongMaterial({ color: "#151720", specular: "#4a5268", shininess: 35 }));
+  const bodyMat = stylizedShade(new THREE.MeshPhongMaterial({ color: "#151720", specular: "#4a5268", shininess: 42 }), 1, 0.15);
   const bodyGeo = new THREE.BoxGeometry(0.088, 0.172, 0.011);
   const body = new THREE.Mesh(bodyGeo, bodyMat);
   body.name = "phoneBody";
@@ -193,11 +197,21 @@ export function createPhone3D(initial: PhoneScreenState = { clock: "00:58" }): P
   screen.name = "phoneScreen";
   screen.position.set(0, 0, 0.0062);
   screen.userData.noOutline = true;
+  screen.userData.noSSAO = true;
   group.add(screen);
 
-  // Articulated 2-joint curled fingers wrapping organically around the left bezel edge (zero text overlap!)
-  const skinMat = stylizedShade(new THREE.MeshLambertMaterial({ color: "#ccb6a0" }));
-  const knuckleShadeMat = stylizedShade(new THREE.MeshLambertMaterial({ color: "#baa28b" }));
+  // Articulated 2-joint curled fingers wrapping organically around the left bezel edge (muted weathered skin so phone light never blows them white!)
+  const skinP = humanSkinPair("v4_pov_phone_skin", "#98806c");
+  const skinMat = stylizedShade(
+    new THREE.MeshPhongMaterial({ map: skinP.map, bumpMap: skinP.bumpMap, bumpScale: 0.003, specular: "#2c221c", shininess: 10 }),
+    0.75,
+    0.25,
+  );
+  const knuckleShadeMat = stylizedShade(
+    new THREE.MeshPhongMaterial({ color: "#88705e", map: skinP.map, bumpMap: skinP.bumpMap, bumpScale: 0.003, specular: "#261e18", shininess: 10 }),
+    0.75,
+    0.28,
+  );
   // Curved palm cradle tucked cleanly behind the phone body (-Z) without peeking past the bottom bezel
   const backPalm = new THREE.Mesh(new THREE.BoxGeometry(0.062, 0.072, 0.014), knuckleShadeMat);
   backPalm.name = "phoneBackPalm";
@@ -230,7 +244,7 @@ export function createPhone3D(initial: PhoneScreenState = { clock: "00:58" }): P
   thumbTip.rotation.set(0.08, -0.18, 0.62);
   group.add(thumbBase, thumbTip);
 
-  attachOutlineRig(group, { pxWidth: 4.5, minWorld: 0.0009, maxWorld: 0.008, color: "#06060a" });
+  attachOutlineRig(group, { mode: outlineMode, pxWidth: 4.5, minWorld: 0.0009, maxWorld: 0.008, color: "#06060a" });
 
   let lastKey = JSON.stringify(initial);
   const setScreen = (state: PhoneScreenState) => {
@@ -270,14 +284,30 @@ export function createPhone3D(initial: PhoneScreenState = { clock: "00:58" }): P
 }
 
 /** Create a 3D handheld metal flashlight with HDR emissive lens, subtle volumetric beam, and SpotLightCfg emitter. */
-export function createFlashlight3D(): Flashlight3D {
+export function createFlashlight3D(outlineMode: OutlineMode = "off"): Flashlight3D {
   const group = new THREE.Group();
   group.name = "Flashlight3D";
 
-  const metalMat = stylizedShade(new THREE.MeshPhongMaterial({ color: "#22252e", specular: "#8ea0ba", shininess: 56 }));
-  const gripSkinMat = stylizedShade(new THREE.MeshLambertMaterial({ color: "#c4ad97" }));
-  const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.019, 0.20, 12).rotateX(Math.PI * 0.5), metalMat);
-  const bezel = new THREE.Mesh(new THREE.CylinderGeometry(0.030, 0.022, 0.048, 12).rotateX(Math.PI * 0.5), metalMat);
+  const metalPair = wovenFabricPair("v4_torch_knurl", "#232730");
+  const metalMat = stylizedShade(
+    new THREE.MeshPhongMaterial({
+      color: "#2b303a",
+      bumpMap: metalPair.bumpMap,
+      bumpScale: 0.0035,
+      specular: "#9eb2cc",
+      shininess: 64,
+    }),
+    1,
+    0.3,
+  );
+  const skinP = humanSkinPair("v4_pov_torch_skin", "#c2aa92");
+  const gripSkinMat = stylizedShade(
+    new THREE.MeshPhongMaterial({ map: skinP.map, bumpMap: skinP.bumpMap, bumpScale: 0.0028, specular: "#382c24", shininess: 14 }),
+    1,
+    0.25,
+  );
+  const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.019, 0.20, 14).rotateX(Math.PI * 0.5), metalMat);
+  const bezel = new THREE.Mesh(new THREE.CylinderGeometry(0.031, 0.022, 0.052, 14).rotateX(Math.PI * 0.5), metalMat);
   bezel.position.set(0, 0, -0.115);
 
   // Curled POV gripping fingers & thumb wrapping naturally around the flashlight barrel
@@ -297,11 +327,12 @@ export function createFlashlight3D(): Flashlight3D {
 
   const lensMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(2.4, 2.3, 2.0), toneMapped: false });
   const lens = new THREE.Mesh(new THREE.CircleGeometry(0.027, 14), lensMat);
-  lens.position.set(0, 0, -0.140);
+  lens.position.set(0, 0, -0.141);
   lens.rotation.y = Math.PI;
   lens.userData.noOutline = true;
+  lens.userData.noSSAO = true;
 
-  // Soft volumetric flashlight cone
+  // Soft volumetric flashlight cone with radial Fresnel edge feathering (ZERO sharp diagonal geometry seam!)
   const coneMat = new THREE.ShaderMaterial({
     transparent: true,
     depthWrite: false,
@@ -309,13 +340,21 @@ export function createFlashlight3D(): Flashlight3D {
     blending: THREE.AdditiveBlending,
     uniforms: {
       uCol: { value: new THREE.Color("#dce8ff") },
-      uOpacity: { value: 0.11 },
+      uOpacity: { value: 0.085 },
     },
-    vertexShader: `varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
-    fragmentShader: `uniform vec3 uCol; uniform float uOpacity; varying vec2 vUv;
+    vertexShader: `varying vec2 vUv; varying vec3 vNormV; varying vec3 vViewD;
       void main(){
-        float along = smoothstep(0.0, 0.12, vUv.y) * pow(1.0 - vUv.y, 1.85);
-        gl_FragColor = vec4(uCol, along * uOpacity);
+        vUv = uv;
+        vec4 mv = modelViewMatrix * vec4(position, 1.0);
+        vNormV = normalize(normalMatrix * normal);
+        vViewD = normalize(-mv.xyz);
+        gl_Position = projectionMatrix * mv;
+      }`,
+    fragmentShader: `uniform vec3 uCol; uniform float uOpacity; varying vec2 vUv; varying vec3 vNormV; varying vec3 vViewD;
+      void main(){
+        float along = smoothstep(0.0, 0.16, vUv.y) * pow(1.0 - vUv.y, 1.95);
+        float rim = pow(abs(dot(vNormV, vViewD)), 2.2);
+        gl_FragColor = vec4(uCol, along * rim * uOpacity);
       }`,
   });
   const coneGeo = new THREE.CylinderGeometry(0.72, 0.035, 4.4, 16, 1, true);
@@ -323,9 +362,10 @@ export function createFlashlight3D(): Flashlight3D {
   coneGeo.translate(0, 0, -2.35);
   const cone = new THREE.Mesh(coneGeo, coneMat);
   cone.userData.noOutline = true;
+  cone.userData.noSSAO = true;
 
   group.add(barrel, bezel, lens, cone);
-  attachOutlineRig(group, { pxWidth: 4.6, minWorld: 0.001, maxWorld: 0.01, color: "#06060a" });
+  attachOutlineRig(group, { mode: outlineMode, pxWidth: 4.6, minWorld: 0.001, maxWorld: 0.01, color: "#06060a" });
 
   let isOn = true;
   let power = 1.0;
@@ -361,12 +401,12 @@ export function createFlashlight3D(): Flashlight3D {
 }
 
 /** Create a portable 3D Vietnamese oil lamp with round oil reservoir, translucent glass chimney, and HDR flame. */
-export function createHandheldOilLamp3D(): HandheldOilLamp3D {
+export function createHandheldOilLamp3D(outlineMode: OutlineMode = "off"): HandheldOilLamp3D {
   const group = new THREE.Group();
   group.name = "HandheldOilLamp3D";
 
-  const baseMat = stylizedShade(new THREE.MeshPhongMaterial({ color: "#3d4652", specular: "#7c8ea0", shininess: 32 }));
-  const brassMat = stylizedShade(new THREE.MeshPhongMaterial({ color: "#8c7246", specular: "#d8be80", shininess: 46 }));
+  const baseMat = stylizedShade(new THREE.MeshPhongMaterial({ color: "#3d4652", specular: "#7c8ea0", shininess: 32 }), 1, 0.3);
+  const brassMat = stylizedShade(new THREE.MeshPhongMaterial({ color: "#8c7246", specular: "#d8be80", shininess: 46 }), 1, 0.2);
   const glassMat = new THREE.MeshBasicMaterial({
     color: "#e6dfd4",
     transparent: true,
@@ -387,6 +427,7 @@ export function createHandheldOilLamp3D(): HandheldOilLamp3D {
   const flame = new THREE.Mesh(new THREE.ConeGeometry(0.013, 0.046, 8), flameMat);
   flame.position.y = 0.158;
   flame.userData.noOutline = true;
+  flame.userData.noSSAO = true;
 
   const chimneyPts = [
     new THREE.Vector2(0.026, 0.132),
@@ -397,9 +438,10 @@ export function createHandheldOilLamp3D(): HandheldOilLamp3D {
   ];
   const chimney = new THREE.Mesh(new THREE.LatheGeometry(chimneyPts, 14), glassMat);
   chimney.userData.noOutline = true;
+  chimney.userData.noSSAO = true;
 
   group.add(foot, bulb, collar, flame, chimney);
-  attachOutlineRig(group, { pxWidth: 4.8, minWorld: 0.001, maxWorld: 0.012, color: "#06060a" });
+  attachOutlineRig(group, { mode: outlineMode, pxWidth: 4.8, minWorld: 0.001, maxWorld: 0.012, color: "#06060a" });
 
   let isLit = true;
   const setLit = (lit: boolean, frame: number) => {
@@ -429,7 +471,7 @@ export function createHandheldOilLamp3D(): HandheldOilLamp3D {
 }
 
 /** Create a held 3D paper note / old letter / talisman prop with custom Canvas2D text. */
-export function createPaperProp3D(): PaperProp3D {
+export function createPaperProp3D(outlineMode: OutlineMode = "off"): PaperProp3D {
   const group = new THREE.Group();
   group.name = "PaperProp3D";
 
@@ -445,11 +487,11 @@ export function createPaperProp3D(): PaperProp3D {
   }
   tex.colorSpace = THREE.SRGBColorSpace;
 
-  const mat = stylizedShade(new THREE.MeshLambertMaterial({ map: tex, color: "#ddd5c4", side: THREE.DoubleSide }));
+  const mat = stylizedShade(new THREE.MeshLambertMaterial({ map: tex, color: "#ddd5c4", side: THREE.DoubleSide }), 1, 0.25);
   const geo = new THREE.BoxGeometry(0.16, 0.21, 0.004);
   const sheet = new THREE.Mesh(geo, mat);
   group.add(sheet);
-  attachOutlineRig(group, { pxWidth: 4.0, minWorld: 0.0008, maxWorld: 0.008, color: "#06060a" });
+  attachOutlineRig(group, { mode: outlineMode, pxWidth: 4.0, minWorld: 0.0008, maxWorld: 0.008, color: "#06060a" });
 
   const setText = (title: string, lines: string[]) => {
     if (!cv) return;
@@ -482,12 +524,27 @@ export function createPaperProp3D(): PaperProp3D {
  * plus camera-aligned articulated dual arms & slender hands for holding diegetic 3D props.
  */
 export function createPovRig3D(
-  opts: { skinCol?: string; sleeveCol?: string; pantsCol?: string; shoeCol?: string; outlinePx?: number } = {},
+  opts: { skinCol?: string; sleeveCol?: string; pantsCol?: string; shoeCol?: string; outlinePx?: number; outlineMode?: OutlineMode } = {},
 ): PovRig3D {
-  const skinMat = stylizedShade(new THREE.MeshLambertMaterial({ color: opts.skinCol ?? "#ccb6a0" }));
-  const sleeveMat = stylizedShade(new THREE.MeshLambertMaterial({ color: opts.sleeveCol ?? "#d8d1c2" }));
-  const pantsMat = stylizedShade(new THREE.MeshLambertMaterial({ color: opts.pantsCol ?? "#1c1d27" }));
-  const shoeMat = stylizedShade(new THREE.MeshLambertMaterial({ color: opts.shoeCol ?? "#15141a" }));
+  const skinP = humanSkinPair("v4_pov_skin", opts.skinCol ?? "#c4ac94");
+  const sleeveP = wovenFabricPair("v4_pov_sleeve", opts.sleeveCol ?? "#d8d1c2");
+  const pantsP = wovenFabricPair("v4_pov_pants", opts.pantsCol ?? "#1c1d27");
+  const skinMat = stylizedShade(
+    new THREE.MeshPhongMaterial({ map: skinP.map, bumpMap: skinP.bumpMap, bumpScale: 0.0025, specular: "#362a22", shininess: 14 }),
+    1,
+    0.25,
+  );
+  const sleeveMat = stylizedShade(
+    new THREE.MeshLambertMaterial({ map: sleeveP.map, bumpMap: sleeveP.bumpMap, bumpScale: 0.008 }),
+    1,
+    0.35,
+  );
+  const pantsMat = stylizedShade(
+    new THREE.MeshLambertMaterial({ map: pantsP.map, bumpMap: pantsP.bumpMap, bumpScale: 0.008 }),
+    1,
+    0.35,
+  );
+  const shoeMat = stylizedShade(new THREE.MeshPhongMaterial({ color: opts.shoeCol ?? "#15141a", specular: "#32343e", shininess: 22 }), 1, 0.4);
 
   const group = new THREE.Group();
   group.name = "PovRig3D";
@@ -539,27 +596,28 @@ export function createPovRig3D(
   const buildPovArm = (side: -1 | 1) => {
     const arm = new THREE.Group();
     arm.name = side < 0 ? "povLeftArm" : "povRightArm";
-    // Forearm & wrist sit cleanly behind held props (-Z away from camera) sloping downward-outward toward shoulder
-    const forearm = new THREE.Mesh(new THREE.CapsuleGeometry(0.030, 0.34, 6, 10), sleeveMat);
-    forearm.position.set(side * 0.076, -0.21, -0.044);
-    forearm.rotation.set(-0.18, 0, side * 0.28);
-    const wrist = new THREE.Mesh(new THREE.CylinderGeometry(0.024, 0.027, 0.068, 10), skinMat);
-    wrist.position.set(side * 0.020, -0.070, -0.048);
-    wrist.rotation.set(-0.14, 0, side * 0.20);
+    // Sleeve & wrist sit cleanly behind held props (-Z away from camera) so no bright beige slab sticks out beneath Phone3D!
+    const forearm = new THREE.Mesh(new THREE.CapsuleGeometry(0.028, 0.36, 6, 10), sleeveMat);
+    forearm.position.set(side * 0.068, -0.20, -0.056);
+    forearm.rotation.set(-0.20, 0, side * 0.26);
+    const wrist = new THREE.Mesh(new THREE.CylinderGeometry(0.017, 0.020, 0.044, 10), skinMat);
+    wrist.position.set(side * 0.018, -0.068, -0.066);
+    wrist.rotation.set(-0.16, 0, side * 0.22);
     const hand = new THREE.Group();
     hand.name = side < 0 ? "povLeftHand" : "povRightHand";
-    const palm = new THREE.Mesh(new THREE.BoxGeometry(0.040, 0.038, 0.016), skinMat);
-    palm.position.set(0, -0.012, -0.048);
+    const palm = new THREE.Mesh(new THREE.BoxGeometry(0.034, 0.032, 0.014), skinMat);
+    palm.position.set(0, -0.018, -0.062);
     hand.add(palm);
     arm.add(forearm, wrist, hand);
     armsRoot.add(arm);
-    return { arm, hand };
+    return { arm, hand, wrist };
   };
 
   const left = buildPovArm(-1);
   const right = buildPovArm(1);
 
-  attachOutlineRig(group, { pxWidth: opts.outlinePx ?? 5.2, minWorld: 0.001, maxWorld: 0.012, color: "#06060a" });
+  const mode: OutlineMode = opts.outlineMode ?? (opts.outlinePx !== undefined && opts.outlinePx > 0 ? "cleanBold" : "off");
+  attachOutlineRig(group, { mode, pxWidth: opts.outlinePx ?? 5.2, minWorld: 0.001, maxWorld: 0.012, color: "#06060a" });
 
   const update = (cam: THREE.PerspectiveCamera, pose: PovPose) => {
     lowerBody.position.set(...pose.anchor);
@@ -586,24 +644,29 @@ export function createPovRig3D(
       // Raised centered-right smartphone framing clearly above lower-third subtitles with zero wrist/bezel clipping
       const k = Math.max(0.001, rRaise);
       right.arm.visible = k > 0.02;
+      right.wrist.visible = false;
       right.arm.position.set(0.032 + swayX, -0.34 + k * 0.33 + swayY, -0.35);
       right.arm.rotation.set(0.10 * (1 - k), -0.05, 0.03);
       left.arm.visible = false;
     } else if (pose.propMode === "flashlight") {
       // Positioned cleanly inside narrow 9:16 lower-right frustum so POV hand & metal torch barrel are clearly visible
       right.arm.visible = rRaise > 0.02;
+      right.wrist.visible = true;
       right.arm.position.set(0.082 + swayX, -0.22 + rRaise * 0.09 + swayY, -0.35);
       right.arm.rotation.set(0.06, 0.06, -0.04);
     } else if (pose.propMode === "lamp") {
       right.arm.visible = rRaise > 0.02;
+      right.wrist.visible = true;
       right.arm.position.set(0.095 + swayX, -0.26 + rRaise * 0.14 + swayY, -0.38);
       right.arm.rotation.set(0.05, -0.08, 0);
     } else if (pose.propMode === "paper") {
       right.arm.visible = rRaise > 0.02;
+      right.wrist.visible = true;
       right.arm.position.set(0.0 + swayX, -0.34 + rRaise * 0.32 + swayY, -0.33);
       right.arm.rotation.set(-0.08, 0, 0);
     } else {
       right.arm.visible = rRaise > 0.02;
+      right.wrist.visible = true;
       right.arm.position.set(0.24 + swayX, -0.44 + rRaise * 0.24 + swayY, -0.28 - rRaise * 0.08);
       right.arm.rotation.set(0.18 - rRaise * 0.22, -0.26, 0.12);
     }

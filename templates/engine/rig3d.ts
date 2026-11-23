@@ -1,15 +1,28 @@
-// Horror Engine v3: Articulated 3D Stylized Dark-Horror Character & Uncanny Entity Rig.
-// Non-chibi adult proportions (~5.6 head-heights), sculpted angular jaw/cheekbones, 3D nose bridge,
-// layered 3D hair, 20 named bone sockets, clean UV garment folds, smooth Inverted-Hull outlines on NOINK,
-// animated clean-line 2D curved face decal, and uncanny supernatural EntityConfig modifiers.
+// Horror Engine v4: Articulated 3D Semi-Realistic Dark-Horror Human & Modular Body-Horror Entity Rig.
+// Adult non-chibi proportions (~5.8 head-heights), sculpted angular 3D faces with recessed eye hollows & cheekbones,
+// multi-layer coarse woven clothing + bumpMaps, multi-clump fibrous 3D hair, 1024px realistic face decals,
+// Style B zero-outline default (with optional Style A / comic outlineMode), and full modular BodyHorrorConfig
+// (3D hollowed skull sockets, recessed wet bloodshot 3D eyeballs, articulated 3D dislocated jaw + crooked teeth,
+// elongated tendon neck, protruding ribs/clavicles/spine, 3-joint spider claw hands, extra arms, crawler/stalkLoom poses).
 
 import * as THREE from "three";
 import { FPS, clamp01, lerp, uncannyTime, uncannyTwitch, type V3 } from "./camera";
 import { NOINK } from "./ink";
 import type { FaceExpr, PoseAction } from "./manifest";
-import { attachOutlineRig } from "./outline3d";
+import { attachOutlineRig, type OutlineMode } from "./outline3d";
+import { cadaverSkinPair, hairStrandPair, humanSkinPair, tatteredGownPair, wovenFabricPair } from "./paint";
 import { stylizedShade } from "./shade";
 import { FaceTextureCache, type FaceSpec, type MouthShape } from "./face2d";
+import {
+  type BodyHorrorConfig,
+  buildEmaciatedTorso3D,
+  buildExtraArms3D,
+  buildHorrorEyes3D,
+  buildHorrorJaw3D,
+  buildHorrorSkullHeadGeo,
+  buildSpiderClawHand3D,
+  buildTendonNeck3D,
+} from "./bodyHorror";
 
 export type WordTiming = { word: string; start: number; end: number; speaker?: string };
 
@@ -35,7 +48,6 @@ export function mouthFromWords(
     if (t >= w.start && t <= w.end) {
       const s = w.word.toLowerCase();
       const prog = (t - w.start) / Math.max(0.04, w.end - w.start);
-      // Slight mouth closure right at word edges so adjacent words articulate cleanly
       if (prog < 0.08 || prog > 0.92) return "parted";
       if (/[oóòỏõọôốồổỗộơớờởỡợuúùủũụưứừửữự]/.test(s)) return "talkO";
       if (/[aáàảãạăắằẳẵặâấầẩẫậ]/.test(s)) return "talkA";
@@ -64,18 +76,19 @@ export type GarmentStyle =
   | "shroud";
 
 export type EntityConfig = {
-  heightScale?: number; // e.g. 1.15 - 1.25 tall looming silhouette
-  gauntness?: number; // 0.70 - 0.88 slender bone-thin limbs/torso
-  armScale?: number; // 1.15 - 1.32 unnaturally long arms
-  fingerScale?: number; // 1.25 - 1.45 spidery elongated fingers
-  neckTiltDeg?: number; // +-20..38 deg broken-neck angle
-  shoulderSkew?: number; // +-0.12 rad uneven shoulders
+  heightScale?: number; // e.g. 1.15 - 1.28 tall looming silhouette
+  gauntness?: number; // 0.68 - 0.88 slender bone-thin limbs/torso
+  armScale?: number; // 1.15 - 1.35 unnaturally long arms
+  fingerScale?: number; // 1.25 - 1.55 spidery elongated fingers
+  neckTiltDeg?: number; // +-20..65 deg broken-neck angle
+  shoulderSkew?: number; // +-0.14 rad uneven shoulders
   hairCurtain?: boolean; // long dark 3D strands draping across face
   silhouetteMode?: boolean; // near-black charcoal figure for deep-shadow reveals
   eyeGlow?: boolean; // HDR emissive pinpoint eyes piercing pitch dark
   eyeGlowColor?: [number, number, number];
   breathing?: boolean; // false = uncanny dead stillness
   steppedFps?: number; // optional subtle stepped motion (e.g. 8-10 fps)
+  bodyHorror?: BodyHorrorConfig; // Horror Engine v4 modular Dark / Gore / Body Horror anatomy
 };
 
 export type CharacterConfig = {
@@ -85,11 +98,13 @@ export type CharacterConfig = {
   hairCol?: string;
   hairStyle?: HairStyle;
   topCol?: string;
+  innerCol?: string; // inner shirt tone for layered jackets/coats
   bottomCol?: string;
   shoeCol?: string;
   garment?: GarmentStyle;
   headbandCol?: string; // e.g. white funeral headband (khăn tang)
-  outlinePx?: number; // default 5.8
+  outlineMode?: OutlineMode; // default "off" (Style B semi-realistic), or "grittyThin" (Style A) / "cleanBold"
+  outlinePx?: number; // legacy explicit outline width override
   entity?: EntityConfig;
 };
 
@@ -100,6 +115,7 @@ export type RigSockets = {
   chest: THREE.Group;
   neck: THREE.Group;
   head: THREE.Group;
+  jaw?: THREE.Group;
   leftShoulder: THREE.Group;
   leftUpperArm: THREE.Group;
   leftForearm: THREE.Group;
@@ -108,6 +124,8 @@ export type RigSockets = {
   rightUpperArm: THREE.Group;
   rightForearm: THREE.Group;
   rightHand: THREE.Group;
+  leftExtraArm?: THREE.Group;
+  rightExtraArm?: THREE.Group;
   leftThigh: THREE.Group;
   leftCalf: THREE.Group;
   leftFoot: THREE.Group;
@@ -126,6 +144,7 @@ export type PoseEvalOpts = {
   headYaw?: number;
   headPitch?: number;
   headRoll?: number;
+  jawOpen?: number; // 0..1 explicit override for 3D articulated horror jaw
   twitch?: boolean;
   seed?: number;
   ageLines?: boolean;
@@ -144,144 +163,118 @@ export type Character3D = {
   dispose: () => void;
 };
 
-/** Generate clean hand-painted garment fold & collar/cuff seam UV texture (zero messy hatching). */
-function makeGarmentTex(baseHex: string, garment: GarmentStyle): THREE.CanvasTexture | null {
-  if (typeof document === "undefined" || typeof document.createElement !== "function") return null;
-  const cv = document.createElement("canvas");
-  cv.width = 512;
-  cv.height = 512;
-  const g = cv.getContext("2d");
-  if (!g) return null;
-
-  g.fillStyle = baseHex;
-  g.fillRect(0, 0, 512, 512);
-
-  // Soft vertical cloth shading folds
-  for (let i = 0; i < 6; i++) {
-    const x = 42 + i * 86;
-    const gr = g.createLinearGradient(x - 24, 0, x + 24, 0);
-    gr.addColorStop(0, "rgba(18,14,24,0)");
-    gr.addColorStop(0.5, "rgba(18,14,24,0.11)");
-    gr.addColorStop(1, "rgba(18,14,24,0)");
-    g.fillStyle = gr;
-    g.fillRect(x - 24, 0, 48, 512);
-  }
-
-  // Clean front seam / diagonal Vietnamese funeral lapel / button placket
-  g.strokeStyle = "rgba(14,10,18,0.52)";
-  g.lineWidth = 4;
-  g.lineCap = "round";
-  if (garment === "funeralRobe" || garment === "shroud") {
-    // Diagonal front lapel seam + subtle raw-hem stitch marks at bottom
-    g.beginPath();
-    g.moveTo(256, 36);
-    g.quadraticCurveTo(232, 130, 174, 210);
-    g.lineTo(174, 490);
-    g.stroke();
-    g.strokeStyle = "rgba(14,10,18,0.34)";
-    g.lineWidth = 2.5;
-    for (let x = 14; x < 500; x += 16) {
-      g.beginPath();
-      g.moveTo(x, 476);
-      g.lineTo(x + (x % 32 === 0 ? 3 : -2), 506);
-      g.stroke();
-    }
-  } else if (garment === "shirt" || garment === "coat" || garment === "casualJacket") {
-    g.beginPath();
-    g.moveTo(256, 20);
-    g.lineTo(256, 500);
-    g.stroke();
-    g.fillStyle = "rgba(14,10,18,0.55)";
-    for (let y = 90; y < 440; y += 78) {
-      g.beginPath();
-      g.arc(244, y, 5, 0, Math.PI * 2);
-      g.fill();
-    }
-  } else if (garment === "hospitalGown") {
-    g.strokeStyle = "rgba(40,68,74,0.22)";
-    g.lineWidth = 3;
-    for (let y = 40; y < 512; y += 44) {
-      g.beginPath();
-      g.moveTo(0, y);
-      g.lineTo(512, y);
-      g.stroke();
-    }
-  }
-
-  const tex = new THREE.CanvasTexture(cv);
-  tex.colorSpace = THREE.SRGBColorSpace;
-  tex.anisotropy = 4;
-  return tex;
-}
-
-/** Sculpted non-chibi adult head geometry: angular tapered jaw, subtle cheekbones, distinct cranium. */
+/** Sculpted non-chibi adult human head (28x22): subtle 3D eye-socket hollows, brow ridge, cheekbones, angular jaw & chin. */
 function buildSculptedHeadGeo(rx: number, ry: number, rz: number): THREE.BufferGeometry {
-  const geo = new THREE.SphereGeometry(1, 20, 16);
+  const geo = new THREE.SphereGeometry(1, 28, 22);
   const pos = geo.attributes.position;
   for (let i = 0; i < pos.count; i++) {
     let x = pos.getX(i);
     let y = pos.getY(i);
     let z = pos.getZ(i);
 
-    // Taper lower jaw & chin cleanly (non-chibi adult silhouette)
     if (y < 0) {
       const jawT = Math.min(1, -y);
-      x *= 1 - 0.34 * jawT * jawT;
+      x *= 1 - 0.35 * jawT * jawT;
       z *= 1 - 0.14 * jawT;
-      if (z > 0) z += 0.08 * jawT * (1 - Math.abs(x)); // defined chin point
+      if (z > 0) z += 0.095 * jawT * (1 - Math.abs(x) * 0.85); // defined adult chin
     } else {
-      // Slightly fuller cranium & subtle temple flattening
       x *= 0.96 + 0.05 * Math.sin(y * Math.PI);
     }
-    // Slight brow ridge overhang on upper front
-    if (y > 0.18 && y < 0.42 && z > 0.4) {
-      z += 0.045 * Math.sin(((y - 0.18) / 0.24) * Math.PI);
+
+    if (z > 0.25) {
+      const front = Math.min(1, (z - 0.25) / 0.55);
+      // Subtle sculpted eye hollows (catches real SSAO & chiaroscuro side-light without distorting face decal!)
+      for (const s of [-1, 1]) {
+        const ex = (x - s * 0.36) / 0.22;
+        const ey = (y - 0.10) / 0.16;
+        const d2 = ex * ex + ey * ey;
+        if (d2 < 2.0) z -= 0.075 * Math.exp(-d2 * 1.9) * front;
+
+        // Defined cheekbones directly below outer eye corner
+        const cx = (x - s * 0.54) / 0.24;
+        const cy = (y + 0.10) / 0.18;
+        const cb = Math.exp(-(cx * cx + cy * cy) * 1.7) * front;
+        x += s * 0.055 * cb;
+        z += 0.045 * cb;
+
+        // Subtle lower-cheek lean hollow below cheekbone
+        const hx = (x - s * 0.44) / 0.24;
+        const hy = (y + 0.36) / 0.24;
+        const ch = Math.exp(-(hx * hx + hy * hy) * 1.6) * front;
+        x -= s * 0.065 * ch;
+      }
+
+      // Defined supraorbital brow ridge overhang
+      if (y > 0.18 && y < 0.44) {
+        z += 0.068 * Math.sin(((y - 0.18) / 0.26) * Math.PI) * front * (1 - Math.min(1, x * x * 1.1));
+      }
     }
+
     pos.setXYZ(i, x * rx, y * ry, z * rz);
   }
   geo.computeVertexNormals();
   return geo;
 }
 
-/** Curved spherical-patch decal hugging the sculpted front face (prevents flat-plane cheek clipping). */
+/** Curved spherical-patch decal hugging the sculpted front face (tracks jaw taper & subtle brow/cheek depth). */
 function buildCurvedFacePatchGeo(rx: number, ry: number, rz: number): THREE.BufferGeometry {
-  const segU = 14, segV = 12;
+  const segU = 18, segV = 16;
   const positions: number[] = [];
   const normals: number[] = [];
   const uvs: number[] = [];
   const indices: number[] = [];
 
-  const azMax = 0.88; // ~50 deg left/right so almond eyes & brows fill the sculpted face naturally
-  const elMin = -0.64; // chin/mouth
-  const elMax = 0.46; // forehead below hairline
-  const pad = 1.024;
+  const azMax = 0.88;
+  const elMin = -0.64;
+  const elMax = 0.46;
+  const pad = 1.028;
 
   for (let iv = 0; iv <= segV; iv++) {
-    const v = iv / segV; // 0 bottom, 1 top
+    const v = iv / segV;
     const el = elMin + (elMax - elMin) * v;
     const cosEl = Math.cos(el);
     const sinEl = Math.sin(el);
     for (let iu = 0; iu <= segU; iu++) {
-      const u = iu / segU; // 0 left, 1 right
+      const u = iu / segU;
       const az = -azMax + 2 * azMax * u;
       let sx = Math.sin(az) * cosEl;
       const sy = sinEl;
       let sz = Math.cos(az) * cosEl;
 
-      // Match the exact jaw taper of buildSculptedHeadGeo
       if (sy < 0) {
         const jawT = Math.min(1, -sy);
-        sx *= 1 - 0.34 * jawT * jawT;
+        sx *= 1 - 0.35 * jawT * jawT;
         sz *= 1 - 0.14 * jawT;
-        if (sz > 0) sz += 0.08 * jawT * (1 - Math.abs(sx));
+        if (sz > 0) sz += 0.095 * jawT * (1 - Math.abs(sx) * 0.85);
       } else {
         sx *= 0.96 + 0.05 * Math.sin(sy * Math.PI);
       }
 
-      const px = sx * rx * pad;
-      const py = sy * ry * pad;
-      const pz = sz * rz * pad;
-      positions.push(px, py, pz);
+      if (sz > 0.25) {
+        const front = Math.min(1, (sz - 0.25) / 0.55);
+        for (const s of [-1, 1]) {
+          const ex = (sx - s * 0.36) / 0.22;
+          const ey = (sy - 0.10) / 0.16;
+          const d2 = ex * ex + ey * ey;
+          if (d2 < 2.0) sz -= 0.072 * Math.exp(-d2 * 1.9) * front;
+
+          const cx = (sx - s * 0.54) / 0.24;
+          const cy = (sy + 0.10) / 0.18;
+          const cb = Math.exp(-(cx * cx + cy * cy) * 1.7) * front;
+          sx += s * 0.055 * cb;
+          sz += 0.045 * cb;
+
+          const hx = (sx - s * 0.44) / 0.24;
+          const hy = (sy + 0.36) / 0.24;
+          const ch = Math.exp(-(hx * hx + hy * hy) * 1.6) * front;
+          sx -= s * 0.065 * ch;
+        }
+        if (sy > 0.18 && sy < 0.44) {
+          sz += 0.066 * Math.sin(((sy - 0.18) / 0.26) * Math.PI) * front * (1 - Math.min(1, sx * sx * 1.1));
+        }
+      }
+
+      positions.push(sx * rx * pad, sy * ry * pad, sz * rz * pad);
       const len = Math.hypot(sx, sy, sz) || 1;
       normals.push(sx / len, sy / len, sz / len);
       uvs.push(u, v);
@@ -306,8 +299,8 @@ function buildCurvedFacePatchGeo(rx: number, ry: number, rz: number): THREE.Buff
   return geo;
 }
 
-/** Tapered stylized limb capsule (origin at top joint y = 0, extending downward to y = -len). */
-function buildTaperedLimbGeo(rTop: number, rBot: number, len: number, segs = 10): THREE.BufferGeometry {
+/** Tapered anatomical limb capsule (origin at top joint y = 0, extending downward to y = -len). */
+function buildTaperedLimbGeo(rTop: number, rBot: number, len: number, segs = 12): THREE.BufferGeometry {
   const pts: THREE.Vector2[] = [];
   const capSteps = 4;
   for (let i = 0; i <= capSteps; i++) {
@@ -315,7 +308,7 @@ function buildTaperedLimbGeo(rTop: number, rBot: number, len: number, segs = 10)
     pts.push(new THREE.Vector2(Math.sin(a) * rBot, -len - Math.cos(a) * rBot * 0.65));
   }
   pts.push(new THREE.Vector2(rBot * 0.96, -len * 0.72));
-  pts.push(new THREE.Vector2((rTop + rBot) * 0.54, -len * 0.35));
+  pts.push(new THREE.Vector2((rTop + rBot) * 0.55, -len * 0.35));
   pts.push(new THREE.Vector2(rTop, -len * 0.06));
   for (let i = 1; i <= capSteps; i++) {
     const a = (i / capSteps) * (Math.PI * 0.5);
@@ -324,7 +317,7 @@ function buildTaperedLimbGeo(rTop: number, rBot: number, len: number, segs = 10)
   return new THREE.LatheGeometry(pts, segs);
 }
 
-/** Build anatomical 3D hair meshes on the head socket. */
+/** Build textured multi-clump 3D hair locks & fibrous tufts on the head socket (kills plastic helmet-sphere look!). */
 function buildHairMeshes(
   parent: THREE.Group,
   style: HairStyle,
@@ -333,9 +326,11 @@ function buildHairMeshes(
   ry: number,
   rz: number,
   hairCurtain: boolean,
+  disposables: Array<{ dispose(): void }>,
 ): THREE.Mesh[] {
   const created: THREE.Mesh[] = [];
   const add = (geo: THREE.BufferGeometry, pos: V3, rot: V3 = [0, 0, 0], scl: V3 = [1, 1, 1], name = "hair") => {
+    disposables.push(geo);
     const m = new THREE.Mesh(geo, mat);
     m.name = name;
     m.position.set(...pos);
@@ -350,51 +345,62 @@ function buildHairMeshes(
 
   if (style === "bald" && !hairCurtain) return created;
 
-  // Base sculpted hair cap tilted BACKWARD so front hairline sits high on forehead (NEVER covering eyes!)
-  // while the back rim drops down cleanly over the occiput.
+  // Base sculpted hair cap tilted BACKWARD so front hairline sits high on forehead (NEVER covers eyes!)
   const cap = new THREE.SphereGeometry(1, 18, 12, 0, Math.PI * 2, 0, Math.PI * 0.48);
   add(cap, [0, ry * 0.14, -rz * 0.08], [-0.46, 0, 0], [rx * 1.07, ry * 1.02, rz * 1.09], "hairCap");
 
-  // Clean rear nape coverage strictly behind the ears (Three.js theta=PI is -Z back, theta=0 is +Z front!)
+  // Rear nape coverage strictly behind the ears (-Z)
   const backNape = new THREE.CylinderGeometry(rx * 0.96, rx * 0.80, ry * 0.78, 12, 1, false, Math.PI * 0.56, Math.PI * 0.88);
   add(backNape, [0, -ry * 0.14, -rz * 0.10], [0.06, 0, 0], [1.02, 1, 0.94], "hairNape");
 
-  if (style === "shortParted") {
-    // Clean adult side-parted hair volume perched strictly above forehead hairline + subtle sideburns
-    add(new THREE.SphereGeometry(1, 12, 10), [-rx * 0.24, ry * 0.84, rz * 0.24], [0.12, 0.14, 0.20], [rx * 0.72, ry * 0.28, rz * 0.54], "hairFringeL");
-    add(new THREE.SphereGeometry(1, 12, 10), [rx * 0.44, ry * 0.80, rz * 0.18], [0.10, -0.18, -0.24], [rx * 0.54, ry * 0.26, rz * 0.48], "hairFringeR");
+  if (style === "shortParted" || style === "elderThin") {
+    // Swept sculpted layered hair volume hugging the cranium, forehead & temples (zero spiky thorns poking out!)
+    add(new THREE.SphereGeometry(1, 16, 12), [-rx * 0.22, ry * 0.78, rz * 0.22], [0.16, 0.14, 0.18], [rx * 0.76, ry * 0.30, rz * 0.56], "hairFringeL");
+    add(new THREE.SphereGeometry(1, 16, 12), [rx * 0.42, ry * 0.74, rz * 0.16], [0.14, -0.18, -0.22], [rx * 0.58, ry * 0.28, rz * 0.50], "hairFringeR");
+    // Overlapping swept side & crown hair layers hugging skull curvature
+    const locks: Array<[V3, V3, V3]> = [
+      [[-rx * 0.58, ry * 0.64, rz * 0.32], [0.95, 0.25, 0.72], [0.036, 0.095, 0.020]],
+      [[rx * 0.58, ry * 0.64, rz * 0.32], [0.95, -0.25, -0.72], [0.036, 0.095, 0.020]],
+      [[-rx * 0.82, ry * 0.34, rz * 0.06], [1.45, 0.18, 1.25], [0.032, 0.092, 0.022]],
+      [[rx * 0.82, ry * 0.34, rz * 0.06], [1.45, -0.18, -1.25], [0.032, 0.092, 0.022]],
+      [[-rx * 0.48, ry * 0.72, -rz * 0.28], [-1.05, 0.16, 0.42], [0.042, 0.105, 0.026]],
+      [[rx * 0.48, ry * 0.72, -rz * 0.28], [-1.05, -0.16, -0.42], [0.042, 0.105, 0.026]],
+    ];
+    locks.forEach(([p, r, s], i) => add(new THREE.ConeGeometry(1, 1, 6), p, r, s, `hairLock_${i}`));
     for (const s of [-1, 1]) {
-      add(new THREE.BoxGeometry(0.014, ry * 0.52, 0.026), [s * rx * 0.96, ry * 0.18, rz * 0.12], [0, 0, s * 0.06], [1, 1, 1], s < 0 ? "sideburnL" : "sideburnR");
+      add(new THREE.BoxGeometry(0.016, ry * 0.54, 0.030), [s * rx * 0.96, ry * 0.16, rz * 0.10], [0, 0, s * 0.08], [1, 1, 1], s < 0 ? "sideburnL" : "sideburnR");
     }
   } else if (style === "spiky") {
     const tufts: [V3, V3, V3][] = [
-      [[0, ry * 1.10, 0.0], [-0.15, 0, 0], [0.042, 0.11, 0.042]],
-      [[-0.048, ry * 1.02, 0.0], [-0.10, 0, 0.38], [0.036, 0.095, 0.036]],
-      [[0.048, ry * 1.02, 0.0], [-0.08, 0, -0.38], [0.036, 0.095, 0.036]],
-      [[-0.03, ry * 1.04, -0.04], [-0.36, 0, 0.22], [0.034, 0.09, 0.034]],
-      [[0.03, ry * 1.04, -0.04], [-0.36, 0, -0.22], [0.034, 0.09, 0.034]],
+      [[0, ry * 1.06, 0.06], [0.32, 0, 0], [0.042, 0.098, 0.032]],
+      [[-0.048, ry * 0.96, 0.04], [0.24, 0, 0.56], [0.036, 0.088, 0.028]],
+      [[0.048, ry * 0.96, 0.04], [0.24, 0, -0.56], [0.036, 0.088, 0.028]],
+      [[-0.078, ry * 0.74, 0.0], [0.12, 0, 1.02], [0.030, 0.082, 0.026]],
+      [[0.078, ry * 0.74, 0.0], [0.12, 0, -1.02], [0.030, 0.082, 0.026]],
+      [[-0.034, ry * 0.98, -0.04], [-0.55, 0, 0.28], [0.036, 0.088, 0.028]],
+      [[0.034, ry * 0.98, -0.04], [-0.55, 0, -0.28], [0.036, 0.088, 0.028]],
     ];
-    for (const [p, r, s] of tufts) add(new THREE.ConeGeometry(1, 1, 6), p, r, s, "hairTuft");
+    for (const [p, r, s] of tufts) add(new THREE.ConeGeometry(1, 1, 5), p, r, s, "hairTuft");
   } else if (style === "bun") {
     add(new THREE.SphereGeometry(rx * 0.58, 12, 10), [0, -ry * 0.06, -rz * 1.24], [0, 0, 0], [1.05, 0.92, 0.92], "hairBun");
   } else if (style === "messyFringe") {
-    add(new THREE.SphereGeometry(1, 14, 10), [0, ry * 0.76, rz * 0.04], [-0.14, 0, 0], [rx * 1.10, ry * 0.44, rz * 0.96], "hairCrown");
+    // Organic swept adult hair hugging skull & temples (zero boxy beret cap!)
+    add(new THREE.SphereGeometry(1, 16, 12), [0, ry * 0.62, -rz * 0.04], [-0.24, 0, 0], [rx * 1.07, ry * 0.44, rz * 1.02], "hairCrown");
     for (const s of [-1, 1]) {
-      add(new THREE.BoxGeometry(0.018, ry * 0.68, 0.044), [s * rx * 0.98, ry * 0.14, rz * 0.04], [0, 0, s * 0.08], [1, 1, 1], s < 0 ? "sideburnL" : "sideburnR");
+      add(new THREE.BoxGeometry(0.016, ry * 0.64, 0.040), [s * rx * 0.96, ry * 0.14, rz * 0.04], [0, 0, s * 0.08], [1, 1, 1], s < 0 ? "sideburnL" : "sideburnR");
     }
-    for (let i = 0; i < 5; i++) {
-      const u = (i - 2) / 2;
+    for (let i = 0; i < 6; i++) {
+      const u = (i - 2.5) / 2.5;
       const m = add(
-        new THREE.ConeGeometry(0.026, 0.095 + (i % 2) * 0.028, 5),
-        [u * rx * 0.74, ry * 0.56 - Math.abs(u) * 0.02, rz * 0.82 - Math.abs(u) * 0.06],
-        [Math.PI + 0.18, 0, u * 0.26],
-        [1, 1, 0.45],
+        new THREE.ConeGeometry(0.024, 0.095 + (i % 2) * 0.026, 5),
+        [u * rx * 0.78, ry * 0.56 - Math.abs(u) * 0.03, rz * 0.82 - Math.abs(u) * 0.10],
+        [Math.PI + 0.24, 0, u * 0.30],
+        [1, 1, 0.42],
         `hairBang_${i}`,
       );
       m.userData.noOutline = true;
     }
   } else if (style === "longDraped") {
-    // Flowing rear hair sheet strictly behind head (-Z) + tapered side locks draping past jaw/shoulders
     add(
       new THREE.CylinderGeometry(rx * 1.06, rx * 1.28, 0.46, 14, 1, false, Math.PI * 0.54, Math.PI * 0.92),
       [0, -0.18, -rz * 0.14],
@@ -413,12 +419,11 @@ function buildHairMeshes(
     }
   }
 
-  // Uncanny entity hanging hair curtain: organic parted curved locks (noOutline on inner wisps -> no comb/piano-key bars!)
   if (hairCurtain) {
     const strands: Array<[number, number, number, number]> = [
       [-0.88, 0.36, 0.12, 0.024],
       [-0.58, 0.30, 0.06, 0.020],
-      [-0.14, 0.21, -0.04, 0.015], // thin center wisp between eyes
+      [-0.14, 0.21, -0.04, 0.014],
       [0.56, 0.32, -0.07, 0.021],
       [0.86, 0.38, -0.13, 0.024],
     ];
@@ -430,7 +435,6 @@ function buildHairMeshes(
         [1, 1, 0.38],
         `hairCurtain_${i}`,
       );
-      // Inner face-framing wisps skip BackSide hull so they read as sharp dark hair locks rather than thick blocks
       if (Math.abs(u) < 0.75) m.userData.noOutline = true;
     });
   }
@@ -438,44 +442,116 @@ function buildHairMeshes(
   return created;
 }
 
-/** Build an articulated 3D stylized dark-horror humanoid or supernatural entity. */
+/** Build an articulated 3D dark-horror humanoid or visceral body-horror entity. */
 export function createCharacter3D(cfg: CharacterConfig): Character3D {
   const ent = cfg.entity;
-  const hScale = (cfg.height ?? 1.72) / 1.72 * (ent?.heightScale ?? 1.0);
+  const bh = ent?.bodyHorror;
+  const hScale = ((cfg.height ?? 1.72) / 1.72) * (ent?.heightScale ?? 1.0);
   const gaunt = ent?.gauntness ?? 1.0;
   const armS = ent?.armScale ?? 1.0;
   const fingerS = ent?.fingerScale ?? 1.0;
-  const isSil = !!ent?.silhouetteMode;
+  const isSil = !!ent?.silhouetteMode && !bh?.cadaverSkin;
+  const bloodLevel = bh?.bloodStainLevel ?? 0;
 
-  const skinHex = isSil ? "#11121a" : (cfg.skinCol ?? "#cbb6a0");
-  const hairHex = isSil ? "#090a10" : (cfg.hairCol ?? "#16141b");
+  const skinHex = isSil ? "#11121a" : (cfg.skinCol ?? (bh?.cadaverSkin ? "#9b9ba4" : "#c4aa90"));
+  const hairHex = isSil ? "#090a10" : (cfg.hairCol ?? "#171419");
   const topHex = isSil ? "#0e0f17" : (cfg.topCol ?? "#d8d1c2");
+  const innerHex = cfg.innerCol ?? new THREE.Color(topHex).multiplyScalar(0.55).getStyle();
   const botHex = isSil ? "#0b0c12" : (cfg.bottomCol ?? "#1d1e28");
   const shoeHex = isSil ? "#09090e" : (cfg.shoeCol ?? "#16141a");
   const garment: GarmentStyle = cfg.garment ?? "shirt";
 
   const disposables: Array<{ dispose(): void }> = [];
   const faceCache = new FaceTextureCache();
-  const garmentTex = isSil ? null : makeGarmentTex(topHex, garment);
-  if (garmentTex) disposables.push(garmentTex);
 
-  const skinMat = stylizedShade(new THREE.MeshLambertMaterial({ color: skinHex }));
-  const hairMat = stylizedShade(new THREE.MeshLambertMaterial({ color: hairHex }));
-  const topMat = stylizedShade(new THREE.MeshLambertMaterial({ color: garmentTex ? "#ffffff" : topHex, map: garmentTex }));
-  const botMat = stylizedShade(new THREE.MeshLambertMaterial({ color: botHex }));
-  const shoeMat = stylizedShade(new THREE.MeshLambertMaterial({ color: shoeHex }));
+  // Tactile Style B Bump-Mapped Materials (kills smooth plastic surfaces!)
+  let skinMat: THREE.Material;
+  if (isSil) {
+    skinMat = stylizedShade(new THREE.MeshLambertMaterial({ color: skinHex }), 0.6, 0.3);
+  } else if (bh?.cadaverSkin) {
+    const cp = cadaverSkinPair(`v4_cad_${cfg.id}`, skinHex, bloodLevel);
+    skinMat = stylizedShade(
+      new THREE.MeshPhongMaterial({
+        map: cp.map,
+        bumpMap: cp.bumpMap,
+        bumpScale: 0.015,
+        specular: "#4a424c",
+        shininess: 22,
+      }),
+      0.72,
+      0.52,
+    );
+  } else {
+    const hp = humanSkinPair(`v4_skin_${cfg.id}`, skinHex);
+    skinMat = stylizedShade(
+      new THREE.MeshPhongMaterial({
+        map: hp.map,
+        bumpMap: hp.bumpMap,
+        bumpScale: 0.0032,
+        specular: "#46352b",
+        shininess: 14,
+      }),
+      1.0,
+      0.22,
+    );
+  }
+
+  let topMat: THREE.Material;
+  if (isSil) {
+    topMat = stylizedShade(new THREE.MeshLambertMaterial({ color: topHex }), 0.6, 0.4);
+  } else if (bh?.tatteredCloth || (bh && (garment === "hospitalGown" || garment === "shroud"))) {
+    const gp = tatteredGownPair(`v4_gown_${cfg.id}`, topHex, bloodLevel);
+    topMat = stylizedShade(
+      new THREE.MeshLambertMaterial({
+        map: gp.map,
+        bumpMap: gp.bumpMap,
+        bumpScale: 0.012,
+        side: THREE.DoubleSide,
+      }),
+      0.85,
+      0.52,
+    );
+  } else {
+    const fp = wovenFabricPair(`v4_top_${cfg.id}`, topHex);
+    topMat = stylizedShade(
+      new THREE.MeshLambertMaterial({ map: fp.map, bumpMap: fp.bumpMap, bumpScale: 0.009 }),
+      1.0,
+      0.38,
+    );
+  }
+
+  const hairP = hairStrandPair(`v4_hair_${cfg.id}`, hairHex);
+  const hairMat = stylizedShade(
+    new THREE.MeshPhongMaterial({
+      ...(isSil ? { color: hairHex } : { map: hairP.map, bumpMap: hairP.bumpMap, bumpScale: 0.006, color: "#ffffff" }),
+      specular: "#4a4240",
+      shininess: 20,
+    }),
+    0.85,
+    0.2,
+  );
+  const botP = wovenFabricPair(`v4_bot_${cfg.id}`, botHex);
+  const botMat = stylizedShade(
+    new THREE.MeshLambertMaterial({
+      ...(isSil ? { color: botHex } : { map: botP.map, bumpMap: botP.bumpMap, bumpScale: 0.008, color: "#ffffff" }),
+    }),
+    0.9,
+    0.42,
+  );
+  const shoeMat = stylizedShade(new THREE.MeshPhongMaterial({ color: shoeHex, specular: "#3a3840", shininess: 22 }), 0.85, 0.4);
   disposables.push(skinMat, hairMat, topMat, botMat, shoeMat);
 
-  // Core 1.72m adult measurements (non-chibi: head height 0.245m -> height/headH ~5.8-6.4)
+  // Core adult measurements (non-chibi: height/headH ~5.8-6.4)
   const thighLen = 0.42 * hScale;
   const calfLen = 0.42 * hScale;
   const footH = 0.06 * hScale;
-  const hipY = thighLen + calfLen + footH; // ~0.90m standing pelvis height
+  const hipY = thighLen + calfLen + footH;
   const spineLen = 0.24 * hScale;
   const chestLen = 0.24 * hScale;
-  const neckLen = 0.08 * hScale;
-  const headRx = 0.092 * hScale * (0.9 + 0.1 * gaunt);
-  const headRy = 0.122 * hScale; // total head height = 0.244m
+  const neckStretch = clamp01(((bh?.neckStretch ?? 1.0) - 1.0) / 1.5) * 1.5 + 1.0;
+  const neckLen = 0.08 * hScale * neckStretch;
+  const headRx = 0.092 * hScale * (0.88 + 0.12 * gaunt);
+  const headRy = 0.122 * hScale * (bh?.skullHollows ? 1.08 : 1.0);
   const headRz = 0.104 * hScale;
   const shoulderW = 0.156 * hScale * gaunt;
   const upperArmLen = 0.285 * hScale * armS;
@@ -513,7 +589,7 @@ export function createCharacter3D(cfg: CharacterConfig): Character3D {
   chest.add(neck);
 
   const head = mkGroup("head");
-  head.position.set(0, neckLen + headRy * 0.72, 0);
+  head.position.set(0, neckLen + headRy * 0.70, 0);
   neck.add(head);
 
   // Pelvis / hips geometry
@@ -521,101 +597,157 @@ export function createCharacter3D(cfg: CharacterConfig): Character3D {
   pelvisGeo.scale(1.12, 0.78, 0.78);
   pelvis.add(mkMesh(pelvisGeo, botMat, "pelvisMesh"));
 
-  // Sculpted torso with natural sloping shoulder yoke & trapezius (blends cleanly into arms!)
-  const torsoPts = [
-    new THREE.Vector2(0.01, -0.02 * hScale),
-    new THREE.Vector2(0.132 * hScale * gaunt, 0.0),
-    new THREE.Vector2(0.122 * hScale * gaunt, 0.13 * hScale),
-    new THREE.Vector2(0.172 * hScale * gaunt, 0.34 * hScale),
-    new THREE.Vector2(0.162 * hScale * gaunt, 0.42 * hScale),
-    new THREE.Vector2(0.118 * hScale * gaunt, 0.468 * hScale),
-    new THREE.Vector2(0.062 * hScale * gaunt, 0.492 * hScale),
-    new THREE.Vector2(0.01, 0.50 * hScale),
-  ];
-  const torsoGeo = new THREE.LatheGeometry(torsoPts, 16);
-  torsoGeo.scale(1.12, 1, 0.65);
-  const torsoMesh = mkMesh(torsoGeo, topMat, "torsoMesh");
-  spine.add(torsoMesh);
+  // Sculpted torso (skipped when bodyHorror.tatteredCloth builds the continuous seamless V-neck robe + sculpted ribcage!)
+  const usesContinuousHorrorRobe = !!(bh?.tatteredCloth);
+  if (!usesContinuousHorrorRobe) {
+    const ribPinch = bh?.exposedRibs ? 0.80 : 1.0;
+    const torsoPts = [
+      new THREE.Vector2(0.01, -0.02 * hScale),
+      new THREE.Vector2(0.132 * hScale * gaunt * ribPinch, 0.0),
+      new THREE.Vector2(0.118 * hScale * gaunt * ribPinch, 0.14 * hScale),
+      new THREE.Vector2(0.172 * hScale * gaunt, 0.34 * hScale),
+      new THREE.Vector2(0.162 * hScale * gaunt, 0.42 * hScale),
+      new THREE.Vector2(0.118 * hScale * gaunt, 0.468 * hScale),
+      new THREE.Vector2(0.062 * hScale * gaunt, 0.492 * hScale),
+      new THREE.Vector2(0.01, 0.50 * hScale),
+    ];
+    const torsoGeo = new THREE.LatheGeometry(torsoPts, 18);
+    torsoGeo.scale(1.12, 1, 0.65);
+    spine.add(mkMesh(torsoGeo, topMat, "torsoMesh"));
+  }
 
-  // Tailored 3D garment collar ring + waist belt/sash for clear silhouette separation from neck/skin
-  if (!isSil) {
+  // Tailored organic 3D collar & waist belt for human characters (zero floating cardboard boxes!)
+  if (!isSil && !bh) {
     const collarCol = new THREE.Color(topHex).multiplyScalar(0.76);
-    const collarMat = stylizedShade(new THREE.MeshLambertMaterial({ color: collarCol }));
+    const collarMat = stylizedShade(new THREE.MeshLambertMaterial({ color: collarCol }), 1.0, 0.35);
     disposables.push(collarMat);
-    const collarGeo = new THREE.CylinderGeometry(0.068 * hScale * gaunt, 0.088 * hScale * gaunt, 0.048 * hScale, 14);
-    collarGeo.scale(1.06, 1, 0.92);
+
+    // Sculpted turned-down V-collar wrapping cleanly around the base of the neck
+    const collarGeo = new THREE.TorusGeometry(0.080 * hScale * gaunt, 0.022 * hScale, 8, 18);
+    collarGeo.rotateX(Math.PI * 0.5 + 0.16);
+    collarGeo.scale(1.06, 0.94, 1.0);
     const collar = mkMesh(collarGeo, collarMat, "garmentCollar");
-    collar.position.set(0, 0.478 * hScale, 0.004 * hScale);
+    collar.position.set(0, 0.470 * hScale, 0.008 * hScale);
     spine.add(collar);
 
-    if (garment === "funeralRobe" || garment === "coat" || garment === "shirt") {
-      const beltGeo = new THREE.CylinderGeometry(0.132 * hScale * gaunt, 0.136 * hScale * gaunt, 0.036 * hScale, 14);
-      beltGeo.scale(1.12, 1, 0.68);
+    // Subtle inner shirt collar triangle tucked flush inside the turned-down collar
+    if (garment === "casualJacket" || garment === "coat" || garment === "shirt") {
+      const innerP = wovenFabricPair(`v4_in_${cfg.id}`, innerHex);
+      const innerMat = stylizedShade(
+        new THREE.MeshLambertMaterial({ map: innerP.map, bumpMap: innerP.bumpMap, bumpScale: 0.006 }),
+        1.0,
+        0.30,
+      );
+      disposables.push(innerMat);
+      const vNeckGeo = new THREE.CylinderGeometry(0.064 * hScale * gaunt, 0.076 * hScale * gaunt, 0.064 * hScale, 14);
+      vNeckGeo.scale(1.02, 1.0, 0.92);
+      const vNeck = mkMesh(vNeckGeo, innerMat, "innerShirtCollar");
+      vNeck.position.set(0, 0.486 * hScale, 0.002 * hScale);
+      spine.add(vNeck);
+    }
+
+    if (garment === "funeralRobe" || garment === "coat" || garment === "shirt" || garment === "casualJacket") {
+      const beltGeo = new THREE.CylinderGeometry(0.134 * hScale * gaunt, 0.138 * hScale * gaunt, 0.036 * hScale, 16);
+      beltGeo.scale(1.12, 1, 0.67);
       const belt = mkMesh(beltGeo, botMat, "waistBelt");
       belt.position.set(0, 0.04 * hScale, 0);
       spine.add(belt);
+      const buckleMat = stylizedShade(new THREE.MeshPhongMaterial({ color: "#686258", specular: "#c8bea8", shininess: 56 }), 1, 0.2);
+      disposables.push(buckleMat);
+      const buckle = mkMesh(new THREE.BoxGeometry(0.040 * hScale, 0.032 * hScale, 0.014 * hScale), buckleMat, "beltBuckle");
+      buckle.position.set(0, 0.04 * hScale, 0.094 * hScale * gaunt);
+      spine.add(buckle);
     }
   }
 
-  // Long robe/coat/shroud lower skirt flare attached to pelvis
-  if (garment === "funeralRobe" || garment === "coat" || garment === "hospitalGown" || garment === "shroud") {
-    const hemLen = garment === "shroud" ? 0.52 * hScale : 0.34 * hScale;
-    const skirtGeo = new THREE.CylinderGeometry(0.145 * hScale * gaunt, 0.195 * hScale * gaunt, hemLen, 14, 1, false);
-    skirtGeo.scale(1.05, 1, 0.72);
+  // Long robe/coat/gown/shroud lower skirt flare (skipped when continuous tatteredCloth gown already spans shoulders-to-knees!)
+  if (!usesContinuousHorrorRobe && (garment === "funeralRobe" || garment === "coat" || garment === "hospitalGown" || garment === "shroud")) {
+    const hemLen = garment === "shroud" || garment === "hospitalGown" ? 0.50 * hScale : 0.34 * hScale;
+    const skirtGeo = new THREE.CylinderGeometry(0.142 * hScale * gaunt, 0.198 * hScale * gaunt, hemLen, 16, 1, false);
+    skirtGeo.scale(1.06, 1, 0.72);
     const skirt = mkMesh(skirtGeo, topMat, "garmentSkirt");
     skirt.position.set(0, -hemLen * 0.42, 0);
     pelvis.add(skirt);
   }
 
-  // Slender neck
-  const neckGeo = new THREE.CylinderGeometry(0.044 * hScale * gaunt, 0.052 * hScale * gaunt, neckLen * 1.45, 10);
-  const neckMesh = mkMesh(neckGeo, skinMat, "neckMesh");
-  neckMesh.position.set(0, neckLen * 0.48, 0);
-  neck.add(neckMesh);
+  // Body Horror emaciated ribs, clavicles, dorsal spine & tattered hem strips
+  if (bh && (bh.exposedRibs || bh.protrudingSpine || bh.tatteredCloth)) {
+    buildEmaciatedTorso3D(spine, pelvis, hScale, gaunt, skinMat, topMat, bh, disposables);
+  }
 
-  // Sculpted head + protruding 3D nose bridge + thin 3D ears
-  const headGeo = buildSculptedHeadGeo(headRx, headRy, headRz);
-  head.add(mkMesh(headGeo, skinMat, "headMesh"));
+  // Neck: either sculpted tendon-ridged elongated body-horror neck OR normal adult neck
+  if (bh && (neckStretch > 1.12 || bh.skullHollows)) {
+    buildTendonNeck3D(neck, neckLen, hScale, gaunt, skinMat, disposables);
+  } else {
+    const neckGeo = new THREE.CylinderGeometry(0.044 * hScale * gaunt, 0.052 * hScale * gaunt, neckLen * 1.45, 12);
+    const neckMesh = mkMesh(neckGeo, skinMat, "neckMesh");
+    neckMesh.position.set(0, neckLen * 0.48, 0);
+    neck.add(neckMesh);
+  }
 
-  // Narrow tapered 3D nose bridge (NOT a chibi round sphere!)
-  const noseGeo = new THREE.ConeGeometry(0.015 * hScale, 0.052 * hScale, 4);
-  noseGeo.rotateY(Math.PI * 0.25);
-  noseGeo.scale(0.75, 1.0, 1.02);
-  const noseMesh = mkMesh(noseGeo, skinMat, "noseMesh");
-  noseMesh.position.set(0, 0.004 * hScale, headRz * 0.96);
-  noseMesh.rotation.x = 0.24;
-  head.add(noseMesh);
+  // Head & Face: Body-Horror 3D Skull + 3D Recessed Eyeballs + 3D Articulated Jaw/Teeth vs Sculpted Human Head + 1024px Decal
+  const uses3DHorrorSkull = !!bh?.skullHollows;
+  let jawSocket: THREE.Group | undefined;
+
+  if (uses3DHorrorSkull) {
+    const hasJaw = (bh?.jawDrop3D ?? 0) > 0 || !!bh?.crookedTeeth;
+    const skullGeo = buildHorrorSkullHeadGeo(headRx, headRy, headRz, hasJaw);
+    head.add(mkMesh(skullGeo, skinMat, "horrorSkullMesh"));
+    buildHorrorEyes3D(head, bh!, headRx, headRy, headRz, hScale, disposables);
+    if (hasJaw) {
+      jawSocket = buildHorrorJaw3D(head, bh!, headRx, headRy, headRz, hScale, skinMat, disposables);
+    }
+  } else {
+    const headGeo = buildSculptedHeadGeo(headRx, headRy, headRz);
+    head.add(mkMesh(headGeo, skinMat, "headMesh"));
+
+    // Sculpted 3D nose bridge + subtle nostril tip
+    const noseGeo = new THREE.ConeGeometry(0.015 * hScale, 0.054 * hScale, 5);
+    noseGeo.rotateY(Math.PI * 0.2);
+    noseGeo.scale(0.76, 1.0, 1.06);
+    const noseMesh = mkMesh(noseGeo, skinMat, "noseMesh");
+    noseMesh.position.set(0, 0.002 * hScale, headRz * 0.96);
+    noseMesh.rotation.x = 0.24;
+    head.add(noseMesh);
+
+    if (bh && ((bh.jawDrop3D ?? 0) > 0 || bh.crookedTeeth)) {
+      jawSocket = buildHorrorJaw3D(head, bh, headRx, headRy, headRz, hScale, skinMat, disposables);
+    }
+  }
 
   // Ears
   for (const side of [-1, 1] as const) {
     const earGeo = new THREE.SphereGeometry(0.022 * hScale, 8, 8);
     earGeo.scale(0.42, 1.25, 0.72);
     const ear = mkMesh(earGeo, skinMat, side < 0 ? "earL" : "earR");
-    ear.position.set(side * headRx * 0.96, -0.006 * hScale, -0.008 * hScale);
+    ear.position.set(side * headRx * 0.95, -0.006 * hScale, -0.008 * hScale);
     head.add(ear);
   }
 
-  // Curved 2D face decal hugging sculpted head (excluded from outline, receives scene light!)
+  // Curved 1024px 2D face decal (used on humans and non-skull entities; hidden on 3D sculpted horror skulls!)
   const faceGeo = buildCurvedFacePatchGeo(headRx, headRy, headRz);
   const faceMat = stylizedShade(
     new THREE.MeshLambertMaterial({
-      map: faceCache.get({ expr: "calm", skinCol: skinHex }),
+      map: faceCache.get({ expr: "calm", skinCol: skinHex, eyeHorror: bh?.eyeHorror, cheekSplitGrin: bh?.cheekSplitGrin }),
       transparent: true,
       alphaTest: 0.02,
       depthWrite: false,
       polygonOffset: true,
       polygonOffsetFactor: -1,
     }),
+    1.0,
+    0.15,
   );
   disposables.push(faceGeo, faceMat);
   const faceMesh = new THREE.Mesh(faceGeo, faceMat);
   faceMesh.name = "faceDecal";
   faceMesh.userData.noOutline = true;
+  faceMesh.userData.noSSAO = true;
   faceMesh.layers.set(NOINK);
-  faceMesh.visible = !isSil;
+  faceMesh.visible = !isSil && !uses3DHorrorSkull;
   head.add(faceMesh);
 
-  // Optional HDR glowing pinpoint eyes for uncanny silhouette entities
+  // Optional HDR glowing pinpoint eyes for silhouette entities
   const eyeGlowGroup = mkGroup("eyeGlowGroup");
   if (ent?.eyeGlow) {
     const [er, eg, eb] = ent.eyeGlowColor ?? [2.3, 2.45, 2.8];
@@ -628,6 +760,7 @@ export function createCharacter3D(cfg: CharacterConfig): Character3D {
       const em = new THREE.Mesh(egGeo, glowMat);
       em.name = s < 0 ? "eyeGlowL" : "eyeGlowR";
       em.userData.noOutline = true;
+      em.userData.noSSAO = true;
       em.userData.isEyeGlow = true;
       em.position.set(s * headRx * 0.36, 0.015 * hScale, headRz * 1.01);
       em.layers.set(NOINK);
@@ -637,9 +770,10 @@ export function createCharacter3D(cfg: CharacterConfig): Character3D {
   head.add(eyeGlowGroup);
 
   // 3D layered hair + optional funeral headband (khăn tang)
-  buildHairMeshes(head, cfg.hairStyle ?? "shortParted", hairMat, headRx, headRy, headRz, !!ent?.hairCurtain);
+  buildHairMeshes(head, cfg.hairStyle ?? "shortParted", hairMat, headRx, headRy, headRz, !!ent?.hairCurtain, disposables);
   if (cfg.headbandCol && !isSil) {
-    const bandMat = stylizedShade(new THREE.MeshLambertMaterial({ color: cfg.headbandCol }));
+    const bandP = wovenFabricPair(`v4_band_${cfg.id}`, cfg.headbandCol);
+    const bandMat = stylizedShade(new THREE.MeshLambertMaterial({ map: bandP.map, bumpMap: bandP.bumpMap, bumpScale: 0.005 }), 1, 0.25);
     disposables.push(bandMat);
     const bandGeo = new THREE.TorusGeometry(headRx * 1.05, 0.015 * hScale, 8, 22);
     bandGeo.rotateX(Math.PI * 0.5);
@@ -650,7 +784,7 @@ export function createCharacter3D(cfg: CharacterConfig): Character3D {
     head.add(band);
   }
 
-  // Arms & hands (15-bone upper body — seated smoothly inside shoulder slope, never popped-out balloons!)
+  // Arms & hands (standard human vs 3-joint skeletal spider claws for Body Horror!)
   const buildArm = (side: -1 | 1) => {
     const pfx = side < 0 ? "left" : "right";
     const shoulder = mkGroup(`${pfx}Shoulder`);
@@ -665,55 +799,66 @@ export function createCharacter3D(cfg: CharacterConfig): Character3D {
     const shBall = mkMesh(shCapGeo, topMat, `${pfx}ShoulderCap`);
     shBall.position.set(-side * 0.012 * hScale, -0.010 * hScale, 0);
     upperArm.add(shBall);
-    const shortSleeve = garment === "shirt" || garment === "hospitalGown";
-    upperArm.add(
-      mkMesh(
-        buildTaperedLimbGeo(0.039 * hScale * gaunt, (shortSleeve ? 0.036 : 0.033) * hScale * gaunt, upperArmLen),
-        topMat,
-        `${pfx}UpperArmMesh`,
-      ),
-    );
-    // Crisp tailored cuff trim at the end of short sleeves (clean transition to bare forearm!)
-    if (shortSleeve && !isSil) {
-      const cuffMat = stylizedShade(new THREE.MeshLambertMaterial({ color: new THREE.Color(topHex).multiplyScalar(0.82) }));
-      disposables.push(cuffMat);
-      const cuff = mkMesh(new THREE.CylinderGeometry(0.038 * hScale * gaunt, 0.039 * hScale * gaunt, 0.024 * hScale, 12), cuffMat, `${pfx}SleeveCuff`);
-      cuff.position.set(0, -upperArmLen + 0.012 * hScale, 0);
-      upperArm.add(cuff);
+
+    const shortSleeve = garment === "shirt" || garment === "hospitalGown" || !!bh?.exposedRibs;
+    const upperRTop = 0.039 * hScale * gaunt;
+    const upperRBot = (shortSleeve ? 0.034 : 0.032) * hScale * gaunt;
+    if (shortSleeve && bh) {
+      // Torn short hospital sleeve exposing emaciated upper arm skin midway
+      const sleeveLen = upperArmLen * 0.48;
+      upperArm.add(mkMesh(buildTaperedLimbGeo(upperRTop, upperRTop * 0.96, sleeveLen), topMat, `${pfx}SleeveMesh`));
+      const bareUpper = mkMesh(buildTaperedLimbGeo(upperRBot * 0.82, upperRBot * 0.72, upperArmLen * 0.56), skinMat, `${pfx}UpperArmMesh`);
+      bareUpper.position.y = -sleeveLen * 0.92;
+      upperArm.add(bareUpper);
+    } else {
+      upperArm.add(mkMesh(buildTaperedLimbGeo(upperRTop, upperRBot, upperArmLen), topMat, `${pfx}UpperArmMesh`));
+      if (shortSleeve && !isSil) {
+        const cuffMat = stylizedShade(new THREE.MeshLambertMaterial({ color: new THREE.Color(topHex).multiplyScalar(0.80) }), 1, 0.35);
+        disposables.push(cuffMat);
+        const cuff = mkMesh(new THREE.CylinderGeometry(0.038 * hScale * gaunt, 0.039 * hScale * gaunt, 0.024 * hScale, 12), cuffMat, `${pfx}SleeveCuff`);
+        cuff.position.set(0, -upperArmLen + 0.012 * hScale, 0);
+        upperArm.add(cuff);
+      }
     }
 
     const forearm = mkGroup(`${pfx}Forearm`);
     forearm.position.set(0, -upperArmLen, 0);
     upperArm.add(forearm);
     const sleeveMat = shortSleeve ? skinMat : topMat;
-    // Bare forearm radius sits cleanly inside short-sleeve cuff so elbow never z-fights!
-    const fTop = (shortSleeve ? 0.028 : 0.033) * hScale * gaunt;
-    const fBot = (shortSleeve ? 0.024 : 0.027) * hScale * gaunt;
+    const fTop = (shortSleeve ? 0.027 : 0.033) * hScale * gaunt;
+    const fBot = (shortSleeve ? 0.022 : 0.027) * hScale * gaunt;
+    // Rounded anatomical elbow joint cap so sharply bent elbows never kink!
+    forearm.add(mkMesh(new THREE.SphereGeometry(fTop * 1.04, 10, 8), sleeveMat, `${pfx}ElbowJoint`));
     forearm.add(mkMesh(buildTaperedLimbGeo(fTop, fBot, forearmLen), sleeveMat, `${pfx}ForearmMesh`));
 
     const hand = mkGroup(`${pfx}Hand`);
     hand.position.set(0, -forearmLen, 0);
     forearm.add(hand);
 
-    // Slender horror palm + thumb + 4 tapered fingers
-    const palmGeo = new THREE.BoxGeometry(0.042 * hScale * gaunt, 0.068 * hScale * fingerS, 0.022 * hScale);
-    const palm = mkMesh(palmGeo, skinMat, `${pfx}Palm`);
-    palm.position.set(0, -0.034 * hScale * fingerS, 0);
-    hand.add(palm);
+    if (bh?.clawHands) {
+      buildSpiderClawHand3D(hand, side, hScale, gaunt, fingerS, skinMat, bloodLevel, disposables, pfx);
+    } else {
+      // Sculpted rounded palm + gently curled slender fingers (never a stiff wooden rake!)
+      const palmGeo = new THREE.SphereGeometry(0.026 * hScale * gaunt, 10, 8);
+      palmGeo.scale(0.86, 1.35 * fingerS, 0.50);
+      const palm = mkMesh(palmGeo, skinMat, `${pfx}Palm`);
+      palm.position.set(0, -0.030 * hScale * fingerS, 0);
+      hand.add(palm);
 
-    const fLen = 0.062 * hScale * fingerS;
-    for (let fi = 0; fi < 4; fi++) {
-      const fGeo = new THREE.CapsuleGeometry(0.0065 * hScale * gaunt, fLen, 4, 6);
-      const fm = mkMesh(fGeo, skinMat, `${pfx}Finger_${fi}`);
-      fm.position.set((fi - 1.5) * 0.011 * hScale * gaunt, -0.068 * hScale * fingerS - fLen * 0.42, 0.004 * hScale);
-      fm.rotation.x = 0.16;
-      hand.add(fm);
+      const fLen = 0.048 * hScale * fingerS;
+      for (let fi = 0; fi < 4; fi++) {
+        const fGeo = new THREE.CapsuleGeometry(0.0056 * hScale * gaunt, fLen, 4, 6);
+        const fm = mkMesh(fGeo, skinMat, `${pfx}Finger_${fi}`);
+        fm.position.set((fi - 1.5) * 0.0095 * hScale * gaunt, -0.056 * hScale * fingerS - fLen * 0.36, 0.008 * hScale);
+        fm.rotation.set(0.36, 0, (fi - 1.5) * -0.04);
+        hand.add(fm);
+      }
+      const thumbGeo = new THREE.CapsuleGeometry(0.0068 * hScale * gaunt, fLen * 0.62, 4, 6);
+      const thumb = mkMesh(thumbGeo, skinMat, `${pfx}Thumb`);
+      thumb.position.set(-side * 0.022 * hScale * gaunt, -0.038 * hScale * fingerS, 0.014 * hScale);
+      thumb.rotation.set(0.34, 0, -side * 0.38);
+      hand.add(thumb);
     }
-    const thumbGeo = new THREE.CapsuleGeometry(0.0075 * hScale * gaunt, fLen * 0.65, 4, 6);
-    const thumb = mkMesh(thumbGeo, skinMat, `${pfx}Thumb`);
-    thumb.position.set(-side * 0.026 * hScale * gaunt, -0.046 * hScale * fingerS, 0.014 * hScale);
-    thumb.rotation.set(0.28, 0, -side * 0.42);
-    hand.add(thumb);
 
     return { shoulder, upperArm, forearm, hand };
   };
@@ -721,26 +866,35 @@ export function createCharacter3D(cfg: CharacterConfig): Character3D {
   const leftArm = buildArm(-1);
   const rightArm = buildArm(1);
 
-  // Legs & shoes
+  // Optional 2 extra gaunt shadowy arms emerging from behind the entity's back!
+  let extraArms: { leftExtraArm: THREE.Group; rightExtraArm: THREE.Group } | undefined;
+  if ((bh?.extraArms ?? 0) >= 2) {
+    extraArms = buildExtraArms3D(chest, hScale, gaunt, armS, skinMat, !!bh?.clawHands, bloodLevel, disposables);
+  }
+
+  // Legs & bare feet / shoes
+  const bareLegs = !!bh && (garment === "hospitalGown" || garment === "shroud");
+  const legMat = bareLegs ? skinMat : botMat;
+  const footMat = bareLegs ? skinMat : shoeMat;
   const buildLeg = (side: -1 | 1) => {
     const pfx = side < 0 ? "left" : "right";
     const thigh = mkGroup(`${pfx}Thigh`);
     thigh.position.set(side * 0.095 * hScale * gaunt, -0.02 * hScale, 0);
     pelvis.add(thigh);
-    thigh.add(mkMesh(buildTaperedLimbGeo(0.068 * hScale * gaunt, 0.048 * hScale * gaunt, thighLen), botMat, `${pfx}ThighMesh`));
+    thigh.add(mkMesh(buildTaperedLimbGeo(0.066 * hScale * gaunt, 0.044 * hScale * gaunt, thighLen), legMat, `${pfx}ThighMesh`));
 
     const calf = mkGroup(`${pfx}Calf`);
     calf.position.set(0, -thighLen, 0);
     thigh.add(calf);
-    calf.add(mkMesh(buildTaperedLimbGeo(0.048 * hScale * gaunt, 0.034 * hScale * gaunt, calfLen), botMat, `${pfx}CalfMesh`));
+    calf.add(mkMesh(buildTaperedLimbGeo(0.044 * hScale * gaunt, 0.030 * hScale * gaunt, calfLen), legMat, `${pfx}CalfMesh`));
 
     const foot = mkGroup(`${pfx}Foot`);
     foot.position.set(0, -calfLen, 0);
     calf.add(foot);
-    const shoeGeo = new THREE.CapsuleGeometry(0.036 * hScale, 0.12 * hScale, 5, 8);
+    const shoeGeo = new THREE.CapsuleGeometry(0.034 * hScale * (bareLegs ? gaunt : 1), 0.12 * hScale, 5, 8);
     shoeGeo.rotateX(Math.PI * 0.5);
-    shoeGeo.scale(0.95, 0.68, 1.0);
-    const shoe = mkMesh(shoeGeo, shoeMat, `${pfx}ShoeMesh`);
+    shoeGeo.scale(0.95, 0.62, 1.0);
+    const shoe = mkMesh(shoeGeo, footMat, `${pfx}ShoeMesh`);
     shoe.position.set(0, -footH * 0.45, 0.045 * hScale);
     foot.add(shoe);
 
@@ -757,6 +911,7 @@ export function createCharacter3D(cfg: CharacterConfig): Character3D {
     chest,
     neck,
     head,
+    ...(jawSocket ? { jaw: jawSocket } : {}),
     leftShoulder: leftArm.shoulder,
     leftUpperArm: leftArm.upperArm,
     leftForearm: leftArm.forearm,
@@ -765,6 +920,7 @@ export function createCharacter3D(cfg: CharacterConfig): Character3D {
     rightUpperArm: rightArm.upperArm,
     rightForearm: rightArm.forearm,
     rightHand: rightArm.hand,
+    ...(extraArms ? { leftExtraArm: extraArms.leftExtraArm, rightExtraArm: extraArms.rightExtraArm } : {}),
     leftThigh: leftLeg.thigh,
     leftCalf: leftLeg.calf,
     leftFoot: leftLeg.foot,
@@ -773,18 +929,32 @@ export function createCharacter3D(cfg: CharacterConfig): Character3D {
     rightFoot: rightLeg.foot,
   };
 
-  // Attach smooth-normal Inverted-Hull outlines to every bone mesh and enforce NOINK layer across entire rig
-  const outlineMeshes = attachOutlineRig(root, { pxWidth: cfg.outlinePx ?? 5.8, color: "#06060a" });
+  // Isolate entire rig onto NOINK; only create cartoon BackSide outlines when explicitly requested (Style B default = "off"!)
+  const resolvedOutlineMode: OutlineMode =
+    cfg.outlineMode ?? (cfg.outlinePx !== undefined && cfg.outlinePx > 0 ? "cleanBold" : "off");
+  const outlineMeshes = attachOutlineRig(root, {
+    mode: resolvedOutlineMode,
+    pxWidth: cfg.outlinePx ?? 5.8,
+    color: "#06060a",
+  });
   for (const ol of outlineMeshes) disposables.push(ol.geometry);
 
   const setFace = (spec: FaceSpec) => {
-    if (isSil) return;
-    const tex = faceCache.get({ skinCol: skinHex, ...spec });
+    if (isSil || uses3DHorrorSkull) return;
+    const tex = faceCache.get({
+      skinCol: skinHex,
+      realisticStyle: resolvedOutlineMode === "off",
+      eyeHorror: bh?.eyeHorror,
+      cheekSplitGrin: bh?.cheekSplitGrin,
+      ...spec,
+    });
     if (faceMat.map !== tex) {
       faceMat.map = tex;
       faceMat.needsUpdate = true;
     }
   };
+
+  const baseJawDrop = clamp01(bh?.jawDrop3D ?? 0);
 
   const resetPose = () => {
     pelvis.position.set(0, hipY, 0);
@@ -793,15 +963,22 @@ export function createCharacter3D(cfg: CharacterConfig): Character3D {
     chest.rotation.set(0, 0, 0);
     neck.rotation.set(0, 0, 0);
     head.rotation.set(0, 0, 0);
+    if (jawSocket) {
+      jawSocket.rotation.set(baseJawDrop * 0.78, 0, 0);
+      jawSocket.position.y = -headRy * 0.24 - baseJawDrop * 0.022 * hScale;
+    }
     leftArm.shoulder.rotation.set(0, 0, 0);
     rightArm.shoulder.rotation.set(0, 0, 0);
-    // Note: Rz(a) maps hanging arm (0,-1,0) -> (+sin(a), -cos(a), 0): left (-X) flares outward with rotZ < 0, right (+X) with rotZ > 0!
     leftArm.upperArm.rotation.set(0, 0, -0.09);
     rightArm.upperArm.rotation.set(0, 0, 0.09);
     leftArm.forearm.rotation.set(-0.14, 0, 0);
     rightArm.forearm.rotation.set(-0.14, 0, 0);
     leftArm.hand.rotation.set(0, 0, 0);
     rightArm.hand.rotation.set(0, 0, 0);
+    if (extraArms) {
+      extraArms.leftExtraArm.rotation.set(0.16, 0.18, -0.42);
+      extraArms.rightExtraArm.rotation.set(0.16, -0.18, 0.42);
+    }
     leftLeg.thigh.rotation.set(0, 0, 0);
     rightLeg.thigh.rotation.set(0, 0, 0);
     leftLeg.calf.rotation.set(0, 0, 0);
@@ -816,26 +993,25 @@ export function createCharacter3D(cfg: CharacterConfig): Character3D {
     const t = ent?.steppedFps ? uncannyTime(frame, Math.max(1, Math.round(FPS / ent.steppedFps)), FPS) : frame / FPS;
     const aliveBreath = ent?.breathing === false ? 0 : Math.sin(t * 2.1 + seed) * 0.022;
 
-    // Default breathing & subtle entity neck distortion
     chest.rotation.x = aliveBreath;
     if (ent?.neckTiltDeg) {
       neck.rotation.z = THREE.MathUtils.degToRad(ent.neckTiltDeg);
     }
 
     if (action === "sitCrossLegged") {
-      // Natural Vietnamese seated cross-legged posture: thighs angled gently forward, shins folded cleanly across in front
       pelvis.position.y = 0.14 * hScale;
-      spine.rotation.x = 0.07 + aliveBreath * 0.6;
+      spine.rotation.x = 0.08 + aliveBreath * 0.6;
       leftLeg.thigh.rotation.set(-1.38, 0.42, -0.14);
       rightLeg.thigh.rotation.set(-1.38, -0.42, 0.14);
       leftLeg.calf.rotation.set(1.52, 0.62, -0.78);
       rightLeg.calf.rotation.set(1.52, -0.62, 0.78);
-      leftArm.upperArm.rotation.set(-0.28, 0.06, -0.18);
-      rightArm.upperArm.rotation.set(-0.28, -0.06, 0.18);
-      leftArm.forearm.rotation.set(-0.92, 0.18, 0.24);
-      rightArm.forearm.rotation.set(-0.92, -0.18, -0.24);
-      leftArm.hand.rotation.set(0.16, 0, 0);
-      rightArm.hand.rotation.set(0.16, 0, 0);
+      // Hands rest naturally inward on knees/lap instead of hanging straight down stiffly!
+      leftArm.upperArm.rotation.set(-0.46, 0.14, -0.14);
+      rightArm.upperArm.rotation.set(-0.46, -0.14, 0.14);
+      leftArm.forearm.rotation.set(-1.08, 0.24, 0.34);
+      rightArm.forearm.rotation.set(-1.08, -0.24, -0.34);
+      leftArm.hand.rotation.set(0.24, 0, 0.18);
+      rightArm.hand.rotation.set(0.24, 0, -0.18);
     } else if (action === "sitChair") {
       pelvis.position.y = 0.46 * hScale;
       spine.rotation.x = 0.05 + aliveBreath;
@@ -895,7 +1071,6 @@ export function createCharacter3D(cfg: CharacterConfig): Character3D {
       leftArm.forearm.rotation.set(-0.22, 0, 0);
       rightArm.forearm.rotation.set(-0.22, 0, 0);
     } else if (action === "loomingStill") {
-      // Uncanny hunched stillness: subtle asymmetric shoulder roll, long gaunt arms hanging eerily off-plumb
       spine.rotation.x = 0.14;
       leftArm.upperArm.rotation.set(-0.08, 0, -0.14);
       rightArm.upperArm.rotation.set(0.04, 0, 0.16);
@@ -913,9 +1088,67 @@ export function createCharacter3D(cfg: CharacterConfig): Character3D {
       head.rotation.y = 0.68;
       leftArm.upperArm.rotation.set(-0.06, 0, -0.12);
       rightArm.upperArm.rotation.set(0.08, 0, 0.14);
+    } else if (action === "stalkLoom") {
+      // Hunched gaunt predator framing a doorway: splayed spider arms clutching outward, snapped broken neck, extra arms clearly jutting from behind!
+      spine.rotation.x = 0.16;
+      chest.rotation.x = 0.08;
+      leftArm.upperArm.rotation.set(-0.22, 0.10, -0.46);
+      rightArm.upperArm.rotation.set(-0.24, -0.10, 0.46);
+      leftArm.forearm.rotation.set(-0.32, 0, 0.12);
+      rightArm.forearm.rotation.set(-0.34, 0, -0.12);
+      leftArm.hand.rotation.set(-0.38, 0, -0.32);
+      rightArm.hand.rotation.set(-0.40, 0, 0.32);
+      if (extraArms) {
+        const sway = Math.sin(t * 1.4 + seed) * 0.07;
+        extraArms.leftExtraArm.rotation.set(0.04, 0.14, -0.92 + sway);
+        extraArms.rightExtraArm.rotation.set(0.04, -0.14, 0.92 - sway);
+      }
+    } else if (action === "jawUnlatch") {
+      // Uncanny craning tilt while the articulated 3D lower jaw dislocates progressively wider!
+      spine.rotation.x = 0.22;
+      neck.rotation.x = -0.16;
+      head.rotation.x = -0.12;
+      leftArm.upperArm.rotation.set(-0.46, 0.16, -0.36);
+      rightArm.upperArm.rotation.set(-0.42, -0.16, 0.38);
+      leftArm.forearm.rotation.set(-0.56, 0, 0.22);
+      rightArm.forearm.rotation.set(-0.52, 0, -0.22);
+      if (jawSocket) {
+        const dynDrop = clamp01(Math.max(baseJawDrop, 0.65 + 0.30 * Math.sin(t * 2.2)));
+        jawSocket.rotation.x = dynDrop * 0.88;
+        jawSocket.position.y = -headRy * 0.24 - dynDrop * 0.028 * hScale;
+      }
+    } else if (action === "crawler") {
+      // Spider-like quadrupedal body-horror crawl with head twisted grotesquely 180° upside-down!
+      pelvis.position.y = 0.44 * hScale;
+      pelvis.rotation.x = 1.24;
+      spine.rotation.x = 0.16;
+      neck.rotation.x = -1.18;
+      head.rotation.z = Math.PI;
+      leftLeg.thigh.rotation.set(-1.35, 0.36, -0.42);
+      rightLeg.thigh.rotation.set(-1.35, -0.36, 0.42);
+      leftLeg.calf.rotation.set(1.65, 0, 0);
+      rightLeg.calf.rotation.set(1.65, 0, 0);
+      leftArm.upperArm.rotation.set(-1.35, 0.18, -0.34);
+      rightArm.upperArm.rotation.set(-1.35, -0.18, 0.34);
+      leftArm.forearm.rotation.set(-0.42, 0, 0);
+      rightArm.forearm.rotation.set(-0.42, 0, 0);
     }
 
-    // Optional violent 2-frame uncanny neck twitch
+    // Twisted unnatural elbow/wrist offsets when bodyHorror.twistedJoints is enabled
+    if (bh?.twistedJoints) {
+      leftArm.forearm.rotation.z += 0.24;
+      rightArm.forearm.rotation.z -= 0.22;
+      leftArm.hand.rotation.z -= 0.28;
+      rightArm.hand.rotation.z += 0.26;
+    }
+
+    // Explicit per-beat jaw override (0..1)
+    if (jawSocket && opts.jawOpen !== undefined) {
+      const k = clamp01(opts.jawOpen);
+      jawSocket.rotation.x = k * 0.86;
+      jawSocket.position.y = -headRy * 0.24 - k * 0.026 * hScale;
+    }
+
     if (opts.twitch || ent?.neckTiltDeg) {
       const tw = uncannyTwitch(frame, seed, 28, 0.26);
       if (opts.twitch) neck.rotation.z += tw;
@@ -953,8 +1186,10 @@ export function createCharacter3D(cfg: CharacterConfig): Character3D {
 
   const boneList: THREE.Group[] = [
     pelvis, spine, chest, neck, head,
+    ...(jawSocket ? [jawSocket] : []),
     leftArm.shoulder, leftArm.upperArm, leftArm.forearm, leftArm.hand,
     rightArm.shoulder, rightArm.upperArm, rightArm.forearm, rightArm.hand,
+    ...(extraArms ? [extraArms.leftExtraArm, extraArms.rightExtraArm] : []),
     leftLeg.thigh, leftLeg.calf, leftLeg.foot,
     rightLeg.thigh, rightLeg.calf, rightLeg.foot,
   ];

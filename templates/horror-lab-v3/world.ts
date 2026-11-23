@@ -1,6 +1,7 @@
-// HorrorLabV3World: Drives 3 radically different environments, 3D dark-horror characters,
-// 1st-person POV rig + Phone3D/Flashlight3D, smooth warmLamp->coldMoon light-loss shift,
-// and deterministic Whip-Pan velocity directly from the single-source-of-truth MANIFEST.
+// HorrorLabV3World (Engine v4 Style B — Semi-Realistic Indie 3D × Modular Dark & Body Horror):
+// Drives 3 radically different gritty environments, sculpted non-plastic humans, visceral Body Horror entities
+// (3D hollowed skull sockets, asymmetric bloodshot weeping sanpaku eyeballs, articulated 3D dislocated jaw + crooked teeth,
+// elongated tendon neck, protruding ribs/spine, spider claw hands, 2 extra shadowy arms), and POV rig from MANIFEST.
 
 import * as THREE from "three";
 import {
@@ -84,6 +85,7 @@ export class HorrorLabV3World implements ShortWorld {
     this.sky.renderOrder = -1;
     this.sky.frustumCulled = false;
     this.sky.layers.set(NOINK);
+    this.sky.userData.noSSAO = true;
     this.root.add(this.sky);
 
     this.hemi = new THREE.HemisphereLight("#2c222a", "#120d13", 0.30);
@@ -92,92 +94,127 @@ export class HorrorLabV3World implements ShortWorld {
     this.sun.shadow.mapSize.set(2048, 2048);
     this.root.add(this.hemi, this.sun, this.sun.target);
 
-    // 3 radically different environments (strictly isolated groups)
+    // 3 radically different gritty environments (strictly isolated groups)
     this.funeralSet = buildRuralFuneralRoom();
     this.hospitalSet = buildHospitalCorridor();
     this.alleySet = buildFoggyVillageAlley();
     this.root.add(this.funeralSet.group, this.hospitalSet.group, this.alleySet.group);
 
-    // 3D Dark-Horror Non-Chibi Characters & Uncanny Entities
+    // 1. Human NPC (Style B sculpted face + multi-layer coarse-woven jacket + tousled 3D hair locks)
     this.chuBay = createCharacter3D({
       id: "chuBay",
       height: 1.74,
-      skinCol: "#cbb298",
-      hairCol: "#141218",
+      skinCol: "#bfa389",
+      hairCol: "#1a1718",
       hairStyle: "shortParted",
-      topCol: "#3a424e",
-      bottomCol: "#191a22",
-      garment: "shirt",
-      headbandCol: "#ede6d8",
-      outlinePx: 5.8,
+      topCol: "#3d3c36",
+      innerCol: "#635c50",
+      bottomCol: "#1a1b20",
+      garment: "casualJacket",
+      headbandCol: "#e3dbcc",
+      outlineMode: "off",
     });
     this.chuBay.group.position.set(...ANCHORS.NPC_SEAT);
 
+    // 2. Doorway Body-Horror Entity (B4 — Uncanny Cadaver Looming in Cold Moonlight Chiaroscuro!)
     this.doorEntity = createCharacter3D({
       id: "doorEntity",
-      height: 1.74,
-      hairStyle: "longDraped",
+      height: 1.78,
+      skinCol: "#787a84",
+      hairStyle: "bald",
+      topCol: "#3c3d46",
+      bottomCol: "#1b1c22",
       garment: "shroud",
-      outlinePx: 6.2,
+      outlineMode: "off",
       entity: {
         heightScale: 1.18,
-        gauntness: 0.74,
-        armScale: 1.26,
-        fingerScale: 1.38,
-        neckTiltDeg: 28,
-        shoulderSkew: 0.11,
-        hairCurtain: true,
-        silhouetteMode: true,
-        eyeGlow: true,
-        eyeGlowColor: [2.2, 2.35, 2.8],
+        gauntness: 0.72,
+        armScale: 1.28,
+        fingerScale: 1.48,
+        neckTiltDeg: 46,
+        shoulderSkew: 0.12,
         breathing: false,
+        bodyHorror: {
+          skullHollows: true,
+          jawDrop3D: 0.88,
+          crookedTeeth: true,
+          neckStretch: 1.95,
+          exposedRibs: true,
+          protrudingSpine: true,
+          clawHands: true,
+          twistedJoints: true,
+          cadaverSkin: true,
+          bloodStainLevel: 0.58,
+          eyeHorror: "weepingIchor",
+          cheekSplitGrin: true,
+          tatteredCloth: true,
+        },
       },
     });
     this.doorEntity.group.position.set(...ANCHORS.ENTITY_DOOR);
 
+    // 3. Hospital Ward Body-Horror Entity (B5 — Matches approved Style B concept: snapped neck, hollow skull + sanpaku weeping eyes,
+    //    unhinged crooked-tooth jaw, sculpted ribs under filthy blood-stained gown, spider claw hands & 2 extra shadowy arms!)
     this.wardEntity = createCharacter3D({
       id: "wardEntity",
-      height: 1.72,
-      skinCol: "#6d7470",
-      hairCol: "#111316",
-      hairStyle: "longDraped",
-      topCol: "#4a5552",
-      bottomCol: "#232a2c",
+      height: 1.76,
+      skinCol: "#7c7e86",
+      hairStyle: "bald",
+      topCol: "#6d6e68",
+      bottomCol: "#2a2e30",
       garment: "hospitalGown",
-      outlinePx: 6.0,
+      outlineMode: "off",
       entity: {
-        heightScale: 1.14,
-        gauntness: 0.76,
-        armScale: 1.24,
-        fingerScale: 1.32,
-        neckTiltDeg: -24,
-        hairCurtain: true,
+        heightScale: 1.16,
+        gauntness: 0.72,
+        armScale: 1.26,
+        fingerScale: 1.48,
+        neckTiltDeg: -48,
+        shoulderSkew: -0.10,
         breathing: false,
+        bodyHorror: {
+          skullHollows: true,
+          jawDrop3D: 0.92,
+          crookedTeeth: true,
+          neckStretch: 2.05,
+          exposedRibs: true,
+          protrudingSpine: true,
+          clawHands: true,
+          twistedJoints: true,
+          extraArms: 2,
+          cadaverSkin: true,
+          bloodStainLevel: 0.72,
+          eyeHorror: "weepingIchor",
+          cheekSplitGrin: true,
+          tatteredCloth: true,
+        },
       },
     });
     this.wardEntity.group.position.set(...ANCHORS.HOSP_ENTITY);
 
+    // 4. Alley Human Figure (Style B sculpted face + layered weathered jacket + messy 3D fringe hair)
     this.alleyFigure = createCharacter3D({
       id: "alleyFigure",
       height: 1.75,
-      skinCol: "#c8b29b",
-      hairCol: "#14131a",
+      skinCol: "#b89f88",
+      hairCol: "#16141a",
       hairStyle: "messyFringe",
-      topCol: "#2d3340",
-      bottomCol: "#171820",
+      topCol: "#343942",
+      innerCol: "#5a5c60",
+      bottomCol: "#181920",
       garment: "casualJacket",
-      outlinePx: 5.8,
+      outlineMode: "off",
     });
     this.alleyFigure.group.position.set(...ANCHORS.ALLEY_FIGURE);
 
     this.root.add(this.chuBay.group, this.doorEntity.group, this.wardEntity.group, this.alleyFigure.group);
 
-    // 1st-Person POV Rig + Diegetic 3D Props (Phone3D + Flashlight3D)
-    this.pov = createPovRig3D({ skinCol: "#ccb6a0", sleeveCol: "#3d4450", pantsCol: "#1a1b24" });
-    this.phone = createPhone3D({ clock: "01:06" });
+    // 1st-Person POV Rig + Diegetic 3D Props (Phone3D + Flashlight3D — Style B zero outlines + weathered skin/metal)
+    this.pov = createPovRig3D({ skinCol: "#967e6a", sleeveCol: "#353b44", pantsCol: "#1a1b24", outlineMode: "off" });
+    this.phone = createPhone3D({ clock: "01:06" }, "off");
     this.phone.group.position.set(0.0, 0.055, -0.02);
     this.phone.group.rotation.set(-0.08, -0.06, 0.03);
-    this.flashlight = createFlashlight3D();
+    this.flashlight = createFlashlight3D("off");
     this.flashlight.group.position.set(0.0, 0.01, -0.05);
     this.pov.rightHand.add(this.phone.group, this.flashlight.group);
     this.root.add(this.pov.group);
@@ -225,30 +262,49 @@ export class HorrorLabV3World implements ShortWorld {
 
       if (oilOn) {
         const [tx, , tz] = ANCHORS.OIL_LAMP_TABLE;
-        pts.push({ pos: [tx - 0.18, 0.84, tz + 0.05], color: [2.45 * flk, 1.42 * flk, 0.56 * flk], radius: 5.8 });
+        pts.push({ pos: [tx - 0.18, 0.84, tz + 0.05], color: [2.55 * flk, 1.46 * flk, 0.54 * flk], radius: 6.0 });
       }
       if (altarOn) {
         const [ax, , az] = ANCHORS.ALTAR;
         pts.push({ pos: [ax - 0.46, 1.32, az + 0.08], color: [1.85 * flk, 1.05 * flk, 0.42 * flk], radius: 4.5 });
       }
+      // Subtle cold blue moonlight leaking from broken right shutter window (rich warm-vs-cold Chiaroscuro!)
+      pts.push({ pos: [2.85, 1.62, -0.90], color: [0.42, 0.62, 0.98], radius: 4.2 });
+
       if (phoneOn) {
         pts.push(this.phone.getLight(1.45));
       }
       if (beat.lightState.doorMoonlight) {
         const [dx, , dz] = ANCHORS.DOUBLE_DOOR;
         pts.push({ pos: [dx, 0.35, dz + 0.45], color: [0.58, 0.76, 1.12], radius: 3.4 });
+        // Side-raking cold moonlight grazing the Body-Horror doorway entity's skull hollows, eyeballs & crooked teeth!
+        if (beat.castStates.doorEntity?.visible) {
+          pts.push({ pos: [dx + 0.85, 1.88, dz + 1.45], color: [0.92, 1.14, 1.56], radius: 3.6 });
+        }
       }
     } else if (beat.locationId === "hospitalCorridor") {
-      const flkA = flickerAt(frame, 13, 0.34, 0.22);
+      // Stark chiaroscuro: dim eerie overhead tube + fierce POV handheld flashlight SpotLight carving the Body Horror entity!
+      const flkA = flickerAt(frame, 13, 0.30, 0.25);
       const flkB = flickerAt(frame, 41, 0.20, 0.58);
-      pts.push({ pos: [0, 2.72, -1.6], color: [1.15 * flkA, 1.42 * flkA, 1.32 * flkA], radius: 6.2 });
-      pts.push({ pos: [0, 2.72, -6.8], color: [0.85 * flkB, 1.12 * flkB, 1.04 * flkB], radius: 6.0 });
-      this.hospitalSet.tubeA.setIntensity(flkA);
-      this.hospitalSet.tubeB.setIntensity(flkB);
-      setSpotLight(this.flashlight.getSpotLight());
+      pts.push({ pos: [0, 2.72, -0.4], color: [0.46 * flkA, 0.58 * flkA, 0.54 * flkA], radius: 4.6 });
+      pts.push({ pos: [0, 2.72, -6.8], color: [0.55 * flkB, 0.76 * flkB, 0.70 * flkB], radius: 5.2 });
+      this.hospitalSet.tubeA.setIntensity(flkA * 0.75);
+      this.hospitalSet.tubeB.setIntensity(flkB * 0.70);
+      const torchSpot = this.flashlight.getSpotLight();
+      if (torchSpot) {
+        // Balanced chiaroscuro beam carving cadaver veins, skull hollows, teeth, ribs & broken tiles with ZERO neon-white blowout!
+        setSpotLight({
+          ...torchSpot,
+          target: [ANCHORS.HOSP_ENTITY[0] - 0.04, 1.44, ANCHORS.HOSP_ENTITY[2]],
+          color: [1.06, 1.00, 0.90],
+          distance: 10.5,
+          angleDeg: 29,
+          penumbra: 0.54,
+        });
+      }
     } else if (beat.locationId === "foggyVillageAlley") {
       const bp = this.alleySet.streetLamp.bulbWorldPos;
-      pts.push({ pos: [bp[0], bp[1] - 0.12, bp[2]], color: [2.4, 1.52, 0.68], radius: 9.2 });
+      pts.push({ pos: [bp[0], bp[1] - 0.12, bp[2]], color: [2.55, 1.62, 0.70], radius: 9.8 });
     }
 
     setLocalLights(pts);
@@ -341,19 +397,21 @@ export class HorrorLabV3World implements ShortWorld {
     const deState = beat.castStates.doorEntity;
     this.doorEntity.group.visible = !!deState?.visible;
     if (deState?.visible) {
-      this.doorEntity.setPose(deState.pose, frame, { twitch: frame > 142 });
+      // Slightly angled facing the POV camera so the broken neck & gaping crooked-tooth jaw hit hard!
+      this.doorEntity.group.rotation.y = 0.24;
+      this.doorEntity.setPose(deState.pose, frame, { jawOpen: 0.90, twitch: frame > 142 });
     }
 
     const weState = beat.castStates.wardEntity;
     this.wardEntity.group.visible = !!weState?.visible;
     if (weState?.visible) {
-      this.wardEntity.setPose(weState.pose, frame, { expr: weState.expr ?? "deadStare" });
+      this.wardEntity.group.rotation.y = -0.06;
+      this.wardEntity.setPose(weState.pose, frame, { jawOpen: 0.94, twitch: frame > 205 });
     }
 
     const afState = beat.castStates.alleyFigure;
     this.alleyFigure.group.visible = !!afState?.visible;
     if (afState?.visible) {
-      // 3/4 tense over-the-shoulder turn toward camera under the warm sodium streetlamp pool
       this.alleyFigure.group.rotation.y = -0.78;
       this.alleyFigure.setPose(afState.pose, frame, { expr: afState.expr ?? "dread", gazeX: 0.45, sweat: true, autoBlink: true });
     }
@@ -365,7 +423,7 @@ export class HorrorLabV3World implements ShortWorld {
     const showFlash = !!flashState?.visible;
     this.phone.group.visible = showPhone;
     this.flashlight.group.visible = showFlash;
-    this.flashlight.setOn(showFlash, 0.92);
+    this.flashlight.setOn(showFlash, 1.05);
 
     if (showPhone && phoneState?.detail) {
       const det = phoneState.detail;

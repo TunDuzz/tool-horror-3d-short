@@ -1,9 +1,11 @@
-// Horror Engine v3: 512x512 Clean-Line Dark-Horror Animated 2D Face Decal Generator & Cache.
-// Non-chibi realistic-stylized almond eyes, contracted pinpoint pupils, soft shaded under-eye hollows,
-// expressive brows, and subtle mouths — ZERO cute round chibi eyes, ZERO Pen.grit wobble, ZERO solid sunglass patches.
+// Horror Engine v4: 1024x1024 Gritty Semi-Realistic Dark-Horror Animated 2D Face Decal Generator & Cache.
+// Supports both Style B gritty semi-realistic human faces (textured multi-ring iris, sculpted brow/cheek planes,
+// natural shaded lips, skin pores, eye bags & subtle sweat) AND primal body-horror eye overlays
+// (sanpaku, weepingIchor, voidSockets, stitched, multiEye, cheekSplitGrin).
 
 import * as THREE from "three";
 import { clamp01 } from "./camera";
+import type { EyeHorrorMode } from "./bodyHorror";
 import type { FaceExpr } from "./manifest";
 
 export type MouthShape =
@@ -22,7 +24,7 @@ export type FaceSpec = {
   lid?: number; // 0 = open, 1 = fully shut blink
   gazeX?: number; // -1..+1 horizontal pupil offset
   gazeY?: number; // -1..+1 vertical pupil offset
-  pupilScale?: number; // 0.25 (pinpoint terror) .. 1.0 (calm)
+  pupilScale?: number; // 0.22 (pinpoint terror) .. 1.0 (calm)
   mouth?: MouthShape;
   skinCol?: string;
   eyeHollow?: number; // 0..1 soft under-eye dark hollow shading
@@ -30,9 +32,12 @@ export type FaceSpec = {
   eyeGlow?: boolean;
   ageLines?: boolean;
   sweat?: boolean; // subtle cold sweat bead on temple (auto-enabled in terrified)
+  realisticStyle?: boolean; // default true (v4 Style B): softer lash shading, textured iris, shaded lips
+  eyeHorror?: EyeHorrorMode;
+  cheekSplitGrin?: boolean;
 };
 
-const INK = "#09070d";
+const INK = "#120d16";
 
 const EXPR_DEFAULTS: Record<FaceExpr, { pupil: number; hollow: number; mouth: MouthShape; browTilt: number; browLift: number; upperLidDroop: number }> = {
   calm:            { pupil: 0.78, hollow: 0.35, mouth: "closed",          browTilt:  0.00, browLift:  0, upperLidDroop: 0.14 },
@@ -153,39 +158,56 @@ function drawAlmondEye(
       }
     }
 
-    // Iris & contracted pupil (horror intensity driven by small cold pupils!)
+    // Iris & contracted pupil (multi-ring textured iris in v4 Style B — kills flat cartoon dot look!)
     const ix = cx + gazeX * 20;
     const iy = cy + gazeY * 8;
-    const irisR = 23 * (0.48 + 0.52 * pupilScale);
-    const pupilR = Math.max(5.5, irisR * (0.56 + 0.14 * (1 - pupilScale)));
+    const isSanpaku = spec.eyeHorror === "sanpaku" || spec.eyeHorror === "weepingIchor";
+    const irisR = (isSanpaku ? 16 : 23) * (0.48 + 0.52 * pupilScale);
+    const pupilR = Math.max(4.0, irisR * (isSanpaku ? 0.44 : 0.54 + 0.14 * (1 - pupilScale)));
 
-    g.fillStyle = "#221d26";
+    // Outer dark limbal ring + deep textured brown-charcoal iris gradient
+    const irG = g.createRadialGradient(ix, iy, pupilR * 0.8, ix, iy, irisR);
+    irG.addColorStop(0, "#120c10");
+    irG.addColorStop(0.55, isSanpaku ? "#594c3e" : "#3a2822");
+    irG.addColorStop(0.84, "#1e161c");
+    irG.addColorStop(1, "#0d0910");
+    g.fillStyle = irG;
     g.beginPath();
     g.arc(ix, iy, irisR, 0, Math.PI * 2);
     g.fill();
 
-    g.fillStyle = "#060409";
+    // Subtle radial iris fibers
+    g.strokeStyle = "rgba(116, 86, 68, 0.24)";
+    g.lineWidth = 1.1;
+    for (let k = 0; k < 14; k++) {
+      const a = (k / 14) * Math.PI * 2;
+      g.beginPath();
+      g.moveTo(ix + Math.cos(a) * (pupilR + 1), iy + Math.sin(a) * (pupilR + 1));
+      g.lineTo(ix + Math.cos(a) * (irisR - 1.5), iy + Math.sin(a) * (irisR - 1.5));
+      g.stroke();
+    }
+
+    g.fillStyle = "#040307";
     g.beginPath();
     g.arc(ix, iy, pupilR, 0, Math.PI * 2);
     g.fill();
 
-    // Very tiny muted glint ONLY in calm/wary (dead matte eyes in horror states!)
-    if (spec.expr === "calm" || spec.expr === "wary") {
-      g.fillStyle = "rgba(245, 240, 232, 0.72)";
-      g.beginPath();
-      g.arc(ix - irisR * 0.32, iy - irisR * 0.30, Math.max(2.2, irisR * 0.20), 0, Math.PI * 2);
-      g.fill();
-    }
+    // Crisp tiny moist cornea specular glint
+    const glintAlpha = spec.expr === "calm" || spec.expr === "wary" ? 0.82 : 0.46;
+    g.fillStyle = `rgba(246, 242, 234, ${glintAlpha})`;
+    g.beginPath();
+    g.arc(ix - irisR * 0.30, iy - irisR * 0.28, Math.max(2.0, irisR * 0.18), 0, Math.PI * 2);
+    g.fill();
   }
 
   // Eyelid curtain (droop + blink)
   const droop = Math.max(def.upperLidDroop, lid);
-  if (droop > 0.01) {
+  if (droop > 0.01 && !spec.eyeHorror) {
     const lidY = cy - ry + droop * (ry * 2.02);
     g.fillStyle = spec.skinCol ?? "#c8b39e";
     g.fillRect(cx - rx - 8, cy - ry - 12, rx * 2 + 16, lidY - (cy - ry - 12));
-    g.strokeStyle = INK;
-    g.lineWidth = 6.5;
+    g.strokeStyle = "rgba(18, 12, 20, 0.85)";
+    g.lineWidth = spec.realisticStyle === false ? 6.5 : 4.2;
     g.beginPath();
     g.moveTo(cx - rx - 4, lidY);
     g.quadraticCurveTo(cx, lidY + 4, cx + rx + 4, lidY);
@@ -193,13 +215,14 @@ function drawAlmondEye(
   }
   g.restore();
 
-  // Crisp upper & lower eye outlines
+  // Upper & lower lash framing (softer realistic lid shadow in Style B, bolder ink only when realisticStyle === false)
+  const realB = spec.realisticStyle !== false;
   const innerX = cx - side * rx;
   const outerX = cx + side * rx;
-  g.strokeStyle = INK;
+  g.strokeStyle = realB ? "rgba(18, 12, 18, 0.86)" : INK;
   g.lineCap = "round";
   g.lineJoin = "round";
-  g.lineWidth = 10.0;
+  g.lineWidth = realB ? 6.4 : 10.0;
   g.beginPath();
   g.moveTo(innerX, cy + 3);
   g.bezierCurveTo(
@@ -209,7 +232,8 @@ function drawAlmondEye(
   );
   g.stroke();
 
-  g.lineWidth = 5.2;
+  g.strokeStyle = realB ? "rgba(38, 24, 30, 0.56)" : INK;
+  g.lineWidth = realB ? 3.2 : 5.2;
   g.beginPath();
   g.moveTo(outerX, cy - 2);
   g.bezierCurveTo(
@@ -219,13 +243,37 @@ function drawAlmondEye(
   );
   g.stroke();
 
-  // Subtle upper eyelid crease
-  g.strokeStyle = "rgba(18, 12, 24, 0.55)";
-  g.lineWidth = 3.2;
+  // Upper eyelid depth fold
+  g.strokeStyle = "rgba(22, 14, 24, 0.58)";
+  g.lineWidth = 3.0;
   g.beginPath();
-  g.moveTo(cx - side * rx * 0.72, cy - ry - 6);
-  g.quadraticCurveTo(cx, cy - ry - 15, cx + side * rx * 0.78, cy - ry - 5);
+  g.moveTo(cx - side * rx * 0.78, cy - ry - 7);
+  g.quadraticCurveTo(cx, cy - ry - 17, cx + side * rx * 0.82, cy - ry - 5);
   g.stroke();
+
+  // Weeping dark ichor trails painted onto cheekbones when requested
+  if (spec.eyeHorror === "weepingIchor") {
+    for (let k = 0; k < 3; k++) {
+      const tx = cx + (k - 1) * 20;
+      const len = 72 + k * 24;
+      const gr = g.createLinearGradient(tx, cy + ry, tx, cy + ry + len);
+      gr.addColorStop(0, "rgba(12, 4, 8, 0.88)");
+      gr.addColorStop(0.65, "rgba(32, 6, 10, 0.62)");
+      gr.addColorStop(1, "rgba(24, 6, 10, 0)");
+      g.fillStyle = gr;
+      g.fillRect(tx - 4, cy + ry - 2, 7.5 - k, len);
+    }
+  } else if (spec.eyeHorror === "stitched") {
+    g.strokeStyle = "#110d14";
+    g.lineWidth = 5.5;
+    for (let k = -2; k <= 2; k++) {
+      const sx = cx + k * 24;
+      g.beginPath();
+      g.moveTo(sx - 8, cy - ry - 10);
+      g.lineTo(sx + 8, cy + ry + 10);
+      g.stroke();
+    }
+  }
 }
 
 function drawEyebrow(
@@ -243,30 +291,63 @@ function drawEyebrow(
   const innerY = by - tilt;
   const outerY = by + tilt * 0.55 + 5;
 
-  g.strokeStyle = spec.browCol ?? INK;
-  g.lineWidth = 13.5;
+  // Textured layered eyebrow hairs instead of single plastic marker stroke
+  g.strokeStyle = spec.browCol ?? "rgba(22, 16, 20, 0.88)";
+  g.lineWidth = 10.5;
   g.lineCap = "round";
   g.beginPath();
   g.moveTo(innerX, innerY);
   g.quadraticCurveTo(cx + side * 6, (innerY + outerY) * 0.5 - 9, outerX, outerY);
   g.stroke();
+
+  g.strokeStyle = "rgba(14, 10, 14, 0.52)";
+  g.lineWidth = 2.4;
+  for (let i = 0; i < 11; i++) {
+    const u = i / 10;
+    const hx = innerX + (outerX - innerX) * u;
+    const hy = innerY + (outerY - innerY) * u - Math.sin(u * Math.PI) * 5;
+    g.beginPath();
+    g.moveTo(hx, hy + 5);
+    g.lineTo(hx + side * 8, hy - 6);
+    g.stroke();
+  }
 }
 
-function drawMouth(g: CanvasRenderingContext2D, mouth: MouthShape) {
+function drawMouth(g: CanvasRenderingContext2D, mouth: MouthShape, spec: FaceSpec) {
   const cx = 256;
   const cy = 406;
-  g.strokeStyle = INK;
+  const realB = spec.realisticStyle !== false;
+
+  // Soft realistic upper & lower lip shading pillow + lower-lip cushion (eliminates cartoon flat mouth look!)
+  if (realB && mouth !== "jawSlack") {
+    const lipG = g.createRadialGradient(cx, cy + 4, 8, cx, cy + 6, 68);
+    lipG.addColorStop(0, "rgba(116, 64, 58, 0.56)");
+    lipG.addColorStop(0.55, "rgba(92, 48, 48, 0.30)");
+    lipG.addColorStop(1, "rgba(86, 46, 48, 0)");
+    g.fillStyle = lipG;
+    g.beginPath();
+    g.ellipse(cx, cy + 5, 62, 24, 0, 0, Math.PI * 2);
+    g.fill();
+
+    // Subtle weathered lower-lip highlight & chin shadow
+    g.fillStyle = "rgba(215, 178, 156, 0.14)";
+    g.beginPath();
+    g.ellipse(cx, cy + 16, 30, 7, 0, 0, Math.PI * 2);
+    g.fill();
+  }
+
+  g.strokeStyle = realB ? "rgba(24, 12, 16, 0.86)" : INK;
   g.lineCap = "round";
   g.lineJoin = "round";
 
   if (mouth === "closed") {
-    g.lineWidth = 8.0;
+    g.lineWidth = realB ? 5.2 : 8.0;
     g.beginPath();
     g.moveTo(cx - 48, cy + 2);
     g.quadraticCurveTo(cx, cy - 3, cx + 48, cy + 2);
     g.stroke();
   } else if (mouth === "tense") {
-    g.lineWidth = 8.0;
+    g.lineWidth = realB ? 5.5 : 8.0;
     g.beginPath();
     g.moveTo(cx - 56, cy + 9);
     g.quadraticCurveTo(cx, cy - 5, cx + 56, cy + 9);
@@ -274,108 +355,121 @@ function drawMouth(g: CanvasRenderingContext2D, mouth: MouthShape) {
   } else if (mouth === "parted" || mouth === "talkE") {
     const h = mouth === "talkE" ? 15 : 11;
     const w = mouth === "talkE" ? 46 : 34;
-    g.fillStyle = "#1a0b12";
+    g.fillStyle = "#16080e";
     g.beginPath();
     g.ellipse(cx, cy + 4, w, h, 0, 0, Math.PI * 2);
     g.fill();
-    g.lineWidth = 6.5;
+    g.lineWidth = realB ? 4.4 : 6.5;
     g.stroke();
+    if (mouth === "talkE") {
+      g.fillStyle = "#d4cbbd";
+      g.fillRect(cx - 24, cy - 2, 48, 5);
+    }
   } else if (mouth === "talkA" || mouth === "talkO") {
     const w = mouth === "talkO" ? 20 : 32;
     const h = mouth === "talkO" ? 20 : 18;
-    g.fillStyle = "#180a10";
+    g.fillStyle = "#15070c";
     g.beginPath();
     g.ellipse(cx, cy + 6, w, h, 0, 0, Math.PI * 2);
     g.fill();
-    g.lineWidth = 6.0;
+    g.lineWidth = realB ? 4.4 : 6.0;
     g.stroke();
   } else if (mouth === "gasp") {
-    // Tense jagged-corner horror gasp (NOT a cute round cartoon O)
-    g.fillStyle = "#15070d";
+    g.fillStyle = "#12050a";
     g.beginPath();
     g.moveTo(cx - 44, cy + 12);
     g.quadraticCurveTo(cx, cy - 10, cx + 44, cy + 12);
     g.quadraticCurveTo(cx, cy + 32, cx - 44, cy + 12);
     g.closePath();
     g.fill();
-    g.lineWidth = 6.5;
+    g.lineWidth = realB ? 4.6 : 6.5;
     g.stroke();
-    // Subtle upper teeth rim
-    g.fillStyle = "#ddd8ce";
+    g.fillStyle = "#d8d1c4";
     g.fillRect(cx - 24, cy + 3, 48, 6);
   } else if (mouth === "unsettlingSmile") {
-    // Unnaturally wide thin tense horror smile curving high toward cheekbones
-    g.lineWidth = 6.5;
+    g.lineWidth = realB ? 5.2 : 6.5;
     g.beginPath();
-    g.moveTo(cx - 72, cy - 10);
-    g.bezierCurveTo(cx - 32, cy + 20, cx + 32, cy + 20, cx + 72, cy - 10);
+    g.moveTo(cx - 76, cy - 12);
+    g.bezierCurveTo(cx - 34, cy + 22, cx + 34, cy + 22, cx + 76, cy - 12);
     g.stroke();
-    // Faint dark lip parting in center
-    g.fillStyle = "#15070d";
+    g.fillStyle = "#13050b";
     g.beginPath();
-    g.ellipse(cx, cy + 7, 38, 6, 0, 0, Math.PI * 2);
+    g.ellipse(cx, cy + 7, 44, 7, 0, 0, Math.PI * 2);
     g.fill();
   } else if (mouth === "jawSlack") {
-    // Elongated dark drop-jaw void
-    g.fillStyle = "#08040a";
+    g.fillStyle = "#060208";
     g.beginPath();
-    g.ellipse(cx, cy + 24, 34, 48, 0, 0, Math.PI * 2);
+    g.ellipse(cx, cy + 24, 38, 52, 0, 0, Math.PI * 2);
     g.fill();
-    g.lineWidth = 7.0;
+    g.lineWidth = 6.0;
     g.stroke();
   }
 
-  // Subtle chin shadow stroke
-  g.strokeStyle = "rgba(18, 12, 24, 0.32)";
-  g.lineWidth = 3.0;
+  // Torn bloody cheek-split grin scars extending past corners of mouth
+  if (spec.cheekSplitGrin) {
+    g.strokeStyle = "rgba(86, 12, 16, 0.85)";
+    g.lineWidth = 5.5;
+    for (const s of [-1, 1]) {
+      g.beginPath();
+      g.moveTo(cx + s * 46, cy + 4);
+      g.quadraticCurveTo(cx + s * 92, cy - 6, cx + s * 134, cy - 28);
+      g.stroke();
+    }
+  }
+
+  // Subtle lower-lip & chin cleft shadow
+  g.strokeStyle = "rgba(18, 12, 24, 0.36)";
+  g.lineWidth = 3.2;
   g.beginPath();
-  g.moveTo(cx - 16, cy + 34);
-  g.quadraticCurveTo(cx, cy + 39, cx + 16, cy + 34);
+  g.moveTo(cx - 18, cy + 32);
+  g.quadraticCurveTo(cx, cy + 38, cx + 18, cy + 32);
   g.stroke();
 }
 
-/** Render a 512x512 hand-painted dark-horror face with sculpted brow/cheekbone hollows onto transparent Canvas2D. */
+/** Render a 1024x1024 (logical 512x512 × 2x HiDPI) gritty dark-horror face onto transparent Canvas2D. */
 export function drawFace2D(g: CanvasRenderingContext2D, spec: FaceSpec): void {
   const def = EXPR_DEFAULTS[spec.expr] ?? EXPR_DEFAULTS.calm;
   const hollow = clamp01(spec.eyeHollow ?? def.hollow);
-  g.clearRect(0, 0, 512, 512);
+  const w = g.canvas?.width || 512;
+  const scale = w / 512;
+  g.save();
+  g.clearRect(0, 0, w, w);
+  g.scale(scale, scale);
 
-  // 1. Soft stylized facial planes (brow overhang shadow + sunken gaunt cheekbones + nose-side shadow)
-  // Eliminates plastic mannequin flatness without adding messy cross-hatching!
-  const browShade = g.createLinearGradient(256, 118, 256, 212);
-  browShade.addColorStop(0, `rgba(20, 12, 26, ${(0.22 + 0.14 * hollow).toFixed(3)})`);
-  browShade.addColorStop(0.55, `rgba(24, 15, 32, ${(0.10 + 0.08 * hollow).toFixed(3)})`);
-  browShade.addColorStop(1, "rgba(24, 15, 32, 0)");
+  // 1. Sculpted brow overhang shadow + sunken gaunt cheekbones + weathered nose/jaw planes
+  const browShade = g.createLinearGradient(256, 114, 256, 214);
+  browShade.addColorStop(0, `rgba(18, 11, 22, ${(0.28 + 0.16 * hollow).toFixed(3)})`);
+  browShade.addColorStop(0.55, `rgba(22, 14, 28, ${(0.14 + 0.10 * hollow).toFixed(3)})`);
+  browShade.addColorStop(1, "rgba(22, 14, 28, 0)");
   g.fillStyle = browShade;
   g.beginPath();
-  g.ellipse(256, 178, 212, 62, 0, 0, Math.PI * 2);
+  g.ellipse(256, 178, 218, 66, 0, 0, Math.PI * 2);
   g.fill();
 
-  // Sunken cheekbone & temple hollows framing both sides of the jaw
   for (const s of [-1, 1] as const) {
     const cx = 256 + s * 168;
     const cy = 326;
-    const ck = g.createRadialGradient(cx, cy, 8, cx, cy, 98);
-    ck.addColorStop(0, `rgba(22, 13, 28, ${(0.18 + 0.24 * hollow).toFixed(3)})`);
-    ck.addColorStop(0.62, `rgba(24, 15, 30, ${(0.08 + 0.10 * hollow).toFixed(3)})`);
-    ck.addColorStop(1, "rgba(24, 15, 30, 0)");
+    const ck = g.createRadialGradient(cx, cy, 8, cx, cy, 104);
+    ck.addColorStop(0, `rgba(20, 12, 24, ${(0.24 + 0.26 * hollow).toFixed(3)})`);
+    ck.addColorStop(0.62, `rgba(22, 14, 26, ${(0.10 + 0.12 * hollow).toFixed(3)})`);
+    ck.addColorStop(1, "rgba(22, 14, 26, 0)");
     g.fillStyle = ck;
     g.beginPath();
-    g.ellipse(cx, cy, 84, 108, s * 0.26, 0, Math.PI * 2);
+    g.ellipse(cx, cy, 88, 114, s * 0.26, 0, Math.PI * 2);
     g.fill();
   }
 
-  // Subtle nose-bridge shadow & philtrum indentation between nose and mouth
-  const noseShade = g.createRadialGradient(256, 308, 4, 256, 314, 42);
-  noseShade.addColorStop(0, "rgba(22, 13, 26, 0.22)");
-  noseShade.addColorStop(1, "rgba(22, 13, 26, 0)");
+  // Nose-bridge & nostril shadow anchor
+  const noseShade = g.createRadialGradient(256, 308, 4, 256, 314, 46);
+  noseShade.addColorStop(0, "rgba(20, 12, 22, 0.30)");
+  noseShade.addColorStop(1, "rgba(20, 12, 22, 0)");
   g.fillStyle = noseShade;
   g.beginPath();
-  g.ellipse(256, 314, 34, 26, 0, 0, Math.PI * 2);
+  g.ellipse(256, 314, 36, 28, 0, 0, Math.PI * 2);
   g.fill();
 
   // Subtle vertical philtrum shadow lines
-  g.strokeStyle = "rgba(22, 14, 26, 0.22)";
+  g.strokeStyle = "rgba(22, 14, 24, 0.26)";
   g.lineWidth = 2.6;
   g.lineCap = "round";
   g.beginPath();
@@ -385,25 +479,26 @@ export function drawFace2D(g: CanvasRenderingContext2D, spec: FaceSpec): void {
   g.lineTo(266, 372);
   g.stroke();
 
-  // Subtle brow-furrow crease lines between eyebrows in tense expressions
-  if (spec.expr === "uneasy" || spec.expr === "dread" || spec.expr === "terrified" || spec.expr === "wary") {
-    g.strokeStyle = "rgba(16, 10, 22, 0.62)";
-    g.lineWidth = 3.8;
+  // Brow-furrow & forehead worry wrinkles
+  if (spec.expr === "uneasy" || spec.expr === "dread" || spec.expr === "terrified" || spec.expr === "wary" || spec.ageLines) {
+    g.strokeStyle = "rgba(18, 11, 20, 0.66)";
+    g.lineWidth = 3.6;
     g.lineCap = "round";
     g.beginPath();
-    g.moveTo(246, 148);
-    g.lineTo(244, 182);
-    g.moveTo(266, 148);
-    g.lineTo(268, 182);
+    g.moveTo(245, 146);
+    g.lineTo(243, 184);
+    g.moveTo(267, 146);
+    g.lineTo(269, 184);
     g.stroke();
-    // Subtle forehead tension wrinkle
-    if (spec.expr === "dread" || spec.expr === "terrified") {
-      g.strokeStyle = "rgba(18, 12, 24, 0.34)";
-      g.lineWidth = 2.6;
-      g.beginPath();
-      g.moveTo(192, 118);
-      g.quadraticCurveTo(256, 126, 320, 118);
-      g.stroke();
+    if (spec.expr === "dread" || spec.expr === "terrified" || spec.ageLines) {
+      g.strokeStyle = "rgba(18, 12, 22, 0.38)";
+      g.lineWidth = 2.4;
+      for (const fy of [104, 120]) {
+        g.beginPath();
+        g.moveTo(186, fy);
+        g.quadraticCurveTo(256, fy + 8, 326, fy);
+        g.stroke();
+      }
     }
   }
 
@@ -412,24 +507,34 @@ export function drawFace2D(g: CanvasRenderingContext2D, spec: FaceSpec): void {
   drawEyebrow(g, 148, 222, -1, spec, def);
   drawEyebrow(g, 364, 222, 1, spec, def);
 
-  // Subtle gaunt nasolabial / cheekbone creases (always soft in dread/terrified or explicit ageLines)
+  // Gaunt nasolabial & crow's-feet creases
   if (spec.ageLines || spec.expr === "dread" || spec.expr === "terrified" || spec.expr === "deadStare") {
-    g.strokeStyle = `rgba(18, 12, 24, ${spec.ageLines ? "0.42" : "0.26"})`;
-    g.lineWidth = 3.2;
+    g.strokeStyle = `rgba(18, 12, 22, ${spec.ageLines ? "0.48" : "0.30"})`;
+    g.lineWidth = 3.0;
     g.lineCap = "round";
     for (const s of [-1, 1]) {
       g.beginPath();
-      g.moveTo(256 + s * 62, 314);
-      g.quadraticCurveTo(256 + s * 78, 352, 256 + s * 62, 392);
+      g.moveTo(256 + s * 60, 312);
+      g.quadraticCurveTo(256 + s * 78, 352, 256 + s * 62, 394);
       g.stroke();
+      if (spec.ageLines) {
+        g.lineWidth = 2.2;
+        g.beginPath();
+        g.moveTo(256 + s * 176, 220);
+        g.lineTo(256 + s * 204, 212);
+        g.moveTo(256 + s * 176, 228);
+        g.lineTo(256 + s * 202, 234);
+        g.stroke();
+        g.lineWidth = 3.0;
+      }
     }
   }
 
-  // Subtle realistic cold sweat droplet on temple (NOT oversized blue anime drop!)
+  // Subtle realistic cold sweat droplet on temple
   if (spec.sweat || spec.expr === "terrified") {
-    g.fillStyle = "rgba(218, 228, 240, 0.55)";
-    g.strokeStyle = "rgba(24, 20, 32, 0.42)";
-    g.lineWidth = 2.0;
+    g.fillStyle = "rgba(218, 228, 240, 0.52)";
+    g.strokeStyle = "rgba(24, 20, 32, 0.36)";
+    g.lineWidth = 1.8;
     g.beginPath();
     g.moveTo(432, 168);
     g.quadraticCurveTo(440, 194, 432, 202);
@@ -439,10 +544,23 @@ export function drawFace2D(g: CanvasRenderingContext2D, spec: FaceSpec): void {
     g.stroke();
   }
 
-  drawMouth(g, spec.mouth ?? def.mouth);
+  // Subtle weathered jaw stubble & sunken chin-side shadow for gritty Style B adult depth
+  if (spec.ageLines) {
+    const stubG = g.createRadialGradient(256, 438, 18, 256, 418, 175);
+    stubG.addColorStop(0, "rgba(22, 16, 18, 0.28)");
+    stubG.addColorStop(0.6, "rgba(26, 20, 22, 0.14)");
+    stubG.addColorStop(1, "rgba(26, 20, 22, 0)");
+    g.fillStyle = stubG;
+    g.beginPath();
+    g.ellipse(256, 424, 168, 92, 0, 0, Math.PI * 2);
+    g.fill();
+  }
+
+  drawMouth(g, spec.mouth ?? def.mouth, spec);
+  g.restore();
 }
 
-/** Caches rendered 512x512 face CanvasTextures by quantized FaceSpec key (safe in headless Node without DOM). */
+/** Caches rendered 1024x1024 face CanvasTextures by quantized FaceSpec key (safe in headless Node without DOM). */
 export class FaceTextureCache {
   private map = new Map<string, THREE.CanvasTexture>();
 
@@ -461,6 +579,9 @@ export class FaceTextureCache {
       !!s.eyeGlow,
       !!s.ageLines,
       !!s.sweat,
+      s.realisticStyle !== false,
+      s.eyeHorror ?? "",
+      !!s.cheekSplitGrin,
     ]);
   }
 
@@ -470,13 +591,12 @@ export class FaceTextureCache {
     if (!tex) {
       if (typeof document !== "undefined" && typeof document.createElement === "function") {
         const cv = document.createElement("canvas");
-        cv.width = 512;
-        cv.height = 512;
+        cv.width = 1024;
+        cv.height = 1024;
         const ctx = cv.getContext("2d");
         if (ctx) drawFace2D(ctx, spec);
         tex = new THREE.CanvasTexture(cv);
       } else {
-        // Headless Node unit-test fallback (valid DataTexture-like CanvasTexture stub)
         tex = new THREE.CanvasTexture(null as unknown as HTMLCanvasElement);
       }
       tex.colorSpace = THREE.SRGBColorSpace;
