@@ -1,49 +1,72 @@
 ---
 name: horror-world-lookdev
-description: Use when designing 3D Gothic horror environments, EraGroups, real local PointLights, non-box architecture/nature, foreground Shadow-Depth silhouettes, Gothic Ink-Noir characters/ghosts, or perspective-locked 2D FX in Three.js + Remotion.
+description: Use when designing unique non-repeating 3D horror environments (LocationBlueprint), modular architecture/props, real practical PointLights/SpotLights, non-chibi 3D dark-horror characters & uncanny entities (rig3d.ts, face2d.ts), 1st-person POV rigs & diegetic 3D props (povRig.ts), or atmospheric 3D FX (fx3d.ts) in Three.js + Remotion Engine v3.
 ---
 
-# Horror World & Character Look-Dev v2 (`Gothic Ink-Noir × Shadow-Depth`)
+# Horror World, Character & POV Look-Dev v3 (`3D Stylized Dark-Horror POV`)
 
-All project outfits, ghosts, and 3D environments stay strictly inside `shorts-project/src/<project>/` (or `src/<episode>/shared/`) — never put story-specific code into `src/engine/` (`GEMINI.md`).
+All project environments, custom textures, character configurations, and story-specific props stay strictly inside `shorts-project/src/<project>/` (or `src/<episode>/shared/`) — never put story-specific code into `src/engine/` (`GEMINI.md`).
 
-## 1. Three-Layer Shadow-Depth Value Separation (No Flat Horizons, No Lego Boxes)
+---
 
-Every exterior and interior frame must build **4 tangible depth layers** so silhouettes read powerfully at 50% phone brightness:
-1. **Near Foreground Silhouette (`addForegroundSilhouette`):** Ultra-dark (`#050409`) overhanging gnarled branches, reeds, doorway jambs, or roof rafters framing edges of wide shots (`toggle visible` off during close-ups so they never block faces!).
-2. **Subject Plane (`charGain 0.68–0.70` + `setLocalLights`):** Gaunt Gothic Ink-Noir characters (`~4.8` heads tall, cross-hatched coats, shadowed eye sockets) sculpted by real nearby `PointLight`s (handheld lantern, oil lamp) plus directional rim light (`rimCol`).
-3. **Midground Gothic Architecture (`build.ts`):** Ban stacked rectangular Lego boxes! Use:
-   - `taperedBoxGeo` (sloping/crooked walls, posts, gravestones) & `pitchedRoofGeo` (real gabled eaves)
-   - `addGnarledTree` (multi-branching twisted limbs + claw twigs placed **within horizontal camera FOV**, e.g. `x ∈ [-3.2, +3.2]` for `9:16`!)
-   - `addReedCluster`, `addHyacinthCluster`, `addSampanHull`, `addStormLantern3D`
-   - `addVolumetricShaft` (angled soft moonbeams or window light shafts cutting through mist)
-   - Gothic HD painters (`darkPlanksHD`, `mudBankHD`, `crackedPlasterHD`, `horrorCloudHD` — never bright cartoon `grass()` or puffy `cloudHD()`!).
-4. **Distant Silhouette & Luminous Fog (`addDistantRidge`, `fogNear 6–7 m`, `fogFar 46–68 m`):** Place undulating treeline/hill ridges in **every camera direction** (both front and reverse angles!) against tinted horizon fog so the background is NEVER a straight flat bar.
+## 1. Mandatory `LocationBlueprint` First (Zero Background Repetition!)
 
-## 2. Real Dynamic PointLights & 3D Lightning (`shade.ts` + `cardshade.ts`)
+**Legacy v2 Retirement:** NEVER copy the old generic wooden box room (`[-4..4] × 3.5m` + 4 pillars + back-left window + right table + bolted door) and NEVER force `addGnarledTree`/`addReedCluster`/`addStormLantern3D` into unrelated stories. Those helpers remain strictly optional exterior tools ONLY when a rural river/forest story calls for them.
 
-- Always call `setLocalLights([...])` (up to 3 lights) in BOTH `world.update()` and `world.syncLighting()`:
-  - Attach a warm `PointLight` to every handheld lantern, table oil lamp, candle, or glowing window so light genuinely falls across the character's face, coat, wood planks, and water!
-- `ShortPlayer` automatically drives `setLightningFlash(lightningAt(overlays, frame))` so `{ kind: "lightning", f }` illuminates 3D meshes, water, and characters with cold blue-white storm contrast (never opaque white HTML washes).
+Before writing a single line of `build.ts`, define a unique `LocationBlueprint` inside `manifest.json` for every setting:
+1. **`archetype`:** Story-authentic environment class (e.g. `ruralThatchedHouse`, `hospitalMorgueWing`, `foggyVillageAlley`, `oldApartmentStairwell`, `boardingRoom`, `abandonedClassroom`, `nightBusInterior`, `mountainTemple`, `basementStorage`).
+2. **`dimensions` (`[width, depth, height]`):** Realistic proportions tailored to the space (`[2.8, 16.0, 2.95]` narrow hospital hall vs `[6.4, 7.6, 4.3]` A-frame thatch house vs `[4.2, 26.0, 9.0]` village alley).
+3. **`ceilingType`:** `"aFrameThatch" | "flatConcrete" | "pitchedTile" | "corrugatedTin" | "openSky" | "woodenBeams"`.
+4. **`materials` (`wall`, `floor`, `ceiling`):** Pick 3 cohesive clean painterly textures from `paint.ts` (`thatchRoofTex`, `tileRoofTex`, `concreteCeilingTex`, `corrugatedTinTex`, `mottledPlasterTex`, `brickWallTex`, `hospitalTileTex`, `paintedConcreteTex`, `darkTimberWallTex`, `terracottaFloorTex`, `vintagePatternTileTex`, `reedMatTex`, `wetAsphaltTex`, `packedEarthTex`, `woodenFloorTex`, `garmentFoldTex`).
+5. **`practicalLights` & `heroProps`:** 1–3 motivated practical light sources + 3–5 story-specific hero props that actually matter to the plot.
+6. **`signatureShadowBeat`:** One unforgettable lighting/shadow visual motif (e.g., *"cold moonlight under bolted double door blocked by 2 dark foot shadows"* or *"flickering fluorescent tube + flashlight beam revealing gaunt figure down hallway"*).
+7. **Anti-Repetition Check:** Validate with `validate_manifest.py --registry LOCATION_REGISTRY.json`. Unrelated videos and unrelated Parts MUST NOT collide; only explicit narrative revisits may declare `sameLocationOf: "<projectId>:<locationId>"`.
 
-## 3. Uncanny Ink-Noir Cast, 3 Views & Motion Mismatch (`src/<project>/toon.ts` + `cast.ts`)
+---
 
-- **Builds & Uncanny Mode (`Outfit`):** `"adult"` (gaunt tall), `"elder"` (stooped, `ageLines: true`), `"gaunt"` + **`uncanny: true`** (for supernatural entities: scratchy double-ink `Pen.grit = 1.55`, asymmetric eye sizing/gaze, cheek-splitting Junji Ito needle-teeth grins, elongated `jawDrop`, ichor `Pen.drip` tears, hyper-elongated clawed arms, `tattered: true` & `eyeGlow`), `"kid"`.
-- **Horror Expressions (`Expr`):** `stoic`, `wary`, `suspicious`, `uneasy`, `dread`, `terrified` (obsidian orbital hollows, bloodshot veined pinpoint eyes, clenched-teeth scream grimace — zero cute round `O` mouths), `hollow` (pitch-black void sockets + dripping ichor + stretched jaw), `unhinged` (Junji Ito wide needle-teeth grin), `possessed` (glowing slits).
-- **3 True Views (`viewOf` / explicit override):** `front` (with `facing: -1 | 0 | 1`), `side` (angular Gothic profile + IK legs), AND **`back`** (`bodyBack` with optional **`glance: -1 | 1`** over-the-shoulder profile turn for OTS shots & twist reveals!).
-- **Uncanny Motion Mismatch (`camera.ts` + `PoseOpts`):**
-  - Humans run smooth 30 fps (`time: frame / FPS`, `shiver`, `wind`, `underLight` when peering down with a lantern).
-  - Supernatural entities run **stepped 6–8 fps (`uncannyTime(frame, 4)`)**, violent 2-frame neck snaps (`headTilt: 24 + uncannyTwitch(frame, ...)`), `jawDrop: 0.7..0.95`, and hallucinatory double-exposure trails (**`pushAfterimage(...)`**)!
-- **Translucent Ghosts (`Place.opacity`):** Stage `opacity: 0.48–0.88` apparitions in open doorways, water, or fog voids — never straddling sharp background pillar edges (`InkPass` depth rule).
+## 2. Neutral Modular Architecture & Hero-Prop Kits (`build.ts` + `fx3d.ts`)
 
-## 4. Perspective-Locked Decals, Chiaroscuro Shadows & Subliminal 2D FX (`cast.ts` + `toon.ts`)
+Compose unique sets cleanly from Engine v3's neutral builders (all lit with `stylizedShade`, architectural meshes on layer 0 for crisp `InkPass` linework, detailed actors/props on `NOINK` with smooth Inverted-Hull outlines):
 
-- **MANDATORY `pushFlatDecal(...)` (`flat: true`):** ALWAYS use `pushFlatDecal` for water ripples (`fxWaterRipple`), wet mud footprints (`fxWetFootprints`), distorted elongated shadows (**`fxLongShadow`**), puddles, and ground runes — NEVER mount them as vertical camera-facing billboards!
-- **Subliminal Peripheral Horror FX:** Plant **`fxLurkingEyes`** deep in dark reeds/trees/windows on early shots, **`fxWindowHand`** pressed outside dark glass behind unsuspecting characters, and gravity-defying upward **`fxFloatingAsh`** on `eerie`/`blood` beats.
-- **Hallucinatory Post-Processing (`grade.ts` + `camera.ts`):** Trigger radial RGB chromatic aberration surges via `{ kind: "aberration", a, b, strength, pulse: true }` (pairs with built-in smoky ink-wash vignette & analog film scratches).
-- **`fxMist` / `fxRain` / `fxBreath`:** Feathered mist above floor (`y >= deckY + 0.55`), needle-sharp translucent storm rain, curling breath vapor (`dir = view.mirror ? -1 : 1`).
-- **Key 3D Props:** Prefer real 3D meshes (`conicalHat`, animated `doorCrossbar`, `Strand` rope, `addStormLantern3D`) over flat 2D stickers whenever a prop interacts closely with 3D geometry.
+- **Walls, Openings & Doors:** `addWallWithOpening` (real geometric doorway/window cutouts — zero overlapping Z-fighting planes!), `addDoubleDoorWithCracks` (hinged leaves + locking bolt + toggleable center/bottom HDR moonlight strips + toggleable 2 dark foot-shadow blockers via `doorCtrl.setMoonlight(moonOn, feetShadow)`).
+- **Roofs, Corridors & Verticality:** `addAFrameRoof` (exposed beams + king posts + pitched roof decks), `addCorridorBay` (modular hallway bays with recessed ward/apartment doors + baseboards), `addStairFlight` (real stepped staircases + landings + handrails).
+- **Practical 3D Light Fixtures & Furniture:** `addGlassOilLamp3D` (translucent glass chimney + flickering HDR flame + `setLit`), `addIncenseBurner3D` (3 glowing incense embers), `addFluorescentTube3D` (`setIntensity` flicker), `addStreetLamp3D` (`bulbWorldPos` for synced sodium light + cone), `addSimpleTable`, `addWoodenBedFrame`.
+- **Atmospheric 3D FX (`fx3d.ts`, strictly on `NOINK`):** `addRisingSmokeWisps` (deterministic curling incense/candle wisps), `addDustMotes` (drifting particles inside flashlight/moon beams), `addVolumetricCone` (soft directional additive light shafts), `createFlatDecalMesh` (flush floor puddles, footprints, blood/water marks — NEVER upright billboards).
+- **Depth Framing in `9:16`:** Keep walls, distant alley end-caps/rooftops, practical lamps, and hero props within narrow `9:16` horizontal FOV so backgrounds never look like empty sky cutouts.
 
-## Lighting & Palette Reference
+---
 
-See [LIGHTING_AND_PALETTE.md](./references/LIGHTING_AND_PALETTE.md) for the calibrated 5-preset parameter tables and PointLight recipes.
+## 3. Non-Chibi 3D Dark-Horror Characters & Uncanny Entities (`rig3d.ts` + `face2d.ts`)
+
+- **Create Human Characters (`createCharacter3D`):**
+  - Adult `~5.6` head-height proportions with sculpted jaw, 3D nose bridge, ears, sloping shoulder yoke, 3D collar/belt, clean UV garment folds, and 20 named sockets.
+  - Hair styles: `shortParted`, `spiky`, `elderThin`, `bun`, `longDraped`, `messyFringe`, `bald` (plus optional `headbandCol`).
+  - Garments: `funeralRobe`, `shirt`, `coat`, `hospitalGown`, `casualJacket`, `shroud`. Choose clothes darker or distinctly contrasted against skin (`#2d3340`, `#3a424e`, `#566360`) so pale faces read sharply in low light.
+  - Expressions (`FaceExpr`): `calm`, `wary`, `uneasy`, `dread`, `terrified`, `deadStare`, `unsettlingSmile`, `hollow` + 9 lip-sync `MouthShape`s + `gazeX/Y` + `lid` blinks + `lookAtWorld(...)`.
+  - Poses (`PoseAction`): `standIdle`, `sitCrossLegged`, `sitChair`, `walk`, `creep`, `peerForward`, `recoil`, `holdPhone`, `holdLantern`, `point`, `lunge`, `loomingStill`, `peekAroundDoor`, `turnHead`.
+- **Create Uncanny Supernatural Entities (`entity: EntityConfig`):**
+  - Push silhouette and posture into dark horror: `heightScale: 1.14–1.24`, `gauntness: 0.72–0.80`, `armScale: 1.20–1.30`, `fingerScale: 1.30–1.40`, `neckTiltDeg: ±24..34`, `shoulderSkew: 0.10`, `hairCurtain: true` (organic parted hair wisps — never thick outline blocks), `breathing: false`, optional `steppedFps: 8–10`, `silhouetteMode: true` + `eyeGlow: true` (`eyeGlowColor: [2.2, 2.35, 2.8]`) for chilling blackout reveals.
+- **Outline Layer Discipline:** `createCharacter3D` automatically attaches angle-weighted smooth-normal Inverted-Hull outlines (`~5.8–6.2 px`) and puts the entire rig on `NOINK` (layer 3) so architectural `InkPass` never double-outlines actors.
+
+---
+
+## 4. 1st-Person POV Rig & Diegetic 3D Props (`povRig.ts`)
+
+- Mount `createPovRig3D({ skinCol, sleeveCol, pantsCol, shoeCol })` once in `world.ts` and call `pov.update(cam, { stance, anchor, bodyYaw, propMode, rightArmRaise, leftArmRaise, frame })` every frame:
+  - `stance: "seated" | "standing"` renders visible knees/legs/shoes when camera pitches down (`POV_DOWN`).
+  - `povRightHand` / `povLeftHand` hold camera-aligned props whose forearms slope cleanly downward/back behind the prop (`-Z`) so sleeves NEVER clip across screens.
+- **Diegetic 3D Props:**
+  - `createPhone3D`: Live 420×820 Canvas2D lockscreen (`clock`, `date`, `carrier`, `battery`, `notifications`), slender bezel-hugging fingers, HDR Bloom screen, and `phone.getLight(intensity)` illuminating fingers & face. Always sync `clock` and notification body directly from `beat.propStates.phone.detail`!
+  - `createFlashlight3D`: Metal barrel, HDR lens, soft beam cone, and `flashlight.getSpotLight()` feeding `setSpotLight(...)`. Keep intensity around `0.85–1.0` to avoid garment highlight blowout.
+  - `createHandheldOilLamp3D`: Flickering portable lamp + `lamp.getLight(frame)`.
+  - `createPaperProp3D`: Live Canvas2D letter/rule-sheet/talisman prop.
+
+---
+
+## 5. Practical Lighting, Smooth Light-Loss Shifts & Whip-Pan Motion Blur
+
+- Always update `applyLightUniforms(L, K)`, `setLocalLights([...])` (up to 6 practical lights), and `setSpotLight(...)` in BOTH `world.update()` and `world.syncLighting()` directly from `beat.lightState`.
+- Implement `getLightBlend(shotId, frame)` using `beat.lightState.blendTo` / `blendRange` for smooth lights-out shifts (`warmLamp → coldMoon`).
+- Implement `getMotionVelocity(shotId, frame, aspect, heightPx)` delegating to `evalShotMotion(...)` so `WhipMotionBlurEffect` delivers deterministic 13-tap directional motion blur during `whipPan` bursts while remaining zero-overhead pass-through on calm shots.
+
+See [LIGHTING_AND_PALETTE.md](./references/LIGHTING_AND_PALETTE.md) and [HORROR_STYLE_BIBLE.md](./references/HORROR_STYLE_BIBLE.md) for calibrated values and verified benchmark stills.

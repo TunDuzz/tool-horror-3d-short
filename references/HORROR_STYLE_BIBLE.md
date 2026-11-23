@@ -1,39 +1,76 @@
-# Horror Style Bible v2 ("Gothic Ink-Noir × Shadow-Depth")
+# Horror Style Bible v3 ("3D Stylized Dark-Horror POV")
 
-Reference standard calibrated for Horror Engine v2 (`templates/engine/`), verified across `HorrorLab` (`9:16` & `16:9`) and `MadaShort` v2.
+Reference visual standard calibrated for **Horror Engine v3** (`templates/engine/`), derived from high-retention 3D POV horror storytelling and pushed away from cute chibi proportions into **chilling, atmospheric dark horror**. Live-verified on `HorrorLabV3Vertical` (`1080×1920`) and `HorrorLabV3Wide` (`1920×1080`) across 3 radically distinct environments (`ruralFuneralRoom`, `hospitalCorridor`, `foggyVillageAlley`).
 
-## 1. Visual Identity ("Junji Ito × Darkest Dungeon × Silent Hill × Mike Mignola")
+Verified full-HD benchmark stills live in `references/stills/`:
+- `v3_B1_funeral_talk.jpg` — Rural thatched A-frame funeral vigil room, non-chibi 3D NPC, warm practical oil-lamp + altar candle light.
+- `v3_whip_blur_f55.jpg` — Deterministic 7-frame GPU directional Whip-Pan Motion Blur sweeping past altar, coffin, and oil lamp.
+- `v3_B2_whip_phone.jpg` — 1st-person POV hand gripping glowing `Phone3D` (`01:06`) synced with upper-third narrative notification card.
+- `v3_B3_door_shadow.jpg` — Smooth `warmLamp → coldMoon` lights-out reveal of bolted double door crack blocked by 2 dark foot shadows.
+- `v3_B4_entity_loom.jpg` — Tall gaunt crooked-neck silhouette entity looming at doorway with organic draped hair & HDR pinpoint eye glow.
+- `v3_B5_hospital_corridor.jpg` — Ceramic-tiled institutional hospital corridor, flickering fluorescent tubes, floating dust motes, POV `Flashlight3D` SpotLight cone.
+- `v3_B6_village_alley.jpg` — Wet asphalt foggy village alley, brick & concrete walls, corrugated tin eave, overhead power lines, warm sodium streetlamp pool.
 
-- **Woodcut Dip-Pen Grit & Uncanny Anatomy (`toon.ts`):** Gaunt, elongated Gothic proportions (`~4.6–5.2` heads tall, sunken cheekbones, slender neck, articulated 2-segment tapered limbs, 4-finger gaunt/clawed hands). Every contour uses deterministic dip-pen ink wobble (`Pen.grit`: `0.95` for humans, `1.55` scratchy double-ink for entities) plus dripping ichor/ink tears (`Pen.drip`). **Zero clean geometric vector lines, zero bean-heads, zero cute round `O` mouths.**
-- **Uncanny Valley Entities & Expressions:**
-  - Deep obsidian *Darkest Dungeon* orbital eye hollows (`#06030a`) + bloodshot veined sclera + razor-tiny pinpoint pupils + clenched-teeth terror grimaces on humans.
-  - Set `uncanny: true` on supernatural entities for **asymmetric eye sizing/gaze**, **cheek-splitting Junji Ito needle-teeth grins (`eerieGrin`)**, **elongated jaw-drop voids (`jawDrop`)**, **violent neck snaps (`headTilt` + `uncannyTwitch`)**, and **stepped 6–8 fps supernatural motion (`uncannyTime`)** contrasting against smooth 30 fps human motion!
-- **Extreme *Chiaroscuro* & Real Local Lighting (`lights.ts`, `shade.ts`, `cardshade.ts`):** "Island of light in an ocean of ink" — deep obsidian shadows outside tight quadratic `PointLight` pools (`setLocalLights`), `underLight` facial shadows, crisp spectral rim light, real 3D lightning (`setLightningFlash`), and distorted `fxLongShadow` floor decals (`flat: true`).
-- **Hallucinatory Post-Processing & Subliminal Horror (`grade.ts`, `cast.ts`, `toon.ts`):** Radial RGB **chromatic aberration** (`{ kind: "aberration" }`), organic smoky ink-wash vignette, vintage film scratches/dust grime, double-exposure spectral trails (`pushAfterimage`), and peripheral dread FX (`fxLurkingEyes`, `fxWindowHand`, `fxFloatingAsh`).
-- **3D Shadow-Depth Worlds (`build.ts` + `paint.ts`):** Crooked Gothic silhouettes (`taperedBoxGeo`, `pitchedRoofGeo`), multi-branching `addGnarledTree`, `addReedCluster`, undulating `addDistantRidge` horizons, wet mold-stained `darkPlanksHD` / `crackedPlasterHD`, **real volumetric light shafts (`addVolumetricShaft`)**, and **dark foreground silhouette framing (`addForegroundSilhouette`)**.
+---
 
-## 2. Dark-Screen Readability (Phone @ 50% Brightness)
+## 1. Visual Identity ("3D Stylized Dark-Horror POV")
 
-- Target median shot luma: **`0.12 – 0.28`** (avoid `< 0.08` across whole shots).
-- Target `p2`: **`0.012 – 0.038`** (velvet ink-black depth without muddy grey washout).
-- Target `p98`: **`>= 0.45`** (driven by HDR emissives `> 1.0`, local PointLights, moon shafts, and rim lighting; `short_qa.py` flags `p98 < 0.38`).
-- **Film Grain:** `grainAmount={0.018}` deterministic PCG grain smooths dark fog banding cleanly under H.264/YouTube compression.
+- **100% Real 3D Articulated Characters — ZERO 2D Billboards, ZERO Cute Chibi (`rig3d.ts`, `face2d.ts`):**
+  - Legacy v2 2D Canvas billboard rigs (`toon.ts`, `cast.ts`, `cardshade.ts`), `Pen.grit` ink wobble, messy cross-hatching, and cute round chibi heads are permanently retired.
+  - Human characters use **non-chibi adult horror proportions (`~5.6–6.0` head heights)** with sculpted angular jaws, 3D nose bridges, ears, sloping shoulder yokes, 3D garment collars/belts, clean UV garment folds, and 20 named articulation sockets.
+  - Curved spherical-patch 512×512 2D face decals (`face2d.ts`) draw clean-line **sharp almond eyes, contracted pinpoint horror pupils, soft gradient under-eye hollows, furrowed brows, and restrained tense mouths** (`calm`, `wary`, `uneasy`, `dread`, `terrified`, `deadStare`, `unsettlingSmile`, `hollow`).
+  - Supernatural entities layer `EntityConfig` modifiers onto the same 3D rig: tall gaunt elongation (`heightScale: 1.14–1.25`, `gauntness: 0.70–0.82`), unnaturally long arms/fingers (`armScale`, `fingerScale`), crooked neck tilts (`neckTiltDeg: ±20°..38°`), asymmetric shoulder skew, organic draped dark hair curtains, pitch-charcoal `silhouetteMode`, dead stillness (`breathing: false`), stepped `steppedFps`, and HDR emissive pinpoint `eyeGlow`.
+- **Clean Bold Dual-Layer Outlines — ZERO Double-Outlines, ZERO Split Corners (`outline3d.ts`, `ink.ts`):**
+  - **Characters, Entities & POV Props (Layer 3 / `NOINK`):** Smooth angle-weighted vertex normals (`computeSmoothNormals`) extruded along a view-distance-clamped BackSide Inverted-Hull shader (`~5–7 px` at 1080p, clamped in world units). Every actor mesh lives strictly on `NOINK` so architectural edge detection never double-outlines characters.
+  - **Architecture & Environments (Layer 0):** Crisp screen-space depth/normal `InkPass` renders clean dark structural linework on walls, door frames, rafters, tiles, and furniture without jitter or grit artifacts.
+- **1st-Person POV Immersion & Diegetic 3D Props (`povRig.ts`):**
+  - Anchor the viewer inside the protagonist's body with `createPovRig3D` (visible seated knees or standing legs when looking down + camera-aligned forearms/hands sloping naturally from below the frame).
+  - Use physical 3D interactive props: `Phone3D` (live Canvas2D lockscreen with HDR Bloom + real local `PointLight` illuminating gripping fingers), `Flashlight3D` (real GPU `SpotLight` beam + soft volumetric cone), `HandheldOilLamp3D`, and `PaperProp3D`.
+- **Soft Stylized Shading + Practical Lights + HDR Bloom (`shade.ts`, `lights.ts`, `ShortPlayer.tsx`):**
+  - Replaced harsh binary 2-tone cel cuts with smooth wrapped shading (`stylizedShade`) receiving **up to 6 real local `PointLight`s + 1 `SpotLight` + real soft directional shadows (`shadows="soft"`) + real 3D lightning**.
+  - Selective HDR Bloom (`luminanceThreshold: 0.92`, `NEUTRAL` tone mapping) gives warm amber halos to glass oil lamps, candles, sodium streetlamps, fluorescent tubes, door-crack moonlight, and smartphone screens.
+  - Clean subtle film finish: deterministic micro-grain `grainAmount={0.008}`, soft framing vignette, optional light chromatic aberration (`<= 0.12` base or subtle dread pulse). **ZERO `gradeGrime` vintage scratches and ZERO fake crimson `blood` screen washes.**
+- **Story-Driven Non-Repeating 3D Environments (`build.ts`, `paint.ts`):**
+  - Every location is built from a unique `LocationBlueprint` using neutral modular architecture kits (`addWallWithOpening`, `addAFrameRoof`, `addDoubleDoorWithCracks`, `addCorridorBay`, `addStairFlight`) and 16 clean painterly textures across 4 surface families.
+  - **Zero cross-video or cross-part background repetition** — unrelated videos or unrelated video parts must never reuse an existing environment.
+
+---
+
+## 2. Dark-Screen Readability Targets (Phone @ 50% Brightness)
+
+Calibrated against reference POV horror footage and live-verified on `HorrorLabV3Vertical` (`short_qa.py`):
+
+| Scene Type | Target Luma `mean` | Target `p2` (shadow floor) | Target `p98` (practical highlight) | Measured `HorrorLabV3` Proof |
+|---|---|---|---|---|
+| Warm practical interior (`warmLamp`) | `0.14 – 0.30` | `0.020 – 0.040` | `0.65 – 0.97` | `mean 0.152–0.280`, `p98 0.729–0.965` |
+| Lights-out moonlight (`coldMoon`) | `0.070 – 0.120` | `0.020 – 0.038` | `0.36 – 0.58` | `mean 0.078–0.091`, `p98 0.456–0.525` |
+| Institutional hall (`fluorescent` + `flashlight`) | `0.15 – 0.24` | `0.030 – 0.050` | `0.48 – 0.75` | `mean 0.209`, `p98 0.538` |
+| Foggy exterior night (`duskFog`) | `0.11 – 0.18` | `0.028 – 0.050` | `0.36 – 0.65` | `mean 0.137`, `p98 0.392` |
+
+- `short_qa.py` enforces dark readability floors (`p98 >= 0.34`, `mean >= 0.065`) so deliberate lights-out scenes stay haunting yet legible on mobile screens.
+- Keep `grainAmount={0.008}` to suppress 8-bit H.264 dark-gradient banding cleanly without dirtying the stylized art.
+
+---
 
 ## 3. Orientation & Framing Grammar (`9:16` vs `16:9`)
 
-Post-processing (`InkPass`, `LensBlur`, `Bloom`, `GrainEffect`, `CARD_K.uPx`) scales automatically by `Math.min(width, height) / 1080`.
+All post-processing (`InkPass`, `LensBlur`, `WhipMotionBlurEffect`, `Bloom`, `GrainEffect`) and `outline3d.ts` screen-space hull widths scale automatically invariant to aspect ratio (`1080×1920` vs `1920×1080`).
 
 | Aspect | Framing Strength | Mandatory Staging Practices |
 |---|---|---|
-| **`9:16` Vertical (`1080x1920`)** | Claustrophobia, looming height, overhead branches, steep POV look-downs | Bring gnarled trees, reeds & background structures **within `x ∈ [-3.2, +3.2]`** so narrow vertical frames are never empty! Frame boots cleanly on wide shots or cut purposefully to chest-up `MCU`/`ECU`. |
-| **`16:9` Wide (`1920x1080`)** | Unsettling **negative space**, dark foreground columns/doorways flanking edges | Stage protagonist in left/right third; let an ominous window, looming silhouette, or light shaft occupy the opposite third. |
+| **`9:16` Vertical (`1080×1920`)** | 1st-person POV immersion, exposed A-frame ceilings, looming tall doorways, tight corridor tunnels, close `Phone3D` reads | Frame architectural depth within `±16–20°` horizontal FOV (e.g., narrow alleys `~4.0–4.4m`, corridors `~2.8m`, practical lamps/altars inside visible thirds). Reserve top `10–24%` for optional header/notification HUD and lower `18–26%` for optional speaker pill + subtitle. |
+| **`16:9` Wide (`1920×1080`)** | Unsettling negative space, lateral peripheral threats, wide interior geography | Stage NPCs or POV props off-center so doorways, dark hallways, or shadow strips occupy the opposite third. |
 
-## 4. Mandatory Cinematography, Acting & Transition Grammar
+---
 
-- **No-Repeat-Angle Rule (Zero Static Stage):** Never hold the same camera vantage across consecutive shots. Alternate purposefully across shot scales: `WS` → `OTS` (`bodyBack`) → `LOW` → `MCU` (side/3-4) → `ECU`/`POV` → `CU` (Dutch tilt) → `Reverse WS`.
-- **Horror Reveal Discipline:** NEVER expose the monster clearly in Shot 1. Build dread progressively: atmospheric stillness → uncanny prop cue (`LOW`/`ECU`) → protagonist investigation (`MCU` + `dollyZoom`) → partial threat (`ECU` hand/shadow) → `[DEAD SILENCE]` → explosive reveal (`LOW` + real 3D lightning).
-- **Continuous Living Animation:** Always pass `time: frame / FPS` so characters breathe, shiver (`shiver`), and sway coats/hair in the wind (`wind`). Match every script verb to a real `Action` (`creep`, `peer`, `recoil`, `lunge`, `emerge`, `flee`, `boltDoor`) and use `bodyBack` + `glance: -1 | 1` for over-the-shoulder reveals.
-- **Purposeful Horror Transitions:**
-  - Hard cuts ONLY when camera angle (`>= 30°`) AND/OR shot scale changes dramatically (never filter-swap jump-cuts!).
-  - Use `{ kind: "dipBlack", at, dur: 12, hold: 2 }` across major location/era changes (`wharf` → `shack`).
-  - Use `{ kind: "blackout", a, b }` for `[DEAD SILENCE]` pre-climax cuts, paired with `{ kind: "lightning", f }` (real 3D flash) and `{ kind: "vignettePulse" }` during creeping dread finales.
+## 4. Mandatory Cinematography, Whip-Pan & Transition Grammar
+
+- **POV & Cinematic Shot Scales:** Label every shot with its exact `ShotScale`: `POV`, `POV_PROP`, `POV_TURN`, `POV_DOWN`, `POV_CU`, `WS`, `MS`, `OTS`, `MCU`, `CU`, `ECU`, `LOW`.
+- **No-Repeat-Angle Rule:** Never hold a static identical vantage across consecutive cuts unless executing an explicit POV reaction (`POV` → `POV_TURN`/`POV_PROP` → `POV_DOWN` → `POV_CU`). Never perform filter-swap jump-cuts on a frozen framing.
+- **Deterministic Whip-Pan Motion Blur (`whipPan` + `WhipMotionBlurEffect`):**
+  - Use `whipPan(eyePos, { f0, dur: 6..8, fromLook, toLook, rollPeak }, frame, fov)` for visceral 1st-person head-snap turns (e.g., snapping from an NPC to a ringing phone or dark doorway).
+  - Declare every Whip-Pan in `WHIP_PANS` and fast close-to-lens POV prop raises in `POV_MOTIONS` inside `story.ts` so `extract_shots.py` registers them as planned motion for `short_qa.py`.
+- **Natural Living Motion:** Apply subtle `povBreath` camera breathing (`0.008–0.014`), natural character poses (`setPose`) and gaze tracking (`lookAtWorld`) for humans, contrasted against `breathing: false` stillness and rare 2-frame `uncannyTwitch` snaps on entities.
+- **Purposeful Transitions & Opt-In HUD:**
+  - Use `{ kind: "dipBlack", at, dur: 8..12, hold: 1..2 }` across location or time jumps, `{ kind: "blackout", a, b }` for `[DEAD SILENCE]` beats, and `getLightBlend` for smooth in-shot lamp-death shifts (`warmLamp → coldMoon`).
+  - `HorrorHUD` (`header`, `notifications`, `captions`, `timeSkips`, `choiceCard`) is **opt-in** and driven directly from `hudFromManifest(MANIFEST)` so on-screen text, clock timestamps, and 3D props never drift out of sync.
