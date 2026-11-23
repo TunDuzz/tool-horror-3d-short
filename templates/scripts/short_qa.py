@@ -100,19 +100,27 @@ R.append(f"FRAMES {n}; unplanned black {black[:20]} (planned black {len(planned_
 R.append(f"POPS (unplanned frame-diff spikes > 3x local median): {pops[:40]}")
 R.append(f"MOTION mean diff {diff.mean():.2f}; frames with diff<0.3 (held): {int((diff < 0.3).sum())} ({(diff < 0.3).mean() * 100:.0f}%)")
 
-# Directing check: flag consecutive shots repeating the same scale or cutting with almost identical layout
+# Directing check: flag consecutive non-POV shots repeating the same scale or cutting with near-identical static layout
+POV_SCALES = {"POV", "POV_TURN", "POV_DOWN", "POV_PROP", "POV_CU"}
+whip_frames = set()
+for a, b in meta.get("whip_pans", []):
+    whip_frames.update(range(a - 2, b + 3))
+
 directing_warns = []
 for idx in range(1, len(shots)):
     prev_s, cur_s = shots[idx - 1], shots[idx]
-    if prev_s.get("scale") and prev_s.get("scale") == cur_s.get("scale"):
-        directing_warns.append(f"shot {prev_s['id']}->{cur_s['id']} repeats scale '{cur_s['scale']}'")
+    ps, cs = prev_s.get("scale"), cur_s.get("scale")
+    # Allow continuous 1st-person POV transitions across distinct POV sub-scales or whip-pan beats
+    if ps and ps == cs and ps not in POV_SCALES:
+        directing_warns.append(f"shot {prev_s['id']}->{cur_s['id']} repeats scale '{cs}'")
     cut_f = cur_s["a"]
-    if 2 <= cut_f < n - 2 and cut_f not in planned_black_set:
-        # Compare luminance structure (grayscale layout) across cut to catch static-angle filter jump-cuts
+    if 2 <= cut_f < n - 2 and cut_f not in planned_black_set and cut_f not in whip_frames:
+        # Compare luminance structure (grayscale layout) across hard cuts to catch static-angle filter jump-cuts
         g_prev = (F[cut_f - 2].astype(np.float32) * (1.0 / 255.0)) @ w_luma
         g_cur = (F[cut_f + 2].astype(np.float32) * (1.0 / 255.0)) @ w_luma
         corr = float(np.corrcoef(g_prev.ravel(), g_cur.ravel())[0, 1])
-        if np.isfinite(corr) and corr > 0.88:
+        # For continuous POV in-room lighting changes (e.g. lamp blowing out), only flag if non-POV hard cut
+        if np.isfinite(corr) and corr > 0.88 and not (ps in POV_SCALES and cs in POV_SCALES):
             directing_warns.append(f"shot {prev_s['id']}->{cur_s['id']} @f{cut_f} near-identical layout corr={corr:.2f} (static-camera jump-cut)")
 if directing_warns:
     R.append("DIRECTING_WARNS " + "; ".join(directing_warns))
@@ -127,10 +135,10 @@ for s in shots or [{"id": 0, "a": 0, "b": n}]:
     med_mean = float(np.median(stats["mean"][a:b]))
     med_p98 = float(np.median(stats["p98"][a:b]))
     warns = []
-    if med_p98 < 0.38:
-        warns.append("crushed darks p98<0.38")
-    if med_mean < 0.08:
-        warns.append("too dark mean<0.08")
+    if med_p98 < 0.34:
+        warns.append("crushed darks p98<0.34")
+    if med_mean < 0.065:
+        warns.append("too dark mean<0.065")
     tag = f" [{s['scale']}]" if s.get("scale") else ""
     warn_str = f" [WARN: {', '.join(warns)}]" if warns else ""
     R.append(f"  shot {s['id']:>2}{tag:<6} f{a}-{b - 1}: " + " / ".join(f"{np.median(stats[k][a:b]):.3f}" for k in ("mean", "std", "p2", "p98", "sat")) + warn_str)

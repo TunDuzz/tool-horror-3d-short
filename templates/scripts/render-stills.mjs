@@ -1,5 +1,7 @@
 // Cross-platform Pre-Final Still Gate renderer (Linux / macOS / Windows).
-// Usage: node scripts/render-stills.mjs <CompositionId> <outPrefix> <frame,frame,...> [scale]
+// Usage:
+//   node scripts/render-stills.mjs <CompositionId> <outPrefix> <frame,frame,...> [scale]
+//   node scripts/render-stills.mjs <CompositionId> <outPrefix> --manifest <still_manifest.json> [scale]
 // Env:
 //   REMOTION_TMP : temp/bundle directory (defaults to D:/remotion-tmp on Windows if D:/ exists, else os.tmpdir()/remotion-tmp)
 //   ENTRY        : bundler entry point (defaults to src/index.ts)
@@ -10,9 +12,41 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
-const [compId, prefix, framesArg, scale = "0.5"] = process.argv.slice(2);
-if (!compId || !prefix || !framesArg) {
-  console.error("Usage: node scripts/render-stills.mjs <CompositionId> <outPrefix> <frame,frame,...> [scale]");
+const args = process.argv.slice(2);
+const [compId, prefix] = args;
+if (!compId || !prefix || args.length < 3) {
+  console.error("Usage: node scripts/render-stills.mjs <CompositionId> <outPrefix> <frame,frame,... | --manifest still_manifest.json> [scale]");
+  process.exit(1);
+}
+
+let jobs = [];
+let scale = "0.5";
+if (args[2] === "--manifest") {
+  const manifestPath = args[3];
+  scale = args[4] || "1";
+  if (!manifestPath || !fs.existsSync(manifestPath)) {
+    console.error("Manifest file not found:", manifestPath);
+    process.exit(1);
+  }
+  const items = JSON.parse(fs.readFileSync(manifestPath, "utf-8"));
+  jobs = items
+    .filter((it) => Number.isFinite(Number(it.peakFrame)))
+    .map((it) => ({
+      frame: Number(it.peakFrame),
+      tag: `${it.beatId || "B"}_f${it.peakFrame}`,
+      intent: it.cameraIntent || "",
+    }));
+} else {
+  const framesArg = args[2];
+  scale = args[3] || "0.5";
+  jobs = framesArg
+    .split(",")
+    .map((s) => Number(s.trim()))
+    .filter((n) => Number.isFinite(n))
+    .map((n) => ({ frame: n, tag: String(n), intent: "" }));
+}
+if (!jobs.length) {
+  console.error("No valid frame numbers provided.");
   process.exit(1);
 }
 
@@ -59,22 +93,13 @@ const onBrowserLog = (l) => {
   }
 };
 
-const frames = framesArg
-  .split(",")
-  .map((s) => Number(s.trim()))
-  .filter((n) => Number.isFinite(n));
-if (!frames.length) {
-  console.error("No valid frame numbers provided.");
-  process.exit(1);
-}
-
-for (const f of frames) {
+for (const job of jobs) {
   const t0 = Date.now();
-  const output = `${prefix}${f}.jpg`;
+  const output = `${prefix}${job.tag}.jpg`;
   await renderStill({
     composition,
     serveUrl,
-    frame: f,
+    frame: job.frame,
     output,
     imageFormat: "jpeg",
     jpegQuality: 88,
@@ -84,5 +109,5 @@ for (const f of frames) {
     timeoutInMilliseconds: 180000,
     onBrowserLog,
   });
-  console.log("still", f, "->", output, ((Date.now() - t0) / 1000).toFixed(1) + "s");
+  console.log("still", job.frame, "->", output, ((Date.now() - t0) / 1000).toFixed(1) + "s", job.intent ? `| ${job.intent}` : "");
 }

@@ -149,6 +149,26 @@ if overlays_m:
 
 cuts = [[int(f), int(f)] for f in re.findall(r"\{\s*f:\s*(\d+)\s*,\s*cut:\s*true", src)]
 
+# Extract planned Whip-Pan directional motion blur bursts (WHIP_PANS array or inline whipPan(..., { f0, dur }))
+whip_planned = []
+for obj in re.findall(r"whipPan\s*\([^)]*\{([^}]*)\}", src, re.DOTALL):
+    f0m = re.search(r"\bf0\s*:\s*([A-Za-z_]\w*|\d+)", obj)
+    dm = re.search(r"\bdur\s*:\s*([A-Za-z_]\w*|\d+)", obj)
+    if f0m:
+        f0 = resolve_num(f0m.group(1), consts)
+        dur = resolve_num(dm.group(1), consts) if dm else 7
+        whip_planned.append([max(0, f0 - 1), f0 + dur + 1])
+
+wp_arr = re.search(r"(?:export\s+)?const\s+WHIP_PANS[^=]*=\s*\[(.*?)\];", src, re.DOTALL)
+if wp_arr:
+    for obj in re.findall(r"\{([^}]*)\}", wp_arr.group(1), re.DOTALL):
+        f0m = re.search(r"\bf0\s*:\s*([A-Za-z_]\w*|\d+)", obj)
+        dm = re.search(r"\bdur\s*:\s*([A-Za-z_]\w*|\d+)", obj)
+        if f0m:
+            f0 = resolve_num(f0m.group(1), consts)
+            dur = resolve_num(dm.group(1), consts) if dm else 7
+            whip_planned.append([max(0, f0 - 1), f0 + dur + 1])
+
 kicks = []
 k_m = re.search(r"(?:export\s+)?const\s+KICKS[^=]*=\s*\[(.*?)\];", src, re.DOTALL)
 if k_m:
@@ -167,8 +187,9 @@ if out_dir:
 payload = {
     "shots": shots,
     "xfade": xfade,
-    "planned": cuts + kicks + flashes + overlay_planned,
+    "planned": cuts + kicks + flashes + overlay_planned + whip_planned,
     "planned_black": planned_black,
+    "whip_pans": whip_planned,
 }
 if len(flashes) == 1:
     payload["flash"] = flashes[0]
@@ -176,4 +197,4 @@ if len(flashes) == 1:
 with open(out_path, "w", encoding="utf-8") as fp:
     json.dump(payload, fp, indent=1)
 
-print(f"{len(shots)} shots -> {out_path} (xfade={xfade}, flashes={flashes}, black={planned_black}, cuts={[c[0] for c in cuts]}, kicks={kicks})")
+print(f"{len(shots)} shots -> {out_path} (xfade={xfade}, flashes={flashes}, black={planned_black}, whips={whip_planned}, cuts={[c[0] for c in cuts]}, kicks={kicks})")

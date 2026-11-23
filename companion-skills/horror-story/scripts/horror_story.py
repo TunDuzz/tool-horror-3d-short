@@ -14,7 +14,7 @@ import os
 import re
 import sys
 
-VALID_LIGHTS = {"night", "candle", "storm", "eerie", "blood"}
+VALID_LIGHTS = {"warmLamp", "coldMoon", "fluorescent", "duskFog", "flashlight"}
 VALID_TIERS = {"lead", "support", "functional"}
 VALID_BEAT_TYPES = {"hook", "omen", "dread", "scare", "reveal", "twist", "escape", "climax"}
 VALID_WEIGHTS = {"major", "minor"}
@@ -172,7 +172,7 @@ def cmd_seed(args):
                 "part": i,
                 "title": f"Phần {i}",
                 "target_sec": sec,
-                "light": "candle" if i == 1 else "night",
+                "light": "warmLamp" if i == 1 else "coldMoon",
                 "synopsis": "",
                 "hook": "",
                 "suspense": "",
@@ -800,7 +800,7 @@ def cmd_export_outline(args):
                 "part": p["part"],
                 "title": p.get("title", f"Part {p['part']}"),
                 "target_sec": p.get("target_sec", 60),
-                "light": p.get("light", "night"),
+                "light": p.get("light", "coldMoon"),
                 "transition_out": "cut" if i < len(parts) else "fade:0.5",
                 "cliffhanger": p.get("suspense", ""),
             }
