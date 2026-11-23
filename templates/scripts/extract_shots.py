@@ -140,7 +140,7 @@ if overlays_m:
                 half = (dur + hold) // 2 + 1
                 planned_black.append([max(0, at - half), at + half + 1])
                 overlay_planned.append([max(0, at - half - 1), at + half + 2])
-        elif kind in ("flicker", "vignettePulse"):
+        elif kind in ("flicker", "vignettePulse", "aberration"):
             am = re.search(r"\ba\s*:\s*([A-Za-z_]\w*|\d+)", obj)
             bm = re.search(r"\bb\s*:\s*([A-Za-z_]\w*|\d+)", obj)
             if am and bm:

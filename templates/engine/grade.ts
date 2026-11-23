@@ -81,15 +81,16 @@ void mainImage(const in vec4 inputColor, const in vec2 uv, out vec4 outputColor)
   float vigMask = smoothstep(gradeVig.y - 0.08, 0.98, r + smokeW);
   c *= 1.0 - gradeVig.x * vigMask;
 
-  // Subtle cursed-celluloid grime: fine vertical film scratches + dark ink-wash dust flecks
+  // Subtle cursed-celluloid grime: broken short vertical scratches + fine dark ink-wash dust flecks
   if (gradeGrime > 0.001) {
     float tStep = floor(gradeTime * 12.0);
     float scX = floor(uv.x * 260.0);
     float scSeed = gHash(vec2(scX, tStep * 0.37));
-    float scratch = step(0.9945, scSeed) * smoothstep(0.25, 0.85, gNoise(vec2(uv.y * 5.0, scX))) * 0.18 * gradeGrime;
-    float speck = step(0.9965, gHash(floor(uv * vec2(180.0, 320.0)) + tStep * 0.7)) * 0.32 * gradeGrime;
-    float blotch = (gNoise(uv * vec2(6.5, 11.0) + vec2(0.0, 0.12)) - 0.5) * 0.08 * gradeGrime * smoothstep(0.25, 0.95, r);
-    c = c * (1.0 - speck + blotch) + vec3(scratch * 0.65);
+    float yBreak = smoothstep(0.55, 0.88, gNoise(vec2(uv.y * 9.0 + tStep * 1.3, scX * 0.5)));
+    float scratch = step(0.9965, scSeed) * yBreak * 0.11 * gradeGrime;
+    float speck = step(0.9965, gHash(floor(uv * vec2(180.0, 320.0)) + tStep * 0.7)) * 0.24 * gradeGrime;
+    float blotch = (gNoise(uv * vec2(6.5, 11.0) + vec2(0.0, 0.12)) - 0.5) * 0.06 * gradeGrime * smoothstep(0.32, 0.95, r);
+    c = c * (1.0 - speck + blotch) + vec3(scratch * 0.55);
   }
 
   c = clamp(c, 0.0, 1.0);
@@ -131,56 +132,56 @@ export type GradeParams = {
 };
 
 export const GRADE_NIGHT: GradeParams = {
-  ky: [0.006, 0.070, 0.225, 0.51, 0.81, 0.95, 1],
-  sat: [0.76, 0.84, 0.94],
-  tintS: [0.022, -0.004],
-  tintM: [0.009, -0.002],
+  ky: [0.012, 0.098, 0.270, 0.55, 0.83, 0.96, 1],
+  sat: [0.78, 0.86, 0.95],
+  tintS: [0.020, -0.004],
+  tintM: [0.008, -0.002],
   tintH: [0.006, 0.0],
-  vig: [0.56, 0.26],
+  vig: [0.42, 0.34],
 };
 
 export const GRADE_CANDLE: GradeParams = {
-  ky: [0.006, 0.068, 0.220, 0.52, 0.83, 0.96, 1],
-  sat: [0.74, 1.00, 1.12],
-  tintS: [0.016, 0.004],
+  ky: [0.012, 0.096, 0.268, 0.56, 0.84, 0.96, 1],
+  sat: [0.76, 1.00, 1.12],
+  tintS: [0.014, 0.004],
   tintM: [-0.008, 0.010],
   tintH: [-0.014, 0.010],
-  vig: [0.62, 0.22],
+  vig: [0.46, 0.30],
 };
 
 export const GRADE_STORM: GradeParams = {
-  ky: [0.008, 0.078, 0.240, 0.53, 0.82, 0.95, 1],
-  sat: [0.64, 0.74, 0.86],
+  ky: [0.014, 0.102, 0.278, 0.56, 0.83, 0.96, 1],
+  sat: [0.66, 0.76, 0.88],
   tintS: [0.014, -0.005],
   tintM: [0.008, -0.004],
   tintH: [0.004, 0.0],
-  vig: [0.56, 0.24],
+  vig: [0.42, 0.32],
 };
 
 export const GRADE_EERIE: GradeParams = {
-  ky: [0.006, 0.074, 0.235, 0.53, 0.82, 0.95, 1],
-  sat: [0.72, 0.84, 0.94],
-  tintS: [0.020, 0.002],
+  ky: [0.012, 0.100, 0.274, 0.56, 0.83, 0.96, 1],
+  sat: [0.74, 0.86, 0.95],
+  tintS: [0.018, 0.002],
   tintM: [-0.006, -0.012],
   tintH: [-0.008, -0.008],
-  vig: [0.60, 0.24],
+  vig: [0.44, 0.30],
 };
 
 export const GRADE_BLOOD: GradeParams = {
-  ky: [0.006, 0.068, 0.220, 0.52, 0.83, 0.96, 1],
-  sat: [0.74, 1.04, 1.14],
+  ky: [0.012, 0.096, 0.268, 0.56, 0.84, 0.96, 1],
+  sat: [0.76, 1.04, 1.14],
   tintS: [0.010, 0.010],
   tintM: [-0.006, 0.014],
   tintH: [-0.008, 0.012],
-  vig: [0.66, 0.20],
+  vig: [0.48, 0.28],
 };
 
 const BASE_ABERRATION: Record<LightKey, number> = {
-  night: 0.14,
-  candle: 0.16,
-  storm: 0.24,
-  eerie: 0.34,
-  blood: 0.44,
+  night: 0.10,
+  candle: 0.12,
+  storm: 0.20,
+  eerie: 0.28,
+  blood: 0.36,
 };
 
 export const GRADES: Record<LightKey, GradeParams> = {

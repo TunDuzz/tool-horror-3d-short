@@ -173,13 +173,14 @@ function Inner<TAssets>({
     if (on.ink) c.addPass(fx.ink);
     if (on.lens && on.pre) c.addPass(new EffectPass(camera, fx.lens.pre));
     if (on.lens) c.addPass(new EffectPass(camera, fx.lens.main));
-    const tailEffects = [
-      ...(on.bloom ? [fx.bloom] : []),
-      fx.tone,
+    // Pass A: HDR Bloom + Neutral ToneMapping (writes display-referred 0..1 to buffer)
+    c.addPass(new EffectPass(camera, ...(on.bloom ? [fx.bloom] : []), fx.tone));
+    // Pass B: GradeEffect (reads bloomed & tonemapped inputBuffer for clean RGB aberration) + GrainEffect
+    const gradeTail = [
       ...(on.grade ? [fx.grade] : []),
       ...(on.grain ? [fx.grain] : []),
     ];
-    c.addPass(new EffectPass(camera, ...tailEffects));
+    if (gradeTail.length) c.addPass(new EffectPass(camera, ...gradeTail));
     const w0 = size.width || width;
     const h0 = size.height || height;
     c.setSize(w0, h0);

@@ -195,7 +195,7 @@ export class Pen {
     g.fill();
   }
   /** Hand-inked Gothic cross-hatching lines clipped inside `pts` on the shadow side away from `light`. */
-  hatch(pts: P2[], light: number, spacing = 10, lw = 1.6, col = "rgba(12,7,18,0.48)", cross = false) {
+  hatch(pts: P2[], light: number, spacing = 10, lw = 1.6, col = "rgba(12,7,18,0.48)", cross = false, cutoff = -0.16) {
     let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
     for (const [x, y] of pts) {
       if (x < x0) x0 = x; if (x > x1) x1 = x;
@@ -215,7 +215,7 @@ export class Pen {
         const px = cx + nx * d, py = cy + ny * d;
         // Favor shadow side of the silhouette
         const side = (px - cx) * sx + (py - cy) * sy;
-        if (side < -span * 0.16) continue;
+        if (side < span * cutoff) continue;
         const pA = this.P(px - ca * span, py - sa * span);
         const pB = this.P(px + ca * span, py + sa * span);
         g.beginPath();
@@ -1397,7 +1397,7 @@ export const bodyFront = (p: Pen, o: Outfit, opts: PoseOpts = {}) => {
   };
   o.hatBehind?.(p, headCtx);
   p.shadedFill(hp, skin, mul(skin, SH_SKIN), light, R.headH);
-  p.hatch(hp, light, o.uncanny ? 6.5 : 8.0, 1.35, o.uncanny ? "rgba(8,4,14,0.46)" : "rgba(12,7,18,0.38)", !!o.uncanny);
+  p.hatch(hp, light, o.uncanny ? 7.0 : 9.5, 1.2, o.uncanny ? "rgba(8,4,14,0.42)" : "rgba(12,7,18,0.26)", !!o.uncanny, o.uncanny ? 0.0 : 0.14);
   p.inkRing(hp, ow, thick);
   drawFaceFront(p, tcx, hc, hp, W, expr, facing, look, lid, shiver, time, o.eyeGlow, o.ageLines, !!o.uncanny, underLight);
   drawBuiltinHeadgear(p, o, headCtx);
@@ -1589,7 +1589,7 @@ export const bodySide = (p: Pen, o: Outfit, opts: PoseOpts = {}) => {
   };
   o.hatBehind?.(p, headCtx);
   p.shadedFill(hp, skin, mul(skin, SH_SKIN), light, R.headH);
-  p.hatch(hp, light, o.uncanny ? 6.5 : 8.0, 1.35, o.uncanny ? "rgba(8,4,14,0.46)" : "rgba(12,7,18,0.38)", !!o.uncanny);
+  p.hatch(hp, light, o.uncanny ? 7.0 : 9.5, 1.2, o.uncanny ? "rgba(8,4,14,0.42)" : "rgba(12,7,18,0.26)", !!o.uncanny, o.uncanny ? 0.0 : 0.14);
   p.inkRing(hp, ow, thick);
   drawFaceSide(p, hx, hc, hp, W, expr, lid, shiver, time, o.eyeGlow, o.ageLines, !!o.uncanny, underLight);
   drawBuiltinHeadgear(p, o, headCtx);
@@ -1729,7 +1729,7 @@ export const bodyBack = (p: Pen, o: Outfit, opts: PoseOpts = {}) => {
     };
     o.hatBehind?.(p, headCtx);
     p.shadedFill(hp, skin, mul(skin, SH_SKIN), light, R.headH);
-    p.hatch(hp, light, 8.5, 1.3, "rgba(12,7,18,0.38)");
+    p.hatch(hp, light, 9.5, 1.15, "rgba(12,7,18,0.26)", false, 0.14);
     p.inkRing(hp, ow, thick);
     drawFaceSide(p, tcx + 6 * u, hc, hp, W, expr, lid, shiver, time, o.eyeGlow, o.ageLines, !!o.uncanny, underLight);
     drawBuiltinHeadgear(p, o, headCtx);
@@ -1749,9 +1749,9 @@ export const bodyBack = (p: Pen, o: Outfit, opts: PoseOpts = {}) => {
       const bh: P2[] = [
         [tcx - W * 0.65, crown - 10],
         [tcx + W * 0.65, crown - 10],
-        [tcx + W * 0.65, hc + R.headH * 0.42],
-        [tcx, hc + R.headH * 0.56],
-        [tcx - W * 0.65, hc + R.headH * 0.42],
+        [tcx + W * 0.65, hc + R.headH * 0.78],
+        [tcx, hc + R.headH * 0.90],
+        [tcx - W * 0.65, hc + R.headH * 0.78],
       ];
       p.gradFill(bh, backHairCol, shade(backHairCol, 0.62), light);
       p.hatch(bh, light, 7, 1.4, "rgba(6,4,10,0.55)");
