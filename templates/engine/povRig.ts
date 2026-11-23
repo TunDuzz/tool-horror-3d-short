@@ -49,6 +49,8 @@ export type PovPose = {
   leftArmRaise?: number; // 0..1
   rightArmRaise?: number; // 0..1
   propMode?: "none" | "phone" | "flashlight" | "lamp" | "paper";
+  kneeYOffset?: number; // optional subtle seat-height adjustment for POV_DOWN framing
+  kneeZOffset?: number; // optional forward knee placement for POV_DOWN framing
   frame: number;
 };
 
@@ -193,23 +195,40 @@ export function createPhone3D(initial: PhoneScreenState = { clock: "00:58" }): P
   screen.userData.noOutline = true;
   group.add(screen);
 
-  // Slender fingers curling neatly around outer left bezel edge (never covering notification icon or text!)
+  // Articulated 2-joint curled fingers wrapping organically around the left bezel edge (zero text overlap!)
   const skinMat = stylizedShade(new THREE.MeshLambertMaterial({ color: "#ccb6a0" }));
+  const knuckleShadeMat = stylizedShade(new THREE.MeshLambertMaterial({ color: "#baa28b" }));
+  // Curved palm cradle tucked cleanly behind the phone body (-Z) without peeking past the bottom bezel
+  const backPalm = new THREE.Mesh(new THREE.BoxGeometry(0.062, 0.072, 0.014), knuckleShadeMat);
+  backPalm.name = "phoneBackPalm";
+  backPalm.position.set(0.010, -0.006, -0.016);
+  group.add(backPalm);
+
+  const fLengths = [0.011, 0.013, 0.012, 0.0095];
   for (let i = 0; i < 4; i++) {
-    const fGeo = new THREE.CapsuleGeometry(0.0066, 0.011, 5, 8);
-    fGeo.rotateZ(Math.PI * 0.5);
-    const fm = new THREE.Mesh(fGeo, skinMat);
-    fm.name = `phoneGripFinger_${i}`;
-    fm.position.set(-0.049, 0.018 - i * 0.019, 0.002);
-    group.add(fm);
+    const fy = 0.019 - i * 0.0185;
+    // Proximal knuckle wrapping around the left side edge
+    const prox = new THREE.Mesh(new THREE.CapsuleGeometry(0.0068, 0.014, 5, 8), knuckleShadeMat);
+    prox.name = `phoneGripKnuckle_${i}`;
+    prox.position.set(-0.047, fy, -0.007);
+    prox.rotation.set(Math.PI * 0.48, 0, -0.18);
+    // Distal fingertip curling onto the outer left bezel rim
+    const tip = new THREE.Mesh(new THREE.CapsuleGeometry(0.0060, fLengths[i], 5, 8), skinMat);
+    tip.name = `phoneGripFinger_${i}`;
+    tip.position.set(-0.0465, fy - 0.001, 0.004);
+    tip.rotation.set(0.08, 0.22, Math.PI * 0.5 - 0.14);
+    group.add(prox, tip);
   }
-  // Slender right thumb resting cleanly on right bezel edge
-  const thumbGeo = new THREE.CapsuleGeometry(0.0080, 0.032, 5, 8);
-  const thumb = new THREE.Mesh(thumbGeo, skinMat);
-  thumb.name = "phoneGripThumb";
-  thumb.position.set(0.046, -0.042, 0.005);
-  thumb.rotation.set(0.08, -0.12, 0.54);
-  group.add(thumb);
+  // Articulated 2-segment right thumb emerging from lower-right palm & resting cleanly on outer right bezel
+  const thumbBase = new THREE.Mesh(new THREE.CapsuleGeometry(0.0092, 0.028, 5, 8), knuckleShadeMat);
+  thumbBase.name = "phoneGripThumbBase";
+  thumbBase.position.set(0.047, -0.056, -0.004);
+  thumbBase.rotation.set(-0.18, 0.16, 0.36);
+  const thumbTip = new THREE.Mesh(new THREE.CapsuleGeometry(0.0078, 0.022, 5, 8), skinMat);
+  thumbTip.name = "phoneGripThumb";
+  thumbTip.position.set(0.044, -0.032, 0.006);
+  thumbTip.rotation.set(0.08, -0.18, 0.62);
+  group.add(thumbBase, thumbTip);
 
   attachOutlineRig(group, { pxWidth: 4.5, minWorld: 0.0009, maxWorld: 0.008, color: "#06060a" });
 
@@ -255,10 +274,26 @@ export function createFlashlight3D(): Flashlight3D {
   const group = new THREE.Group();
   group.name = "Flashlight3D";
 
-  const metalMat = stylizedShade(new THREE.MeshPhongMaterial({ color: "#22252e", specular: "#7c889e", shininess: 48 }));
+  const metalMat = stylizedShade(new THREE.MeshPhongMaterial({ color: "#22252e", specular: "#8ea0ba", shininess: 56 }));
+  const gripSkinMat = stylizedShade(new THREE.MeshLambertMaterial({ color: "#c4ad97" }));
   const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.019, 0.20, 12).rotateX(Math.PI * 0.5), metalMat);
   const bezel = new THREE.Mesh(new THREE.CylinderGeometry(0.030, 0.022, 0.048, 12).rotateX(Math.PI * 0.5), metalMat);
   bezel.position.set(0, 0, -0.115);
+
+  // Curled POV gripping fingers & thumb wrapping naturally around the flashlight barrel
+  const gripGroup = new THREE.Group();
+  gripGroup.name = "flashlightGrip";
+  for (let i = 0; i < 4; i++) {
+    const f = new THREE.Mesh(new THREE.TorusGeometry(0.024, 0.0068, 6, 12, Math.PI * 1.15), gripSkinMat);
+    f.position.set(0, 0, -0.045 + i * 0.018);
+    f.rotation.z = -Math.PI * 0.15;
+    gripGroup.add(f);
+  }
+  const fThumb = new THREE.Mesh(new THREE.CapsuleGeometry(0.0075, 0.026, 5, 8), gripSkinMat);
+  fThumb.position.set(-0.016, 0.024, -0.036);
+  fThumb.rotation.set(Math.PI * 0.44, 0.18, 0.28);
+  gripGroup.add(fThumb);
+  group.add(gripGroup);
 
   const lensMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(2.4, 2.3, 2.0), toneMapped: false });
   const lens = new THREE.Mesh(new THREE.CircleGeometry(0.027, 14), lensMat);
@@ -464,16 +499,18 @@ export function createPovRig3D(
 
   const seatedMeshGroup = new THREE.Group();
   seatedMeshGroup.name = "povSeated";
+  // 2 clean natural seated thighs/knees + tucked shins + draped shirt lap hem (zero extra double-humps!)
+  const lapHem = new THREE.Mesh(new THREE.BoxGeometry(0.30, 0.08, 0.24), sleeveMat);
+  lapHem.position.set(0, 0.16, -0.22);
+  seatedMeshGroup.add(lapHem);
   for (const side of [-1, 1] as const) {
-    const thigh = new THREE.Mesh(new THREE.CapsuleGeometry(0.074, 0.38, 6, 10), pantsMat);
-    thigh.position.set(side * 0.18, 0.16, -0.30);
-    thigh.rotation.set(Math.PI * 0.44, side * -0.34, side * 0.14);
-    const shin = new THREE.Mesh(new THREE.CapsuleGeometry(0.058, 0.34, 6, 10), pantsMat);
-    shin.position.set(side * 0.14, 0.11, -0.48);
-    shin.rotation.set(Math.PI * 0.5, side * 1.12, 0);
-    const lapHem = new THREE.Mesh(new THREE.BoxGeometry(0.30, 0.08, 0.28), sleeveMat);
-    lapHem.position.set(0, 0.17, -0.18);
-    seatedMeshGroup.add(thigh, shin, lapHem);
+    const thigh = new THREE.Mesh(new THREE.CapsuleGeometry(0.082, 0.36, 8, 12), pantsMat);
+    thigh.position.set(side * 0.17, 0.17, -0.38);
+    thigh.rotation.set(Math.PI * 0.45, side * -0.24, side * 0.06);
+    const shin = new THREE.Mesh(new THREE.CapsuleGeometry(0.060, 0.34, 6, 10), pantsMat);
+    shin.position.set(side * 0.11, 0.10, -0.54);
+    shin.rotation.set(Math.PI * 0.5, side * 1.18, 0);
+    seatedMeshGroup.add(thigh, shin);
   }
   lowerBody.add(seatedMeshGroup);
 
@@ -504,15 +541,15 @@ export function createPovRig3D(
     arm.name = side < 0 ? "povLeftArm" : "povRightArm";
     // Forearm & wrist sit cleanly behind held props (-Z away from camera) sloping downward-outward toward shoulder
     const forearm = new THREE.Mesh(new THREE.CapsuleGeometry(0.030, 0.34, 6, 10), sleeveMat);
-    forearm.position.set(side * 0.078, -0.23, -0.050);
+    forearm.position.set(side * 0.076, -0.21, -0.044);
     forearm.rotation.set(-0.18, 0, side * 0.28);
-    const wrist = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.026, 0.062, 10), skinMat);
-    wrist.position.set(side * 0.018, -0.088, -0.054);
+    const wrist = new THREE.Mesh(new THREE.CylinderGeometry(0.024, 0.027, 0.068, 10), skinMat);
+    wrist.position.set(side * 0.020, -0.070, -0.048);
     wrist.rotation.set(-0.14, 0, side * 0.20);
     const hand = new THREE.Group();
     hand.name = side < 0 ? "povLeftHand" : "povRightHand";
-    const palm = new THREE.Mesh(new THREE.BoxGeometry(0.042, 0.042, 0.016), skinMat);
-    palm.position.set(0, -0.026, -0.052);
+    const palm = new THREE.Mesh(new THREE.BoxGeometry(0.040, 0.038, 0.016), skinMat);
+    palm.position.set(0, -0.012, -0.048);
     hand.add(palm);
     arm.add(forearm, wrist, hand);
     armsRoot.add(arm);
@@ -527,6 +564,7 @@ export function createPovRig3D(
   const update = (cam: THREE.PerspectiveCamera, pose: PovPose) => {
     lowerBody.position.set(...pose.anchor);
     lowerBody.rotation.set(0, pose.bodyYaw, 0);
+    seatedMeshGroup.position.set(0, pose.kneeYOffset ?? 0, pose.kneeZOffset ?? 0);
     seatedMeshGroup.visible = pose.stance === "seated";
     standingMeshGroup.visible = pose.stance === "standing";
 

@@ -145,9 +145,10 @@ const STYLIZED_SHADE = /* glsl */ `
   float fres = pow( clamp( 1.0 - facing, 0.0, 1.0 ), 2.6 );
   vec3 rimDiff = alb * uRimCol * uRimStrength * fres * ( 0.30 + 0.70 * sunTerm );
 
-  // 6 real local dynamic PointLights (oil lamps, candles, phone screen glow, streetlamps)
+  // 6 real local dynamic PointLights (oil lamps, candles, phone screen glow, streetlamps) + stylized Phong specular sheen
   vec3 fragV = -vViewPosition;
   vec3 ptSum = vec3( 0.0 );
+  vec3 specSum = vec3( 0.0 );
   for ( int i = 0; i < 6; i++ ) {
     float r = uPtRad[ i ];
     if ( r > 0.01 ) {
@@ -156,6 +157,11 @@ const STYLIZED_SHADE = /* glsl */ `
       vec3 lDir = normalize( ( viewMatrix * vec4( uPtPos[ i ], 1.0 ) ).xyz - fragV );
       float pndl = 0.24 + 0.76 * smoothstep( -0.22, 0.68, dot( geometryNormal, lDir ) );
       ptSum += uPtCol[ i ] * att * pndl;
+      #ifdef USE_STYLIZED_SPEC
+        vec3 halfV = normalize( lDir + geometryViewDir );
+        float sp = pow( max( dot( geometryNormal, halfV ), 0.0 ), max( shininess, 8.0 ) );
+        specSum += specular * uPtCol[ i ] * att * sp * 0.65;
+      #endif
     }
   }
 
@@ -169,6 +175,11 @@ const STYLIZED_SHADE = /* glsl */ `
       vec3 lDir = normalize( ( viewMatrix * vec4( uSpPos, 1.0 ) ).xyz - fragV );
       float sndl = 0.18 + 0.82 * smoothstep( -0.15, 0.58, dot( geometryNormal, lDir ) );
       ptSum += uSpCol * satt * cone * sndl;
+      #ifdef USE_STYLIZED_SPEC
+        vec3 halfS = normalize( lDir + geometryViewDir );
+        float ssp = pow( max( dot( geometryNormal, halfS ), 0.0 ), max( shininess, 10.0 ) );
+        specSum += specular * uSpCol * satt * cone * ssp * 0.72;
+      #endif
     }
   }
 
@@ -180,6 +191,9 @@ const STYLIZED_SHADE = /* glsl */ `
   }
 
   reflectedLight.directDiffuse = baseDiff + rimDiff + alb * ptSum + flashDiff;
+  #ifdef USE_STYLIZED_SPEC
+    reflectedLight.directSpecular += specSum;
+  #endif
   reflectedLight.indirectDiffuse = vec3( 0.0 );
 }
 `;
@@ -193,19 +207,21 @@ const DECL =
   "uniform vec3 uSpPos; uniform vec3 uSpDir; uniform vec3 uSpCol; uniform float uSpDist; uniform float uSpCosIn; uniform float uSpCosOut;\n" +
   "uniform float uFlashAmt; uniform vec3 uFlashCol;";
 
-/** Upgrade Lambert / Phong material to Horror Engine v3 soft stylized shading with 6 PointLights + 1 SpotLight. */
+/** Upgrade Lambert / Phong material to Horror Engine v3.5 soft stylized shading with 6 PointLights + 1 SpotLight + Phong specular sheen. */
 export function stylizedShade<T extends THREE.MeshLambertMaterial | THREE.MeshPhongMaterial>(m: T, liftK = 1): T {
+  const isPhong = m instanceof THREE.MeshPhongMaterial;
   m.onBeforeCompile = (sh) => {
     Object.assign(sh.uniforms, TONE, DYNAMIC_LIGHTS);
     sh.vertexShader = sh.vertexShader
       .replace("#include <common>", "#include <common>\nvarying vec3 vToneWorldPos;")
       .replace("#include <project_vertex>", "#include <project_vertex>\n" + VERT_WORLD_POS);
+    const specDef = isPhong ? "#define USE_STYLIZED_SPEC\n" : "";
     sh.fragmentShader = sh.fragmentShader
-      .replace("#include <common>", DECL + `\n#define LIFT_K ${liftK.toFixed(3)}`)
+      .replace("#include <common>", specDef + DECL + `\n#define LIFT_K ${liftK.toFixed(3)}`)
       .replace("#include <lights_fragment_begin>", "float sunVis = 1.0;\n" + LFB)
       .replace("#include <lights_fragment_end>", "#include <lights_fragment_end>\n" + STYLIZED_SHADE);
   };
-  m.customProgramCacheKey = () => "stylizedShadeV3_" + liftK.toFixed(3);
+  m.customProgramCacheKey = () => `stylizedShadeV35_${isPhong ? "p" : "l"}_${liftK.toFixed(3)}`;
   return m;
 }
 

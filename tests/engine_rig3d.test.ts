@@ -4,7 +4,7 @@ import * as THREE from "three";
 
 import { NOINK } from "../templates/engine/ink.ts";
 import { FaceTextureCache } from "../templates/engine/face2d.ts";
-import { createCharacter3D } from "../templates/engine/rig3d.ts";
+import { autoBlink, createCharacter3D, mouthFromWords } from "../templates/engine/rig3d.ts";
 
 test("createCharacter3D builds 20 named sockets with non-chibi adult horror proportions (height/headH >= 5.3)", () => {
   const npc = createCharacter3D({
@@ -121,5 +121,41 @@ test("setPose produces distinct deterministic poses across sitCrossLegged, walk,
   const cache = new FaceTextureCache();
   assert.ok(cache);
   cache.dispose();
+  npc.dispose();
+});
+
+test("setPoseBlend interpolates poses smoothly, autoBlink blinks deterministically, and mouthFromWords maps Vietnamese vowels", () => {
+  const npc = createCharacter3D({ id: "blend" });
+  npc.setPose("sitCrossLegged", 10);
+  const ySit = npc.sockets.pelvis.position.y;
+  npc.setPose("standIdle", 10);
+  const yStand = npc.sockets.pelvis.position.y;
+
+  npc.setPoseBlend("sitCrossLegged", "standIdle", 0.5, 10);
+  const yMid = npc.sockets.pelvis.position.y;
+  assert.ok(Math.abs(yMid - (ySit + yStand) * 0.5) < 1e-4, `Expected midpoint pelvisY, got ${yMid}`);
+
+  // autoBlink returns 0 most frames and hits 1.0 cleanly at periodic blink peaks
+  let sawClosed = false;
+  let sawOpen = false;
+  for (let f = 0; f < 180; f++) {
+    const b = autoBlink(f, 5);
+    if (b === 1.0) sawClosed = true;
+    if (b === 0) sawOpen = true;
+    assert.equal(b, autoBlink(f, 5));
+  }
+  assert.ok(sawClosed && sawOpen);
+
+  // mouthFromWords maps Vietnamese vowels accurately
+  const words = [
+    { word: "Cô", start: 0.0, end: 0.5 },
+    { word: "nhà", start: 0.6, end: 1.1 },
+    { word: "đếm", start: 1.2, end: 1.7 },
+  ];
+  assert.equal(mouthFromWords(words, 7, 30), "talkO"); // 0.23s inside "Cô"
+  assert.equal(mouthFromWords(words, 25, 30), "talkA"); // 0.83s inside "nhà"
+  assert.equal(mouthFromWords(words, 43, 30), "talkE"); // 1.43s inside "đếm"
+  assert.equal(mouthFromWords(words, 60, 30, "tense"), "tense"); // silence after words
+
   npc.dispose();
 });

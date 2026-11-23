@@ -313,8 +313,11 @@ export class HorrorLabV3World implements ShortWorld {
     if (beat.locationId === "ruralFuneralRoom") {
       const oilOn = isLampLit(beat, "oilLamp");
       const altarOn = isLampLit(beat, "altarCandle");
+      const flk = flickerAt(frame, 29, 0.22, 0.80);
       this.funeralSet.oilLamp.setLit(oilOn, frame);
+      this.funeralSet.oilLampHalo.setIntensity(oilOn ? flk : 0);
       this.funeralSet.altarCandleMat.color.setRGB(altarOn ? 3.4 : 0.05, altarOn ? 2.1 : 0.05, altarOn ? 0.72 : 0.06);
+      this.funeralSet.altarHalo.setIntensity(altarOn ? flk : 0);
       this.funeralSet.doorCtrl.setMoonlight(!!beat.lightState.doorMoonlight, !!beat.lightState.feetShadow);
       this.funeralSet.incenseSmoke.update(frame, true);
       this.funeralSet.altarSmoke.update(frame, true);
@@ -329,6 +332,8 @@ export class HorrorLabV3World implements ShortWorld {
       this.chuBay.setPose(cbState.pose, frame, {
         expr: cbState.expr ?? "uneasy",
         mouth: beat.beatId === "B1_FUNERAL_TALK" && frame % 12 < 6 ? "talkE" : "tense",
+        ageLines: true,
+        autoBlink: true,
       });
       this.chuBay.lookAtWorld(ANCHORS.POV_EYE, 0.85);
     }
@@ -350,7 +355,7 @@ export class HorrorLabV3World implements ShortWorld {
     if (afState?.visible) {
       // 3/4 tense over-the-shoulder turn toward camera under the warm sodium streetlamp pool
       this.alleyFigure.group.rotation.y = -0.78;
-      this.alleyFigure.setPose(afState.pose, frame, { expr: afState.expr ?? "dread", gazeX: 0.45 });
+      this.alleyFigure.setPose(afState.pose, frame, { expr: afState.expr ?? "dread", gazeX: 0.45, sweat: true, autoBlink: true });
     }
 
     // 6. POV Rig + Diegetic 3D Props synced to beat.propStates
@@ -383,8 +388,10 @@ export class HorrorLabV3World implements ShortWorld {
       const raisePhone = showPhone ? clamp01((frame - 58) / 10) : 0;
       this.pov.update(cam, {
         stance: isHosp ? "standing" : "seated",
-        anchor: isHosp ? ANCHORS.HOSP_POV_FEET : isDoorLook ? [-0.68, 0.0, 0.56] : ANCHORS.POV_SEAT,
+        anchor: isHosp ? ANCHORS.HOSP_POV_FEET : isDoorLook ? [-0.68, 0.0, 0.34] : ANCHORS.POV_SEAT,
         bodyYaw: isDoorLook ? 0.16 : 0,
+        kneeYOffset: isDoorLook ? 0.16 : 0,
+        kneeZOffset: isDoorLook ? -0.22 : 0,
         propMode: showPhone ? "phone" : showFlash ? "flashlight" : "none",
         rightArmRaise: showPhone ? raisePhone : showFlash ? 1 : 0,
         leftArmRaise: 0,

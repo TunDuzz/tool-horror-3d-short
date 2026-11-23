@@ -4,6 +4,7 @@
 import * as THREE from "three";
 import { FPS, type V3 } from "./camera";
 import { NOINK } from "./ink";
+import { stylizedShade } from "./shade";
 
 const hash = (i: number, s: number) => {
   const v = Math.sin(i * 127.1 + s * 311.7) * 43758.5453;
@@ -209,5 +210,138 @@ export function createFlatDecalMesh(
   const mesh = new THREE.Mesh(geo, mat);
   mesh.layers.set(NOINK);
   mesh.userData.noOutline = true;
+  return mesh;
+}
+
+/** Soft feathered ground Contact Ambient Occlusion shadow disc (grounds characters, tables, coffins, gurneys). */
+export function addContactShadow(
+  parent: THREE.Object3D,
+  pos: V3,
+  rx: number,
+  rz: number = rx,
+  opacity = 0.58,
+  color = "#06040a",
+): THREE.Mesh {
+  const geo = new THREE.PlaneGeometry(rx * 2, rz * 2);
+  geo.rotateX(-Math.PI * 0.5);
+  const mat = new THREE.ShaderMaterial({
+    transparent: true,
+    depthWrite: false,
+    polygonOffset: true,
+    polygonOffsetFactor: -2,
+    uniforms: {
+      uCol: { value: new THREE.Color(color) },
+      uOpacity: { value: opacity },
+    },
+    vertexShader: `varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+    fragmentShader: `uniform vec3 uCol; uniform float uOpacity; varying vec2 vUv;
+      void main(){
+        float r = length(vUv - 0.5) * 2.0;
+        float a = smoothstep(1.0, 0.12, r);
+        a = a * a * uOpacity;
+        gl_FragColor = vec4(uCol, a);
+      }`,
+  });
+  const mesh = new THREE.Mesh(geo, mat);
+  mesh.name = "ContactShadowAO";
+  mesh.position.set(pos[0], pos[1] + 0.004, pos[2]);
+  mesh.layers.set(NOINK);
+  mesh.userData.noOutline = true;
+  parent.add(mesh);
+  return mesh;
+}
+
+let cachedHaloTex: THREE.CanvasTexture | null = null;
+function getHaloTex(): THREE.CanvasTexture {
+  if (cachedHaloTex) return cachedHaloTex;
+  if (typeof document !== "undefined" && typeof document.createElement === "function") {
+    const cv = document.createElement("canvas");
+    cv.width = 256;
+    cv.height = 256;
+    const g = cv.getContext("2d")!;
+    const gr = g.createRadialGradient(128, 128, 2, 128, 128, 126);
+    gr.addColorStop(0, "rgba(255,255,255,1.0)");
+    gr.addColorStop(0.24, "rgba(255,244,218,0.55)");
+    gr.addColorStop(0.58, "rgba(255,220,175,0.16)");
+    gr.addColorStop(1, "rgba(255,200,150,0.0)");
+    g.fillStyle = gr;
+    g.fillRect(0, 0, 256, 256);
+    cachedHaloTex = new THREE.CanvasTexture(cv);
+  } else {
+    cachedHaloTex = new THREE.CanvasTexture(null as unknown as HTMLCanvasElement);
+  }
+  cachedHaloTex.colorSpace = THREE.SRGBColorSpace;
+  return cachedHaloTex;
+}
+
+/** Soft additive atmospheric radial light halo around oil lamps, altar candles, or foggy streetlamps. */
+export function addLampHalo3D(
+  parent: THREE.Object3D,
+  pos: V3,
+  radius = 0.65,
+  color = "#ffb964",
+  opacity = 0.28,
+): { sprite: THREE.Sprite; setIntensity: (k: number) => void } {
+  const mat = new THREE.SpriteMaterial({
+    map: getHaloTex(),
+    color: new THREE.Color(color),
+    transparent: true,
+    opacity,
+    depthWrite: false,
+    blending: THREE.AdditiveBlending,
+  });
+  const sprite = new THREE.Sprite(mat);
+  sprite.name = "LampHalo3D";
+  sprite.position.set(...pos);
+  sprite.scale.set(radius * 2, radius * 2, 1);
+  sprite.layers.set(NOINK);
+  sprite.userData.noOutline = true;
+  parent.add(sprite);
+  const setIntensity = (k: number) => {
+    sprite.visible = k > 0.01;
+    mat.opacity = opacity * k;
+  };
+  return { sprite, setIntensity };
+}
+
+/** Reflective wet floor/asphalt puddle catching real stylized specular sheen from PointLights & SpotLights. */
+export function addWetPuddleDecal(
+  parent: THREE.Object3D,
+  pos: V3,
+  rx = 0.9,
+  rz = 1.4,
+  tint = "#1a2230",
+  opacity = 0.72,
+): THREE.Mesh {
+  const shape = new THREE.Shape();
+  const segs = 20;
+  for (let i = 0; i <= segs; i++) {
+    const a = (i / segs) * Math.PI * 2;
+    const wob = 1 + 0.14 * Math.sin(a * 3 + pos[0] * 2.1) + 0.09 * Math.cos(a * 5 + pos[2] * 1.7);
+    const x = Math.cos(a) * rx * wob;
+    const y = Math.sin(a) * rz * wob;
+    if (i === 0) shape.moveTo(x, y);
+    else shape.lineTo(x, y);
+  }
+  const geo = new THREE.ShapeGeometry(shape, 16);
+  geo.rotateX(-Math.PI * 0.5);
+  const mat = stylizedShade(
+    new THREE.MeshPhongMaterial({
+      color: tint,
+      specular: "#c8dcf4",
+      shininess: 96,
+      transparent: true,
+      opacity,
+      depthWrite: false,
+      polygonOffset: true,
+      polygonOffsetFactor: -2,
+    }),
+  );
+  const mesh = new THREE.Mesh(geo, mat);
+  mesh.name = "WetPuddleDecal";
+  mesh.position.set(pos[0], pos[1] + 0.005, pos[2]);
+  mesh.layers.set(NOINK);
+  mesh.userData.noOutline = true;
+  parent.add(mesh);
   return mesh;
 }

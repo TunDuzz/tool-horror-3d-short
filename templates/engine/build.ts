@@ -1242,3 +1242,192 @@ export function addWoodenBedFrame(
   b.add(boxGeo(V(cx - hw + 0.06, cy + h, cz - hd + 0.06), V(cx + hw - 0.06, cy + h + 0.14, cz + hd - 0.06), 1.2), mattressMat);
 }
 
+/** Soft ambient-occlusion shadow strips hugging wall-floor corners (grounds interior walls cleanly). */
+export function addFloorCornerAO(
+  parent: THREE.Object3D,
+  x0: number,
+  x1: number,
+  z0: number,
+  z1: number,
+  y = 0.004,
+  width = 0.44,
+  opacity = 0.46,
+): THREE.Group {
+  const g = new THREE.Group();
+  g.name = "FloorCornerAO";
+  const makeStrip = (len: number, stripW: number, pos: V3, rotY: number) => {
+    const geo = new THREE.PlaneGeometry(len, stripW);
+    geo.rotateX(-Math.PI * 0.5);
+    const mat = new THREE.ShaderMaterial({
+      transparent: true,
+      depthWrite: false,
+      polygonOffset: true,
+      polygonOffsetFactor: -1,
+      uniforms: { uOp: { value: opacity } },
+      vertexShader: `varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+      fragmentShader: `uniform float uOp; varying vec2 vUv;
+        void main(){
+          float a = pow(1.0 - vUv.y, 1.9) * uOp;
+          gl_FragColor = vec4(0.02, 0.015, 0.035, a);
+        }`,
+    });
+    const m = new THREE.Mesh(geo, mat);
+    m.position.set(...pos);
+    m.rotation.y = rotY;
+    m.layers.set(NOINK);
+    m.userData.noOutline = true;
+    g.add(m);
+  };
+  const cx = (x0 + x1) * 0.5;
+  const cz = (z0 + z1) * 0.5;
+  const w = Math.abs(x1 - x0);
+  const d = Math.abs(z1 - z0);
+  // North (z0), South (z1), West (x0), East (x1) — vUv.y=0 touches wall, fades inward to 1
+  makeStrip(w, width, [cx, y, z0 + width * 0.5], 0);
+  makeStrip(w, width, [cx, y, z1 - width * 0.5], Math.PI);
+  makeStrip(d, width, [x0 + width * 0.5, y, cz], -Math.PI * 0.5);
+  makeStrip(d, width, [x1 - width * 0.5, y, cz], Math.PI * 0.5);
+  parent.add(g);
+  return g;
+}
+
+/** Architectural baseboard trim around an interior room perimeter. */
+export function addRoomBaseboard(
+  b: Batch,
+  mat: THREE.Material,
+  x0: number,
+  x1: number,
+  z0: number,
+  z1: number,
+  y = 0,
+  height = 0.11,
+  thickness = 0.032,
+): void {
+  b.add(boxGeo(V(x0, y, z0), V(x1, y + height, z0 + thickness), 1.5), mat);
+  b.add(boxGeo(V(x0, y, z1 - thickness), V(x1, y + height, z1), 1.5), mat);
+  b.add(boxGeo(V(x0, y, z0), V(x0 + thickness, y + height, z1), 1.5), mat);
+  b.add(boxGeo(V(x1 - thickness, y, z0), V(x1, y + height, z1), 1.5), mat);
+}
+
+/** Glowing green HDR institutional EXIT / LỐI THOÁT sign for hospitals, apartments, stairwells, or schools. */
+export function addExitSign3D(
+  parent: THREE.Object3D,
+  pos: V3,
+  yaw = 0,
+  label = "LỐI THOÁT",
+): THREE.Group {
+  const g = new THREE.Group();
+  g.name = "ExitSign3D";
+  g.position.set(...pos);
+  g.rotation.y = yaw;
+
+  const boxMat = lam("v3_exit_box", () => ({ color: "#262c2e" }));
+  const housing = new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.17, 0.065), boxMat);
+  g.add(housing);
+
+  let tex: THREE.CanvasTexture;
+  if (typeof document !== "undefined" && typeof document.createElement === "function") {
+    const cv = document.createElement("canvas");
+    cv.width = 256;
+    cv.height = 96;
+    const ctx = cv.getContext("2d")!;
+    ctx.fillStyle = "#12422e";
+    ctx.fillRect(0, 0, 256, 96);
+    ctx.strokeStyle = "#8cffc2";
+    ctx.lineWidth = 6;
+    ctx.strokeRect(6, 6, 244, 84);
+    ctx.fillStyle = "#c8ffe0";
+    ctx.font = "900 34px sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(label, 128, 50);
+    tex = new THREE.CanvasTexture(cv);
+  } else {
+    tex = new THREE.CanvasTexture(null as unknown as HTMLCanvasElement);
+  }
+  tex.colorSpace = THREE.SRGBColorSpace;
+
+  const faceMat = new THREE.MeshBasicMaterial({ map: tex, color: new THREE.Color(1.45, 1.85, 1.55), toneMapped: false });
+  const face = new THREE.Mesh(new THREE.PlaneGeometry(0.42, 0.14), faceMat);
+  face.position.set(0, 0, 0.035);
+  face.layers.set(NOINK);
+  face.userData.noOutline = true;
+  g.add(face);
+  parent.add(g);
+  return g;
+}
+
+/** Exposed architectural conduit / plumbing pipe run between two 3D points with periodic clamp collars. */
+export function addPipeRun3D(b: Batch, mat: THREE.Material, from: V3, to: V3, radius = 0.026): void {
+  const a = V(...from);
+  const c = V(...to);
+  const dir = c.clone().sub(a);
+  const len = Math.max(0.05, dir.length());
+  const mid = a.clone().add(c).multiplyScalar(0.5);
+  const q = new THREE.Quaternion().setFromUnitVectors(V(0, 1, 0), dir.clone().normalize());
+  b.add(new THREE.CylinderGeometry(radius, radius, len, 8), mat, new THREE.Matrix4().compose(mid, q, V(1, 1, 1)));
+  const clamps = Math.max(1, Math.floor(len / 2.4));
+  for (let i = 1; i <= clamps; i++) {
+    const p = a.clone().lerp(c, i / (clamps + 1));
+    b.add(
+      new THREE.CylinderGeometry(radius * 1.45, radius * 1.45, 0.05, 8),
+      mat,
+      new THREE.Matrix4().compose(p, q, V(1, 1, 1)),
+    );
+  }
+}
+
+/** Wall-mounted electrical switch / small utility junction box. */
+export function addWallSwitch3D(parent: THREE.Object3D, pos: V3, yaw = 0): THREE.Group {
+  const g = new THREE.Group();
+  g.name = "WallSwitch3D";
+  g.position.set(...pos);
+  g.rotation.y = yaw;
+  const plateMat = lam("v3_switch_plate", () => ({ color: "#8c928e" }));
+  const keyMat = lam("v3_switch_key", () => ({ color: "#2b3036" }));
+  const plate = new THREE.Mesh(new THREE.BoxGeometry(0.11, 0.15, 0.022), plateMat);
+  const toggle = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.045, 0.028), keyMat);
+  toggle.position.set(0, 0, 0.008);
+  g.add(plate, toggle);
+  parent.add(g);
+  return g;
+}
+
+/** Traditional footed ceramic offering plate with sculpted fruit + 3 tiny tea cups (for ancestral altars). */
+export function addAltarOfferingPlate3D(parent: THREE.Object3D, pos: V3, scale = 1.0): THREE.Group {
+  const g = new THREE.Group();
+  g.name = "AltarOfferingPlate3D";
+  g.position.set(...pos);
+  g.scale.setScalar(scale);
+
+  const ceramicMat = phong("v3_altar_ceramic", () => ({ color: "#bfb7a6", specular: "#efe9d8", shininess: 36 }));
+  const fruitAMat = phong("v3_altar_fruit_a", () => ({ color: "#768446", specular: "#bcc884", shininess: 24 }));
+  const fruitBMat = phong("v3_altar_fruit_b", () => ({ color: "#b67432", specular: "#f2ba74", shininess: 28 }));
+
+  const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.032, 0.056, 0.062, 12), ceramicMat);
+  stem.position.y = 0.031;
+  const dish = new THREE.Mesh(new THREE.CylinderGeometry(0.135, 0.055, 0.038, 16), ceramicMat);
+  dish.position.y = 0.078;
+  g.add(stem, dish);
+
+  for (const [fx, fy, fz, r, mat] of [
+    [-0.042, 0.125, 0.015, 0.036, fruitAMat],
+    [0.042, 0.125, 0.012, 0.036, fruitBMat],
+    [0.0, 0.132, -0.032, 0.038, fruitBMat],
+    [0.0, 0.168, 0.004, 0.034, fruitAMat],
+  ] as const) {
+    const f = new THREE.Mesh(new THREE.SphereGeometry(r, 10, 8), mat);
+    f.position.set(fx, fy, fz);
+    g.add(f);
+  }
+
+  for (const cx of [-0.075, 0, 0.075]) {
+    const cup = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.013, 0.028, 10), ceramicMat);
+    cup.position.set(cx, 0.014, 0.145);
+    g.add(cup);
+  }
+  attachOutlineRig(g, { pxWidth: 4.0, minWorld: 0.001, maxWorld: 0.008, color: "#06060a" });
+  parent.add(g);
+  return g;
+}
+

@@ -29,6 +29,7 @@ export type FaceSpec = {
   browCol?: string;
   eyeGlow?: boolean;
   ageLines?: boolean;
+  sweat?: boolean; // subtle cold sweat bead on temple (auto-enabled in terrified)
 };
 
 const INK = "#09070d";
@@ -333,22 +334,77 @@ function drawMouth(g: CanvasRenderingContext2D, mouth: MouthShape) {
   g.stroke();
 }
 
-/** Render a 512x512 clean-line dark-horror face onto a transparent Canvas2D context. */
+/** Render a 512x512 hand-painted dark-horror face with sculpted brow/cheekbone hollows onto transparent Canvas2D. */
 export function drawFace2D(g: CanvasRenderingContext2D, spec: FaceSpec): void {
   const def = EXPR_DEFAULTS[spec.expr] ?? EXPR_DEFAULTS.calm;
+  const hollow = clamp01(spec.eyeHollow ?? def.hollow);
   g.clearRect(0, 0, 512, 512);
+
+  // 1. Soft stylized facial planes (brow overhang shadow + sunken gaunt cheekbones + nose-side shadow)
+  // Eliminates plastic mannequin flatness without adding messy cross-hatching!
+  const browShade = g.createLinearGradient(256, 118, 256, 212);
+  browShade.addColorStop(0, `rgba(20, 12, 26, ${(0.22 + 0.14 * hollow).toFixed(3)})`);
+  browShade.addColorStop(0.55, `rgba(24, 15, 32, ${(0.10 + 0.08 * hollow).toFixed(3)})`);
+  browShade.addColorStop(1, "rgba(24, 15, 32, 0)");
+  g.fillStyle = browShade;
+  g.beginPath();
+  g.ellipse(256, 178, 212, 62, 0, 0, Math.PI * 2);
+  g.fill();
+
+  // Sunken cheekbone & temple hollows framing both sides of the jaw
+  for (const s of [-1, 1] as const) {
+    const cx = 256 + s * 168;
+    const cy = 326;
+    const ck = g.createRadialGradient(cx, cy, 8, cx, cy, 98);
+    ck.addColorStop(0, `rgba(22, 13, 28, ${(0.18 + 0.24 * hollow).toFixed(3)})`);
+    ck.addColorStop(0.62, `rgba(24, 15, 30, ${(0.08 + 0.10 * hollow).toFixed(3)})`);
+    ck.addColorStop(1, "rgba(24, 15, 30, 0)");
+    g.fillStyle = ck;
+    g.beginPath();
+    g.ellipse(cx, cy, 84, 108, s * 0.26, 0, Math.PI * 2);
+    g.fill();
+  }
+
+  // Subtle nose-bridge shadow & philtrum indentation between nose and mouth
+  const noseShade = g.createRadialGradient(256, 308, 4, 256, 314, 42);
+  noseShade.addColorStop(0, "rgba(22, 13, 26, 0.22)");
+  noseShade.addColorStop(1, "rgba(22, 13, 26, 0)");
+  g.fillStyle = noseShade;
+  g.beginPath();
+  g.ellipse(256, 314, 34, 26, 0, 0, Math.PI * 2);
+  g.fill();
+
+  // Subtle vertical philtrum shadow lines
+  g.strokeStyle = "rgba(22, 14, 26, 0.22)";
+  g.lineWidth = 2.6;
+  g.lineCap = "round";
+  g.beginPath();
+  g.moveTo(248, 336);
+  g.lineTo(246, 372);
+  g.moveTo(264, 336);
+  g.lineTo(266, 372);
+  g.stroke();
 
   // Subtle brow-furrow crease lines between eyebrows in tense expressions
   if (spec.expr === "uneasy" || spec.expr === "dread" || spec.expr === "terrified" || spec.expr === "wary") {
-    g.strokeStyle = "rgba(16, 10, 22, 0.55)";
-    g.lineWidth = 3.5;
+    g.strokeStyle = "rgba(16, 10, 22, 0.62)";
+    g.lineWidth = 3.8;
     g.lineCap = "round";
     g.beginPath();
-    g.moveTo(246, 154);
+    g.moveTo(246, 148);
     g.lineTo(244, 182);
-    g.moveTo(266, 154);
+    g.moveTo(266, 148);
     g.lineTo(268, 182);
     g.stroke();
+    // Subtle forehead tension wrinkle
+    if (spec.expr === "dread" || spec.expr === "terrified") {
+      g.strokeStyle = "rgba(18, 12, 24, 0.34)";
+      g.lineWidth = 2.6;
+      g.beginPath();
+      g.moveTo(192, 118);
+      g.quadraticCurveTo(256, 126, 320, 118);
+      g.stroke();
+    }
   }
 
   drawAlmondEye(g, 148, 222, -1, spec, def);
@@ -356,17 +412,31 @@ export function drawFace2D(g: CanvasRenderingContext2D, spec: FaceSpec): void {
   drawEyebrow(g, 148, 222, -1, spec, def);
   drawEyebrow(g, 364, 222, 1, spec, def);
 
-  // Subtle age / gaunt cheekbone lines if requested
-  if (spec.ageLines) {
-    g.strokeStyle = "rgba(18, 12, 24, 0.36)";
-    g.lineWidth = 3.0;
+  // Subtle gaunt nasolabial / cheekbone creases (always soft in dread/terrified or explicit ageLines)
+  if (spec.ageLines || spec.expr === "dread" || spec.expr === "terrified" || spec.expr === "deadStare") {
+    g.strokeStyle = `rgba(18, 12, 24, ${spec.ageLines ? "0.42" : "0.26"})`;
+    g.lineWidth = 3.2;
     g.lineCap = "round";
     for (const s of [-1, 1]) {
       g.beginPath();
-      g.moveTo(256 + s * 64, 304);
-      g.quadraticCurveTo(256 + s * 76, 336, 256 + s * 56, 368);
+      g.moveTo(256 + s * 62, 314);
+      g.quadraticCurveTo(256 + s * 78, 352, 256 + s * 62, 392);
       g.stroke();
     }
+  }
+
+  // Subtle realistic cold sweat droplet on temple (NOT oversized blue anime drop!)
+  if (spec.sweat || spec.expr === "terrified") {
+    g.fillStyle = "rgba(218, 228, 240, 0.55)";
+    g.strokeStyle = "rgba(24, 20, 32, 0.42)";
+    g.lineWidth = 2.0;
+    g.beginPath();
+    g.moveTo(432, 168);
+    g.quadraticCurveTo(440, 194, 432, 202);
+    g.quadraticCurveTo(424, 194, 432, 168);
+    g.closePath();
+    g.fill();
+    g.stroke();
   }
 
   drawMouth(g, spec.mouth ?? def.mouth);
@@ -390,6 +460,7 @@ export class FaceTextureCache {
       s.browCol ?? "",
       !!s.eyeGlow,
       !!s.ageLines,
+      !!s.sweat,
     ]);
   }
 

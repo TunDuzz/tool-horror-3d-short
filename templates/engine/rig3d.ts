@@ -4,12 +4,47 @@
 // animated clean-line 2D curved face decal, and uncanny supernatural EntityConfig modifiers.
 
 import * as THREE from "three";
-import { FPS, uncannyTime, uncannyTwitch, type V3 } from "./camera";
+import { FPS, clamp01, lerp, uncannyTime, uncannyTwitch, type V3 } from "./camera";
 import { NOINK } from "./ink";
 import type { FaceExpr, PoseAction } from "./manifest";
 import { attachOutlineRig } from "./outline3d";
 import { stylizedShade } from "./shade";
 import { FaceTextureCache, type FaceSpec, type MouthShape } from "./face2d";
+
+export type WordTiming = { word: string; start: number; end: number; speaker?: string };
+
+/** Deterministic natural human eye-blink curve (0 = open, 1 = shut) repeating every ~3.8-5.1s. */
+export function autoBlink(frame: number, seed = 7, fps = FPS): number {
+  const period = Math.round(fps * (3.8 + ((seed * 37) % 13) * 0.1));
+  const phase = ((frame + seed * 19) % period + period) % period;
+  if (phase === 0 || phase === 4) return 0.45;
+  if (phase === 1 || phase === 3) return 0.88;
+  if (phase === 2) return 1.0;
+  return 0;
+}
+
+/** Deterministic Vietnamese-aware audio lip-sync viseme mapper from words.json timestamps. */
+export function mouthFromWords(
+  words: WordTiming[],
+  frame: number,
+  fps = FPS,
+  restMouth: MouthShape = "closed",
+): MouthShape {
+  const t = frame / fps;
+  for (const w of words) {
+    if (t >= w.start && t <= w.end) {
+      const s = w.word.toLowerCase();
+      const prog = (t - w.start) / Math.max(0.04, w.end - w.start);
+      // Slight mouth closure right at word edges so adjacent words articulate cleanly
+      if (prog < 0.08 || prog > 0.92) return "parted";
+      if (/[oóòỏõọôốồổỗộơớờởỡợuúùủũụưứừửữự]/.test(s)) return "talkO";
+      if (/[aáàảãạăắằẳẵặâấầẩẫậ]/.test(s)) return "talkA";
+      if (/[eéèẻẽẹêếềểễệiíìỉĩịyýỳỷỹỵ]/.test(s)) return "talkE";
+      return "parted";
+    }
+  }
+  return restMouth;
+}
 
 export type HairStyle =
   | "shortParted"
@@ -93,6 +128,9 @@ export type PoseEvalOpts = {
   headRoll?: number;
   twitch?: boolean;
   seed?: number;
+  ageLines?: boolean;
+  sweat?: boolean;
+  autoBlink?: boolean;
 };
 
 export type Character3D = {
@@ -101,6 +139,7 @@ export type Character3D = {
   config: CharacterConfig;
   setFace: (spec: FaceSpec) => void;
   setPose: (action: PoseAction, frame: number, opts?: PoseEvalOpts) => void;
+  setPoseBlend: (from: PoseAction, to: PoseAction, t: number, frame: number, opts?: PoseEvalOpts) => void;
   lookAtWorld: (target: V3, weight?: number) => void;
   dispose: () => void;
 };
@@ -634,6 +673,14 @@ export function createCharacter3D(cfg: CharacterConfig): Character3D {
         `${pfx}UpperArmMesh`,
       ),
     );
+    // Crisp tailored cuff trim at the end of short sleeves (clean transition to bare forearm!)
+    if (shortSleeve && !isSil) {
+      const cuffMat = stylizedShade(new THREE.MeshLambertMaterial({ color: new THREE.Color(topHex).multiplyScalar(0.82) }));
+      disposables.push(cuffMat);
+      const cuff = mkMesh(new THREE.CylinderGeometry(0.038 * hScale * gaunt, 0.039 * hScale * gaunt, 0.024 * hScale, 12), cuffMat, `${pfx}SleeveCuff`);
+      cuff.position.set(0, -upperArmLen + 0.012 * hScale, 0);
+      upperArm.add(cuff);
+    }
 
     const forearm = mkGroup(`${pfx}Forearm`);
     forearm.position.set(0, -upperArmLen, 0);
@@ -776,17 +823,19 @@ export function createCharacter3D(cfg: CharacterConfig): Character3D {
     }
 
     if (action === "sitCrossLegged") {
-      // Cross-legged seated posture on floor/mat (elbows naturally flared slightly outward, forearms resting on knees)
+      // Natural Vietnamese seated cross-legged posture: thighs angled gently forward, shins folded cleanly across in front
       pelvis.position.y = 0.14 * hScale;
-      spine.rotation.x = 0.09 + aliveBreath * 0.6;
-      leftLeg.thigh.rotation.set(-1.42, 0.58, -0.25);
-      rightLeg.thigh.rotation.set(-1.42, -0.58, 0.25);
-      leftLeg.calf.rotation.set(2.05, 0, -0.28);
-      rightLeg.calf.rotation.set(2.05, 0, 0.28);
-      leftArm.upperArm.rotation.set(-0.24, 0, -0.22);
-      rightArm.upperArm.rotation.set(-0.24, 0, 0.22);
-      leftArm.forearm.rotation.set(-0.76, 0, 0.26);
-      rightArm.forearm.rotation.set(-0.76, 0, -0.26);
+      spine.rotation.x = 0.07 + aliveBreath * 0.6;
+      leftLeg.thigh.rotation.set(-1.38, 0.42, -0.14);
+      rightLeg.thigh.rotation.set(-1.38, -0.42, 0.14);
+      leftLeg.calf.rotation.set(1.52, 0.62, -0.78);
+      rightLeg.calf.rotation.set(1.52, -0.62, 0.78);
+      leftArm.upperArm.rotation.set(-0.28, 0.06, -0.18);
+      rightArm.upperArm.rotation.set(-0.28, -0.06, 0.18);
+      leftArm.forearm.rotation.set(-0.92, 0.18, 0.24);
+      rightArm.forearm.rotation.set(-0.92, -0.18, -0.24);
+      leftArm.hand.rotation.set(0.16, 0, 0);
+      rightArm.hand.rotation.set(0.16, 0, 0);
     } else if (action === "sitChair") {
       pelvis.position.y = 0.46 * hScale;
       spine.rotation.x = 0.05 + aliveBreath;
@@ -876,15 +925,60 @@ export function createCharacter3D(cfg: CharacterConfig): Character3D {
     if (opts.headPitch !== undefined) head.rotation.x += opts.headPitch;
     if (opts.headRoll !== undefined) head.rotation.z += opts.headRoll;
 
-    if (opts.expr !== undefined || opts.mouth !== undefined || opts.lid !== undefined || opts.gazeX !== undefined) {
+    const wantsFace =
+      opts.expr !== undefined ||
+      opts.mouth !== undefined ||
+      opts.lid !== undefined ||
+      opts.gazeX !== undefined ||
+      opts.gazeY !== undefined ||
+      opts.pupilScale !== undefined ||
+      opts.ageLines !== undefined ||
+      opts.sweat !== undefined ||
+      opts.autoBlink !== undefined;
+    if (wantsFace) {
+      const blinkVal = opts.autoBlink && ent?.breathing !== false ? autoBlink(frame, seed) : 0;
       setFace({
         expr: opts.expr ?? "calm",
         mouth: opts.mouth,
-        lid: opts.lid,
+        lid: opts.lid !== undefined ? Math.max(opts.lid, blinkVal) : blinkVal,
         gazeX: opts.gazeX,
         gazeY: opts.gazeY,
         pupilScale: opts.pupilScale,
+        ageLines: opts.ageLines,
+        sweat: opts.sweat,
+        eyeGlow: ent?.eyeGlow,
       });
+    }
+  };
+
+  const boneList: THREE.Group[] = [
+    pelvis, spine, chest, neck, head,
+    leftArm.shoulder, leftArm.upperArm, leftArm.forearm, leftArm.hand,
+    rightArm.shoulder, rightArm.upperArm, rightArm.forearm, rightArm.hand,
+    leftLeg.thigh, leftLeg.calf, leftLeg.foot,
+    rightLeg.thigh, rightLeg.calf, rightLeg.foot,
+  ];
+
+  const setPoseBlend = (from: PoseAction, to: PoseAction, tRaw: number, frame: number, opts: PoseEvalOpts = {}) => {
+    const k = clamp01(tRaw);
+    if (k <= 0.0001) {
+      setPose(from, frame, opts);
+      return;
+    }
+    if (k >= 0.9999) {
+      setPose(to, frame, opts);
+      return;
+    }
+    setPose(from, frame, opts);
+    const pA = pelvis.position.clone();
+    const rA = boneList.map((b) => [b.rotation.x, b.rotation.y, b.rotation.z] as [number, number, number]);
+
+    setPose(to, frame, opts);
+    const pB = pelvis.position.clone();
+    pelvis.position.set(lerp(pA.x, pB.x, k), lerp(pA.y, pB.y, k), lerp(pA.z, pB.z, k));
+    for (let i = 0; i < boneList.length; i++) {
+      const b = boneList[i];
+      b.rotation.set(lerp(rA[i][0], b.rotation.x, k), lerp(rA[i][1], b.rotation.y, k), lerp(rA[i][2], b.rotation.z, k));
     }
   };
 
@@ -905,5 +999,5 @@ export function createCharacter3D(cfg: CharacterConfig): Character3D {
     for (const d of disposables) d.dispose();
   };
 
-  return { group: root, sockets, config: cfg, setFace, setPose, lookAtWorld, dispose };
+  return { group: root, sockets, config: cfg, setFace, setPose, setPoseBlend, lookAtWorld, dispose };
 }

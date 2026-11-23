@@ -55,6 +55,7 @@ export type ShortPlayerProps<TAssets = undefined> = {
   hud?: HorrorHudConfig;
   inkOptions?: InkOptions;
   grainAmount?: number;
+  draft?: boolean;
   width?: number;
   height?: number;
   background?: string;
@@ -144,6 +145,7 @@ type InnerProps<TAssets> = {
   createWorld: (assets: TAssets) => ShortWorld;
   inkOptions?: InkOptions;
   grainAmount?: number;
+  draft?: boolean;
 };
 
 function Inner<TAssets>({
@@ -157,6 +159,7 @@ function Inner<TAssets>({
   createWorld,
   inkOptions,
   grainAmount = 0.008,
+  draft = false,
 }: InnerProps<TAssets>) {
   const f = useCurrentFrame();
   const { camera, scene, gl, size } = useThree();
@@ -194,7 +197,7 @@ function Inner<TAssets>({
   if (grainOn) fx.grain.amount = grainAmount;
 
   const composer = useMemo(() => {
-    const c = new PostComposer(gl, { frameBufferType: THREE.HalfFloatType, multisampling: 4 });
+    const c = new PostComposer(gl, { frameBufferType: THREE.HalfFloatType, multisampling: draft ? 0 : 4 });
     c.autoRenderToScreen = true;
     c.addPass(new RenderPass(scene, camera));
     if (on.ink) c.addPass(fx.ink);
@@ -209,7 +212,7 @@ function Inner<TAssets>({
     c.setSize(w0, h0);
     appliedSize.current = { width: w0, height: h0, pixelRatio: gl.getPixelRatio() };
     return c;
-  }, [gl, scene, camera, fx, on]);
+  }, [gl, scene, camera, fx, on, draft]);
 
   useEffect(() => {
     const prevAutoClear = gl.autoClear;
@@ -252,8 +255,6 @@ function Inner<TAssets>({
   cam.aspect = width / Math.max(1, height);
   setLightningFlash(lightningAt(overlays, f));
   target.copy(world.update(id, f, cam, scene));
-  world.syncLighting?.(id, f);
-  setLightningFlash(lightningAt(overlays, f));
   noInkFallback(world.root);
 
   const d = evalDof(dof, f);
@@ -288,6 +289,7 @@ type ShotViewProps<TAssets> = {
   createWorld: (assets: TAssets) => ShortWorld;
   inkOptions?: InkOptions;
   grainAmount?: number;
+  draft?: boolean;
 };
 
 function ShotView<TAssets>({
@@ -302,6 +304,7 @@ function ShotView<TAssets>({
   createWorld,
   inkOptions,
   grainAmount,
+  draft = false,
 }: ShotViewProps<TAssets>) {
   const dpr = dprOverride();
   return (
@@ -310,7 +313,7 @@ function ShotView<TAssets>({
         width={width}
         height={height}
         {...(dpr ? { dpr } : {})}
-        shadows="soft"
+        shadows={draft ? true : "soft"}
         gl={{
           antialias: false,
           stencil: false,
@@ -330,7 +333,8 @@ function ShotView<TAssets>({
           assets={assets}
           createWorld={createWorld}
           inkOptions={inkOptions}
-          grainAmount={grainAmount}
+          grainAmount={grainAmount ?? 0.008}
+          draft={draft}
         />
       </ThreeCanvas>
     </AbsoluteFill>
@@ -348,12 +352,14 @@ export function ShortPlayer<TAssets = undefined>({
   hud,
   inkOptions,
   grainAmount = 0.008,
+  draft,
   width,
   height,
   background = "#06060b",
 }: ShortPlayerProps<TAssets>) {
   const f = useCurrentFrame();
   const vc = useVideoConfig();
+  const isDraft = draft ?? !!(getInputProps() as { draft?: boolean })?.draft;
   const w = width ?? vc.width;
   const h = height ?? vc.height;
   const { ready, assets } = useLoadedAssets(loadAssets);
@@ -381,6 +387,7 @@ export function ShortPlayer<TAssets = undefined>({
           createWorld={createWorld}
           inkOptions={inkOptions}
           grainAmount={grainAmount}
+          draft={isDraft}
         />
       ))}
       {flash > 0 && <AbsoluteFill style={{ background: "#ffffff", opacity: flash, mixBlendMode: "screen" }} />}

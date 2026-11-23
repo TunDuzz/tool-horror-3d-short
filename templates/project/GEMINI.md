@@ -27,9 +27,9 @@ Các quy tắc bắt buộc dưới đây áp dụng cho mọi dự án video ki
   REMOTION_TMP=/tmp/remotion-tmp node scripts/render-stills.mjs <CompositionId> out/<project>/stills/b_ --manifest out/<project>/still_manifest.json 1
   ```
   (và render thêm frame giữa các cú `whipPan`) rồi **tự mở xem trực tiếp 100% ảnh bằng `read_file`** để đối chiếu kịch bản ↔ frame (đúng bối cảnh, đúng đèn tắt/bật, không lộ quái sớm, không kẹt tóc/tay che màn hình `Phone3D`, Whip-Pan có blur ngang rõ rệt, không cháy sáng áo trắng).
-- **Post-Render QA Gate & Bảo vệ ổ đĩa:**
-  - Đặt `REMOTION_TMP=/tmp/remotion-tmp` (Linux/macOS) hoặc `$env:REMOTION_TMP="D:/remotion-tmp"` (Windows) và xóa sạch bundle tạm sau khi render.
-  - Chỉ dùng `--scale 1`, `--scale 1.25` hoặc `--scale 1.5` (tuyệt đối không dùng `--scale 1.3333`).
+- **Post-Render QA Gate & Tăng tốc GPU / Bảo vệ ổ đĩa:**
+  - Dùng `node scripts/render-video.mjs <CompId> out/<project>/video.mp4 --scale 1` (tự dò GPU NVIDIA `angle-egl`, fallback `swangle`, tự dọn bundle tạm; hỗ trợ `--draft` để xem trước nhanh `scale 0.5`).
+  - Đặt `REMOTION_TMP=/tmp/remotion-tmp` (Linux/macOS) hoặc `$env:REMOTION_TMP="D:/remotion-tmp"` (Windows). Chỉ dùng `--scale 0.5`, `1`, `1.25` hoặc `1.5` (tuyệt đối không dùng `--scale 1.3333`).
   - Ghép âm thanh bằng `ffmpeg -map 0:v:0 -map 1:a:0`.
   - Chạy `extract_shots.py` + `short_qa.py` xác nhận `0` frame đen/trắng ngoài kế hoạch, `0` frozen `>= 12f`, `0` unplanned `pops`, `DIRECTING_WARNS none`, không cảnh báo quá tối (`p98 >= 0.34, mean >= 0.065`), và xem trực tiếp `sheet_*.jpg`.
 

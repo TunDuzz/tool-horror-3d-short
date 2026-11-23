@@ -15,7 +15,17 @@ import {
   addDustMotes,
   addVolumetricCone,
   createFlatDecalMesh,
+  addContactShadow,
+  addLampHalo3D,
+  addWetPuddleDecal,
 } from "../templates/engine/fx3d.ts";
+import {
+  Batch,
+  addFloorCornerAO,
+  addExitSign3D,
+  addPipeRun3D,
+  addAltarOfferingPlate3D,
+} from "../templates/engine/build.ts";
 
 test("createPovRig3D builds NOINK outlined POV lowerBody + armsRoot and aligns deterministically to camera", () => {
   const pov = createPovRig3D({ sleeveCol: "#d8d1c2", pantsCol: "#1a1b24" });
@@ -105,4 +115,31 @@ test("fx3d helpers stay on NOINK and update deterministically regardless of fram
     if (m.isMesh) assert.equal(m.layers.mask, 1 << NOINK);
   });
   assert.equal(cone.mesh.layers.mask, 1 << NOINK);
+});
+
+test("v3.5 atmospheric grounding & dressing helpers (ContactShadow, LampHalo, WetPuddle, FloorCornerAO, ExitSign, PipeRun, AltarPlate)", () => {
+  const parent = new THREE.Group();
+  const cs = addContactShadow(parent, [0, 0, 0], 0.5, 0.4);
+  const halo = addLampHalo3D(parent, [1, 1, 0], 0.6);
+  const puddle = addWetPuddleDecal(parent, [0, 0, -2], 0.8, 1.1);
+  const cornerAo = addFloorCornerAO(parent, -2, 2, -3, 3);
+  const exitSign = addExitSign3D(parent, [0, 2.5, -3], 0, "LỐI THOÁT");
+  const altarPlate = addAltarOfferingPlate3D(parent, [0, 1, -2]);
+
+  assert.equal(cs.layers.mask, 1 << NOINK);
+  assert.equal(puddle.layers.mask, 1 << NOINK);
+  assert.ok(puddle.material instanceof THREE.MeshPhongMaterial);
+  halo.setIntensity(0);
+  assert.equal(halo.sprite.visible, false);
+  halo.setIntensity(0.8);
+  assert.equal(halo.sprite.visible, true);
+  assert.equal(cornerAo.children.length, 4);
+  assert.ok(exitSign.children.length >= 2);
+  assert.ok(altarPlate.children.length >= 8);
+
+  const b = new Batch();
+  addPipeRun3D(b, new THREE.MeshLambertMaterial(), [-1, 2, 0], [-1, 2, -6], 0.03);
+  const pipeGroup = new THREE.Group();
+  b.build(pipeGroup, false);
+  assert.ok(pipeGroup.children.length >= 1);
 });

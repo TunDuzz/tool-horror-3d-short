@@ -8,7 +8,7 @@ description: Use when creating a standalone 55-75s horror story video (vertical 
 Workspace: `shorts-project/` (30 fps; `9:16` `1080×1920` or `16:9` `1920×1080`; scale cleanly with integer-dimension multipliers `--scale 1`, `1.25`, or `1.5`).
 Neutral Horror Engine v3: `shorts-project/src/engine/` (18 modules imported via `../engine`).
 Procedural Horror Audio DSP: `shorts-project/audio/` (`dsp.py`, `horror_instruments.py`, `mix_base.py`).
-Automation & QA scripts: `shorts-project/scripts/` (`validate_manifest.py`, `horror_story.py`, `gen_horror_voice.py`, `render-stills.mjs`, `extract_shots.py`, `short_qa.py`, `stitch_parts.py`, `validate_continuity.py`).
+Automation & QA scripts: `shorts-project/scripts/` (`validate_manifest.py`, `horror_story.py`, `gen_horror_voice.py`, `render-stills.mjs`, `render-video.mjs`, `extract_shots.py`, `short_qa.py`, `stitch_parts.py`, `validate_continuity.py`).
 
 ## Companion Skills (Activate as Needed)
 
@@ -76,10 +76,11 @@ Automation & QA scripts: `shorts-project/scripts/` (`validate_manifest.py`, `hor
      ```
      *(On Windows PowerShell use `$env:REMOTION_TMP="D:/remotion-tmp"`.)*
    - **Open and visually inspect EVERY `.jpg` directly using `read_file`** against the Beat-by-Beat Audit Checklist in [READABILITY_AND_QA.md](./references/READABILITY_AND_QA.md). Reject and fix any script↔frame drift, hair/hand clipping, blowout, or outline defect before final render.
-9. **Final Render & Audio Mux:**
-   - Render Full HD (`--scale 1`) or QHD (`--scale 1.25` or `--scale 1.5`; NEVER non-integer `--scale 1.3333`; on Linux headless without GPU EGL use `--gl swangle` or test `--gl angle-egl`):
+9. **Final Render (Hardware GPU Auto-Detected) & Audio Mux:**
+   - Optional fast draft preview (`--draft`, `scale 0.5`, MSAA off): `node scripts/render-video.mjs <CompId> out/<project>/draft.mp4 --draft`
+   - Final Full HD (`--scale 1`) or QHD (`--scale 1.25` or `--scale 1.5`; NEVER `1.3333`) with automatic Linux NVIDIA `angle-egl` GPU detection + graceful `swangle` fallback and automatic temp bundle cleanup:
      ```bash
-     REMOTION_TMP=/tmp/remotion-tmp npx remotion render src/index.ts <CompId> out/<project>/video.mp4 --codec h264 --crf 16 --scale 1 --concurrency 2 --timeout 180000
+     REMOTION_TMP=/tmp/remotion-tmp node scripts/render-video.mjs <CompId> out/<project>/video.mp4 --scale 1 --crf 16 --concurrency 2
      ffmpeg -y -i out/<project>/video.mp4 -i out/<project>/audio/mix.wav -c:v copy -c:a aac -b:a 192k -map 0:v:0 -map 1:a:0 out/<project>/final.mp4
      ```
 10. **Post-Render Automated QA Gate:**

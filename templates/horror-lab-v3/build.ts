@@ -13,17 +13,26 @@ import {
   Strand,
   V,
   addAFrameRoof,
+  addAltarOfferingPlate3D,
+  addContactShadow,
   addCorridorBay,
   addDoubleDoorWithCracks,
   addDustMotes,
+  addExitSign3D,
+  addFloorCornerAO,
   addFluorescentTube3D,
   addGlassOilLamp3D,
   addIncenseBurner3D,
+  addLampHalo3D,
+  addPipeRun3D,
   addRisingSmokeWisps,
+  addRoomBaseboard,
   addSimpleTable,
   addStreetLamp3D,
   addVolumetricCone,
+  addWallSwitch3D,
   addWallWithOpening,
+  addWetPuddleDecal,
   attachOutlineRig,
   boxGeo,
   brickWallTex,
@@ -48,7 +57,9 @@ import { ANCHORS } from "./story";
 export type FuneralRoomSet = {
   group: THREE.Group;
   oilLamp: ReturnType<typeof addGlassOilLamp3D>;
+  oilLampHalo: ReturnType<typeof addLampHalo3D>;
   altarCandleMat: THREE.MeshBasicMaterial;
+  altarHalo: ReturnType<typeof addLampHalo3D>;
   doorCtrl: DoubleDoorCtrl;
   incenseSmoke: SmokeWisps3D;
   altarSmoke: SmokeWisps3D;
@@ -136,10 +147,11 @@ export function buildRuralFuneralRoom(): FuneralRoomSet {
   b.add(boxGeo(V(3.18, 0, -3.78), V(3.36, 3.0, 3.8), 2.2), wallMat);
   b.add(boxGeo(V(-3.2, 0, 3.62), V(3.2, 4.4, 3.8), 2.2), wallMat);
 
-  // Structural corner & mid timber columns
+  // Structural corner & mid timber columns + baseboard trim
   for (const [px, pz] of [[-3.08, -3.52], [3.08, -3.52], [-3.08, 0.2], [3.08, 0.2], [-3.08, 3.48], [3.08, 3.48]] as const) {
     b.add(boxGeo(V(px - 0.08, 0, pz - 0.08), V(px + 0.08, 2.86, pz + 0.08), 1.5), trussMat);
   }
+  addRoomBaseboard(b, trussMat, -3.18, 3.18, -3.60, 3.62, 0, 0.11, 0.035);
 
   // 2. Exposed Vietnamese rural A-frame thatch roof overhead (eaveY=2.28 so angled rafters & thatch crown Shot 1!)
   addAFrameRoof(b, trussMat, thatchMat, { cx: 0, cz: 0, width: 6.4, depth: 7.6, eaveY: 2.28, ridgeH: 1.55, trussCount: 5, tile: 2.0 });
@@ -193,10 +205,21 @@ export function buildRuralFuneralRoom(): FuneralRoomSet {
   altarFlame.layers.set(NOINK);
   group.add(altarCandleBody, altarFlame);
 
-  // Incense burners + glass oil lamp
+  // Incense burners, glass oil lamp, offering fruit plate, atmospheric halos & Contact AO grounding
   const oilLamp = addGlassOilLamp3D(group, [tx - 0.18, 0.56, tz + 0.05], 1.15);
+  const oilLampHalo = addLampHalo3D(group, [tx - 0.18, 0.79, tz + 0.05], 0.54, "#ffb458", 0.30);
+  const altarHalo = addLampHalo3D(group, [ax - 0.46, 1.25, az + 0.06], 0.36, "#ffb860", 0.24);
   addIncenseBurner3D(group, [tx + 0.24, 0.56, tz + 0.04], 1.05);
   addIncenseBurner3D(group, [ax, 0.98, az + 0.08], 1.15);
+  addAltarOfferingPlate3D(group, [ax + 0.44, 0.98, az + 0.04], 0.96);
+  addWallSwitch3D(group, [-0.42, 1.32, -3.58], 0);
+
+  // Grounding Contact AO along room walls + beneath Chu Bay, offering table, coffin, and altar
+  addFloorCornerAO(group, -3.18, 3.18, -3.60, 3.62, 0.004, 0.48, 0.48);
+  addContactShadow(group, [ANCHORS.NPC_SEAT[0], 0.022, ANCHORS.NPC_SEAT[2]], 0.54, 0.44, 0.62);
+  addContactShadow(group, [tx, 0.004, tz], 0.52, 0.42, 0.56);
+  addContactShadow(group, [cx, 0.004, cz], 0.68, 1.22, 0.60);
+  addContactShadow(group, [ax, 0.004, az], 0.88, 0.46, 0.58);
 
   const incenseSmoke = addRisingSmokeWisps(group, [tx + 0.24, 0.92, tz + 0.04], { count: 7, height: 0.85, opacity: 0.22 });
   const altarSmoke = addRisingSmokeWisps(group, [ax, 1.35, az + 0.08], { count: 7, height: 0.95, opacity: 0.20 });
@@ -208,7 +231,7 @@ export function buildRuralFuneralRoom(): FuneralRoomSet {
     { pos: ANCHORS.DOUBLE_DOOR, width: 1.48, height: 2.24, crackW: 0.032, bottomGap: 0.045, moonColor: "#a2b8dc" },
   );
 
-  return { group, oilLamp, altarCandleMat, doorCtrl, incenseSmoke, altarSmoke };
+  return { group, oilLamp, oilLampHalo, altarCandleMat, altarHalo, doorCtrl, incenseSmoke, altarSmoke };
 }
 
 export function buildHospitalCorridor(): HospitalCorridorSet {
@@ -247,17 +270,25 @@ export function buildHospitalCorridor(): HospitalCorridorSet {
   // Guard rails
   b.add(boxGeo(V(gx + 0.34, 0.92, gz - 0.55), V(gx + 0.37, 0.96, gz + 0.55), 0), steelMat);
 
-  // HERO PROP 2: Tall wheeled IV drip stand along right wall
+  // HERO PROP 2: Tall wheeled IV drip stand along right wall + exposed institutional conduit pipe
   const ix = 1.02, iz = -3.45;
   b.add(new THREE.CylinderGeometry(0.016, 0.020, 1.85, 8), steelMat, new THREE.Matrix4().makeTranslation(ix, 0.92, iz));
   b.add(new THREE.CylinderGeometry(0.24, 0.24, 0.04, 10), steelMat, new THREE.Matrix4().makeTranslation(ix, 0.04, iz));
   b.add(boxGeo(V(ix - 0.20, 1.82, iz - 0.015), V(ix + 0.20, 1.86, iz + 0.015), 0), steelMat);
+  addPipeRun3D(b, steelMat, [-1.34, 2.62, 3.6], [-1.34, 2.62, -11.9], 0.028);
 
   b.build(group, true);
 
-  // Overhead flickering fluorescent tubes
+  // Overhead flickering fluorescent tubes, glowing green EXIT sign, wall switch, Contact AO & wet specular spill
   const tubeA = addFluorescentTube3D(group, [0, 2.88, -1.6], 1.18, Math.PI * 0.5);
   const tubeB = addFluorescentTube3D(group, [0, 2.88, -6.8], 1.18, Math.PI * 0.5);
+  addExitSign3D(group, [0, 2.48, -11.95], 0, "LỐI THOÁT");
+  addWallSwitch3D(group, [1.38, 1.32, -0.4], -Math.PI * 0.5);
+  addFloorCornerAO(group, -1.40, 1.40, -12.0, 4.0, 0.004, 0.34, 0.45);
+  addContactShadow(group, [gx, 0.004, gz], 0.54, 1.08, 0.58);
+  addContactShadow(group, [ix, 0.004, iz], 0.34, 0.34, 0.52);
+  addContactShadow(group, [ANCHORS.HOSP_ENTITY[0], 0.004, ANCHORS.HOSP_ENTITY[2]], 0.38, 0.34, 0.60);
+  addWetPuddleDecal(group, [-0.15, 0.004, -3.55], 0.58, 0.85, "#192625", 0.56);
   const dust = addDustMotes(group, [0, 1.45, -2.5], [2.0, 2.2, 8.5], 32, 19, "#c4ded8");
 
   return { group, tubeA, tubeB, dust };
@@ -295,7 +326,7 @@ export function buildFoggyVillageAlley(): VillageAlleySet {
   // HERO PROP: Weathered wooden village gate inset on left brick wall
   b.add(boxGeo(V(-2.08, 0, -7.8), V(-1.96, 2.10, -6.1), 1.2), gateMat);
 
-  // Far-alley distant silhouette compound wall & dark rural rooftop so lane dissolves into village depth (no empty cut-out!)
+  // Far-alley distant silhouette compound wall & dark rural rooftop + vertical drainpipe on house facade
   b.add(boxGeo(V(-2.4, 0, -17.8), V(2.4, 2.45, -17.2), 2.0), brickMat);
   const farRoof = new THREE.Matrix4().compose(
     V(0.2, 3.05, -18.5),
@@ -303,11 +334,13 @@ export function buildFoggyVillageAlley(): VillageAlleySet {
     V(5.6, 0.9, 2.6),
   );
   b.add(new THREE.BoxGeometry(1, 1, 1), gateMat, farRoof);
+  addPipeRun3D(b, tinMat, [2.01, 0.0, -3.2], [2.01, 2.75, -3.2], 0.036);
 
   b.build(group, true);
 
-  // HERO PROP: Concrete pole streetlamp reaching over the misty alley with warm sodium-vapor glow + cone
+  // HERO PROP: Concrete pole streetlamp reaching over misty alley + warm mist halo + volumetric cone + specular wet puddles
   const streetLamp = addStreetLamp3D(group, ANCHORS.ALLEY_LAMP, 3.9, Math.PI);
+  addLampHalo3D(group, streetLamp.bulbWorldPos, 0.92, "#ffbe68", 0.34);
   addVolumetricCone(
     group,
     streetLamp.bulbWorldPos,
@@ -317,6 +350,10 @@ export function buildFoggyVillageAlley(): VillageAlleySet {
     "#f4be74",
     0.13,
   );
+  addFloorCornerAO(group, -2.05, 2.05, -17.2, 4.0, 0.004, 0.42, 0.44);
+  addContactShadow(group, [ANCHORS.ALLEY_FIGURE[0], 0.004, ANCHORS.ALLEY_FIGURE[2]], 0.42, 0.36, 0.62);
+  addWetPuddleDecal(group, [0.45, 0.004, -5.2], 0.78, 1.35, "#19202e", 0.76);
+  addWetPuddleDecal(group, [-0.65, 0.004, -1.9], 0.62, 0.95, "#181f2c", 0.68);
 
   // Overhead sagging power wires crossing the foggy alley
   for (const wz of [-4.2, -6.4]) {
