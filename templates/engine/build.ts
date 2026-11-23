@@ -1,11 +1,12 @@
-// Neutral Horror Engine v2 3D geometry, non-box Gothic architectural builders, gnarled trees, reeds,
-// curved hulls, volumetric light shafts, Shadow-Depth foreground frames, and batching utilities.
+// Neutral Horror Engine v3 3D geometry, modular anti-repetition architectural kits, hero props, and batching utilities.
 
 import * as THREE from "three";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
+import { flickerAt, type V3 } from "./camera";
 import { rng } from "./paint";
-import { twoTone } from "./shade";
+import { stylizedShade } from "./shade";
 import { NOINK } from "./ink";
+import { attachOutlineRig } from "./outline3d";
 
 export type Kit = Record<string, THREE.Object3D>;
 export const V = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
@@ -15,7 +16,7 @@ const mats = new Map<string, THREE.Material>();
 export const lam = (key: string, make: () => THREE.MeshLambertMaterialParameters, liftK = 1): THREE.MeshLambertMaterial => {
   let m = mats.get(key) as THREE.MeshLambertMaterial | undefined;
   if (!m) {
-    m = twoTone(new THREE.MeshLambertMaterial(make()), liftK);
+    m = stylizedShade(new THREE.MeshLambertMaterial(make()), liftK);
     mats.set(key, m);
   }
   return m;
@@ -23,7 +24,7 @@ export const lam = (key: string, make: () => THREE.MeshLambertMaterialParameters
 export const phong = (key: string, make: () => THREE.MeshPhongMaterialParameters, liftK = 1): THREE.MeshPhongMaterial => {
   let m = mats.get(key) as THREE.MeshPhongMaterial | undefined;
   if (!m) {
-    m = twoTone(new THREE.MeshPhongMaterial(make()), liftK);
+    m = stylizedShade(new THREE.MeshPhongMaterial(make()), liftK);
     mats.set(key, m);
   }
   return m;
@@ -41,13 +42,13 @@ const RECOLOR: Record<string, string> = {
   stone: "#6e6b68",
 };
 
-/** Convert standard/GLB materials to two-tone Gothic Lambert so the whole world shares one lighting model. */
+/** Convert standard/GLB materials to v3 stylized Lambert so the whole world shares one lighting model. */
 export const toLambert = (m: THREE.Material): THREE.MeshLambertMaterial => {
   let l = lamOf.get(m.uuid);
   if (!l) {
     const s = m as THREE.MeshStandardMaterial;
     const col = RECOLOR[m.name];
-    l = twoTone(
+    l = stylizedShade(
       new THREE.MeshLambertMaterial({
         color: col ? new THREE.Color(col) : s.color?.clone() ?? new THREE.Color("#88868a"),
         map: s.map ?? null,
@@ -606,9 +607,17 @@ const linkTemplate = (h: number): LinkT => {
 
 export class Strand {
   mesh: THREE.Mesh;
+  n: number;
+  w: number;
+  h: number;
+  tile: number;
   private pos: Float32Array; private nor: Float32Array; private uv: Float32Array;
   private lt: LinkT | null = null; private maxLinks = 0;
-  constructor(public n: number, public w: number, public h: number, mat: THREE.Material, public tile = 1, cast = true, links = false) {
+  constructor(n: number, w: number, h: number, mat: THREE.Material, tile = 1, cast = true, links = false) {
+    this.n = n;
+    this.w = w;
+    this.h = h;
+    this.tile = tile;
     const g = new THREE.BufferGeometry();
     if (links) {
       const lt = (this.lt = linkTemplate(h)), nv = LNS * LNR;
@@ -742,3 +751,494 @@ export const kitClone = (kit: Kit, name: string, h: number): THREE.Object3D | nu
   g.add(c);
   return g;
 };
+
+// ---------------- Horror Engine v3: Modular Anti-Repetition Architectural & Hero-Prop Builders ----------------
+
+/** Build a clean wall slab with an exact rectangular cutout opening (doorway, window, or passage) with zero overlap. */
+export function addWallWithOpening(
+  b: Batch,
+  mat: THREE.Material,
+  wallMin: V3,
+  wallMax: V3,
+  opening: { axis: "x" | "z"; u0: number; u1: number; y0: number; y1: number },
+  tile = 2.0,
+): void {
+  const [x0, yMin, z0] = wallMin;
+  const [x1, yMax, z1] = wallMax;
+  const oy0 = Math.max(yMin, opening.y0);
+  const oy1 = Math.min(yMax, opening.y1);
+
+  if (opening.axis === "x") {
+    const ox0 = Math.max(x0, opening.u0);
+    const ox1 = Math.min(x1, opening.u1);
+    if (ox0 > x0 + 0.01) b.add(boxGeo(V(x0, yMin, z0), V(ox0, yMax, z1), tile), mat);
+    if (x1 > ox1 + 0.01) b.add(boxGeo(V(ox1, yMin, z0), V(x1, yMax, z1), tile), mat);
+    if (oy0 > yMin + 0.01 && ox1 > ox0 + 0.01) b.add(boxGeo(V(ox0, yMin, z0), V(ox1, oy0, z1), tile), mat);
+    if (yMax > oy1 + 0.01 && ox1 > ox0 + 0.01) b.add(boxGeo(V(ox0, oy1, z0), V(ox1, yMax, z1), tile), mat);
+  } else {
+    const oz0 = Math.max(z0, opening.u0);
+    const oz1 = Math.min(z1, opening.u1);
+    if (oz0 > z0 + 0.01) b.add(boxGeo(V(x0, yMin, z0), V(x1, yMax, oz0), tile), mat);
+    if (z1 > oz1 + 0.01) b.add(boxGeo(V(x0, yMin, oz1), V(x1, yMax, z1), tile), mat);
+    if (oy0 > yMin + 0.01 && oz1 > oz0 + 0.01) b.add(boxGeo(V(x0, yMin, oz0), V(x1, oy0, oz1), tile), mat);
+    if (yMax > oy1 + 0.01 && oz1 > oz0 + 0.01) b.add(boxGeo(V(x0, oy1, oz0), V(x1, yMax, oz1), tile), mat);
+  }
+}
+
+/** Exposed Vietnamese rural A-frame timber roof trusses + pitched thatch/tile underside visible from inside. */
+export function addAFrameRoof(
+  b: Batch,
+  trussMat: THREE.Material,
+  roofMat: THREE.Material,
+  cfg: { cx: number; cz: number; width: number; depth: number; eaveY: number; ridgeH: number; trussCount?: number; tile?: number },
+): void {
+  const { cx, cz, width, depth, eaveY, ridgeH } = cfg;
+  const hw = width * 0.5;
+  const hd = depth * 0.5;
+  const tile = cfg.tile ?? 1.8;
+  const slopeLen = Math.hypot(hw, ridgeH);
+
+  // Double-sided pitched roof shell (visible cleanly from inside looking up!)
+  b.add(pitchedRoofGeo(cx, eaveY, cz, width + 0.35, depth + 0.35, ridgeH, 0.14, 0, tile), roofMat);
+
+  // Ridge beam + longitudinal purlins along both slopes
+  b.add(boxGeo(V(cx - 0.07, eaveY + ridgeH - 0.20, cz - hd), V(cx + 0.07, eaveY + ridgeH - 0.06, cz + hd), 2.0), trussMat);
+  for (const frac of [0.35, 0.68]) {
+    const py = eaveY + ridgeH * frac - 0.10;
+    const px = hw * (1 - frac);
+    b.add(boxGeo(V(cx - px - 0.05, py - 0.05, cz - hd), V(cx - px + 0.05, py + 0.05, cz + hd), 2.0), trussMat);
+    b.add(boxGeo(V(cx + px - 0.05, py - 0.05, cz - hd), V(cx + px + 0.05, py + 0.05, cz + hd), 2.0), trussMat);
+  }
+
+  // Exposed A-frame triangular trusses (tie beam + left/right rafters + king post)
+  const count = Math.max(2, cfg.trussCount ?? 4);
+  const rafterAngle = Math.atan2(ridgeH, hw);
+  for (let i = 0; i < count; i++) {
+    const tz = cz - hd + 0.35 + ((depth - 0.7) * i) / (count - 1);
+    // Horizontal tie beam
+    b.add(boxGeo(V(cx - hw, eaveY - 0.14, tz - 0.065), V(cx + hw, eaveY, tz + 0.065), 1.5), trussMat);
+    // King post
+    b.add(boxGeo(V(cx - 0.055, eaveY, tz - 0.055), V(cx + 0.055, eaveY + ridgeH - 0.12, tz + 0.055), 1.5), trussMat);
+    // Angled left & right rafters
+    for (const side of [-1, 1] as const) {
+      const m = new THREE.Matrix4().compose(
+        V(cx + side * hw * 0.5, eaveY + ridgeH * 0.5 - 0.08, tz),
+        new THREE.Quaternion().setFromEuler(new THREE.Euler(0, 0, -side * rafterAngle)),
+        V(slopeLen, 0.11, 0.11),
+      );
+      b.add(new THREE.BoxGeometry(1, 1, 1), trussMat, m);
+    }
+  }
+}
+
+export type DoubleDoorCtrl = {
+  group: THREE.Group;
+  leftPivot: THREE.Group;
+  rightPivot: THREE.Group;
+  boltBar: THREE.Mesh;
+  moonStrip: THREE.Mesh;
+  feetBlockers: THREE.Group;
+  setOpen: (rad: number) => void;
+  setMoonlight: (on: boolean, feetShadow?: boolean) => void;
+};
+
+/**
+ * Hinged 2-leaf wooden door with controllable vertical center crack, bottom gap, horizontal bolt bar,
+ * cold moonlight floor trapezoid projection, and 2 dark silhouette foot-shadow blockers (like videomau sec_050/067/088).
+ */
+export function addDoubleDoorWithCracks(
+  parent: THREE.Object3D,
+  mats: { frame: THREE.Material; leaf: THREE.Material; bolt: THREE.Material },
+  cfg: { pos: V3; yaw?: number; width?: number; height?: number; crackW?: number; bottomGap?: number; moonColor?: string },
+): DoubleDoorCtrl {
+  const w = cfg.width ?? 1.48;
+  const h = cfg.height ?? 2.24;
+  const crackW = cfg.crackW ?? 0.032;
+  const bottomGap = cfg.bottomGap ?? 0.042;
+  const moonCol = cfg.moonColor ?? "#9ab0d4";
+
+  const group = new THREE.Group();
+  group.name = "DoubleDoorWithCracks";
+  group.position.set(...cfg.pos);
+  group.rotation.y = cfg.yaw ?? 0;
+
+  // Thick exterior frame jambs & lintel
+  const fb = new Batch();
+  const frameT = 0.12;
+  const frameD = 0.18;
+  fb.add(boxGeo(V(-w * 0.5 - frameT, 0, -frameD * 0.5), V(-w * 0.5, h + frameT, frameD * 0.5), 1.2), mats.frame);
+  fb.add(boxGeo(V(w * 0.5, 0, -frameD * 0.5), V(w * 0.5 + frameT, h + frameT, frameD * 0.5), 1.2), mats.frame);
+  fb.add(boxGeo(V(-w * 0.5 - frameT - 0.04, h, -frameD * 0.5 - 0.02), V(w * 0.5 + frameT + 0.04, h + frameT + 0.04, frameD * 0.5 + 0.02), 1.2), mats.frame);
+  fb.build(group, true);
+
+  // Two hinged door leaves with explicit center crack & bottom gap
+  const leafW = (w - crackW) * 0.5;
+  const leafH = h - bottomGap;
+  const makeLeaf = (side: -1 | 1) => {
+    const piv = new THREE.Group();
+    piv.position.set(side * w * 0.5, bottomGap, 0);
+    const lb = new Batch();
+    const x0 = side < 0 ? 0 : -leafW;
+    const x1 = side < 0 ? leafW : 0;
+    lb.add(boxGeo(V(x0, 0, -0.028), V(x1, leafH, 0.028), 1.1), mats.leaf);
+    // Horizontal cross-rails
+    lb.add(boxGeo(V(x0 + 0.03, 0.18, 0.025), V(x1 - 0.03, 0.28, 0.052), 1.0), mats.frame);
+    lb.add(boxGeo(V(x0 + 0.03, leafH - 0.30, 0.025), V(x1 - 0.03, leafH - 0.20, 0.052), 1.0), mats.frame);
+    lb.build(piv, true);
+    group.add(piv);
+    return piv;
+  };
+  const leftPivot = makeLeaf(-1);
+  const rightPivot = makeLeaf(1);
+
+  // Horizontal wooden bolt bar across interior face (+Z)
+  const boltBar = new THREE.Mesh(boxGeo(V(-w * 0.44, -0.05, -0.03), V(w * 0.44, 0.05, 0.03), 1.0), mats.bolt);
+  boltBar.position.set(0, h * 0.46, 0.072);
+  boltBar.castShadow = true;
+  boltBar.receiveShadow = true;
+  group.add(boltBar);
+
+  // Glowing vertical & bottom crack strips (visible when moonlit from outside!)
+  const crackMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(1.45, 1.65, 2.10), toneMapped: false });
+  const vCrack = new THREE.Mesh(new THREE.PlaneGeometry(crackW * 0.85, h), crackMat);
+  vCrack.position.set(0, h * 0.5, -0.038);
+  vCrack.layers.set(NOINK);
+  const bCrack = new THREE.Mesh(new THREE.PlaneGeometry(w, bottomGap * 0.9), crackMat);
+  bCrack.position.set(0, bottomGap * 0.5, -0.038);
+  bCrack.layers.set(NOINK);
+  group.add(vCrack, bCrack);
+
+  // Floor moonlight trapezoid projection spilling inward (+Z)
+  const moonMat = new THREE.ShaderMaterial({
+    transparent: true,
+    depthWrite: false,
+    side: THREE.DoubleSide,
+    uniforms: { uCol: { value: new THREE.Color(moonCol) } },
+    vertexShader: `varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+    fragmentShader: `uniform vec3 uCol; varying vec2 vUv;
+      void main(){
+        float fade = smoothstep(0.0, 0.08, vUv.y) * pow(1.0 - vUv.y, 1.15);
+        float edgeX = smoothstep(0.0, 0.06, vUv.x) * smoothstep(1.0, 0.94, vUv.x);
+        gl_FragColor = vec4(uCol, fade * edgeX * 0.52);
+      }`,
+  });
+  const stripLen = 1.65;
+  const stripGeo = new THREE.BufferGeometry();
+  const hw0 = w * 0.46, hw1 = w * 0.62;
+  stripGeo.setAttribute(
+    "position",
+    new THREE.Float32BufferAttribute(
+      [-hw0, 0.012, 0.04, hw0, 0.012, 0.04, hw1, 0.012, stripLen, -hw0, 0.012, 0.04, hw1, 0.012, stripLen, -hw1, 0.012, stripLen],
+      3,
+    ),
+  );
+  stripGeo.setAttribute("uv", new THREE.Float32BufferAttribute([0, 0, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1], 2));
+  const moonStrip = new THREE.Mesh(stripGeo, moonMat);
+  moonStrip.layers.set(NOINK);
+  moonStrip.renderOrder = 1;
+  group.add(moonStrip);
+
+  // Two dark foot-shadow streaks cutting across the floor moonlight strip (someone standing outside!)
+  const feetBlockers = new THREE.Group();
+  feetBlockers.name = "DoorFeetShadowBlockers";
+  const shadowMat = new THREE.MeshBasicMaterial({
+    color: "#090a10",
+    transparent: true,
+    opacity: 0.78,
+    depthWrite: false,
+    polygonOffset: true,
+    polygonOffsetFactor: -3,
+  });
+  for (const fx of [-0.19, 0.19]) {
+    const fGeo = new THREE.PlaneGeometry(0.15, stripLen * 0.96);
+    fGeo.rotateX(-Math.PI * 0.5);
+    const fm = new THREE.Mesh(fGeo, shadowMat);
+    fm.position.set(fx, 0.016, stripLen * 0.5 + 0.02);
+    fm.layers.set(NOINK);
+    fm.renderOrder = 2;
+    feetBlockers.add(fm);
+  }
+  feetBlockers.visible = false;
+  group.add(feetBlockers);
+
+  parent.add(group);
+
+  const setOpen = (rad: number) => {
+    leftPivot.rotation.y = -rad;
+    rightPivot.rotation.y = rad;
+    boltBar.visible = Math.abs(rad) < 0.08;
+  };
+
+  const setMoonlight = (on: boolean, feetShadow = false) => {
+    vCrack.visible = on;
+    bCrack.visible = on;
+    moonStrip.visible = on;
+    feetBlockers.visible = on && feetShadow;
+  };
+
+  return { group, leftPivot, rightPivot, boltBar, moonStrip, feetBlockers, setOpen, setMoonlight };
+}
+
+/** Modular institutional apartment / hospital corridor bay (floor, ceiling, baseboards, recessed side doors). */
+export function addCorridorBay(
+  b: Batch,
+  mats: { wall: THREE.Material; floor: THREE.Material; ceiling: THREE.Material; trim: THREE.Material },
+  cfg: { z0: number; z1: number; width: number; height: number; doorLeft?: boolean; doorRight?: boolean },
+): void {
+  const { z0, z1, width, height } = cfg;
+  const hw = width * 0.5;
+  const zMid = (z0 + z1) * 0.5;
+  const wallT = 0.14;
+
+  // Floor & flat ceiling
+  b.add(boxGeo(V(-hw - wallT, -0.12, z0), V(hw + wallT, 0, z1), 1.6), mats.floor);
+  b.add(boxGeo(V(-hw - wallT, height, z0), V(hw + wallT, height + 0.14, z1), 2.0), mats.ceiling);
+
+  // Left & right walls (with optional recessed door alcoves)
+  const buildSide = (side: -1 | 1, hasDoor: boolean) => {
+    const x0 = side < 0 ? -hw - wallT : hw;
+    const x1 = side < 0 ? -hw : hw + wallT;
+    if (hasDoor) {
+      addWallWithOpening(b, mats.wall, [x0, 0, z0], [x1, height, z1], { axis: "z", u0: zMid - 0.50, u1: zMid + 0.50, y0: 0, y1: 2.15 }, 2.0);
+      // Recessed door panel & trim
+      const dx = side < 0 ? -hw - 0.08 : hw + 0.08;
+      b.add(boxGeo(V(dx - 0.03, 0, zMid - 0.48), V(dx + 0.03, 2.14, zMid + 0.48), 1.2), mats.trim);
+    } else {
+      b.add(boxGeo(V(x0, 0, z0), V(x1, height, z1), 2.0), mats.wall);
+    }
+    // Baseboard & ceiling molding trim
+    const bx = side < 0 ? -hw : hw - 0.04;
+    b.add(boxGeo(V(bx, 0, z0), V(bx + 0.04, 0.14, z1), 1.0), mats.trim);
+    b.add(boxGeo(V(bx, height - 0.10, z0), V(bx + 0.04, height, z1), 1.0), mats.trim);
+  };
+  buildSide(-1, !!cfg.doorLeft);
+  buildSide(1, !!cfg.doorRight);
+}
+
+/** Modular concrete or timber staircase flight with handrail. */
+export function addStairFlight(
+  b: Batch,
+  stepMat: THREE.Material,
+  railMat: THREE.Material,
+  cfg: { start: V3; steps: number; width: number; stepRise: number; stepRun: number; yaw?: number },
+): void {
+  const { start, steps, width, stepRise, stepRun } = cfg;
+  const q = new THREE.Quaternion().setFromAxisAngle(V(0, 1, 0), cfg.yaw ?? 0);
+  const base = V(...start);
+  const hw = width * 0.5;
+  for (let i = 0; i < steps; i++) {
+    const local = V(0, (i + 0.5) * stepRise, -(i + 0.5) * stepRun).applyQuaternion(q).add(base);
+    b.add(new THREE.BoxGeometry(width, stepRise, stepRun + 0.02), stepMat, new THREE.Matrix4().compose(local, q, V(1, 1, 1)));
+  }
+  // Angled side handrails
+  const totalRise = steps * stepRise;
+  const totalRun = steps * stepRun;
+  const len = Math.hypot(totalRise, totalRun);
+  const pitch = Math.atan2(totalRise, totalRun);
+  for (const side of [-1, 1] as const) {
+    const mid = V(side * (hw - 0.05), totalRise * 0.5 + 0.90, -totalRun * 0.5).applyQuaternion(q).add(base);
+    const rq = q.clone().multiply(new THREE.Quaternion().setFromEuler(new THREE.Euler(pitch, 0, 0)));
+    b.add(new THREE.BoxGeometry(0.05, 0.05, len), railMat, new THREE.Matrix4().compose(mid, rq, V(1, 1, 1)));
+  }
+}
+
+/** Traditional Vietnamese glass-chimney oil lamp (đèn dầu) with rounded bulb, translucent chimney & HDR flame. */
+export function addGlassOilLamp3D(
+  parent: THREE.Object3D,
+  pos: V3,
+  scale = 1.0,
+): { group: THREE.Group; flameMat: THREE.MeshBasicMaterial; setLit: (lit: boolean, frame: number) => void } {
+  const group = new THREE.Group();
+  group.name = "GlassOilLamp3D";
+  group.position.set(...pos);
+  group.scale.setScalar(scale);
+
+  const footMat = lam("v3_oillamp_foot", () => ({ color: "#4e5662" }));
+  const bulbMat = phong("v3_oillamp_bulb", () => ({ color: "#c9985a", specular: "#ffe2aa", shininess: 42 }));
+  const collarMat = phong("v3_oillamp_collar", () => ({ color: "#8a6d3f", specular: "#e0c482", shininess: 48 }));
+  const glassMat = new THREE.MeshBasicMaterial({
+    color: "#f2ece2",
+    transparent: true,
+    opacity: 0.25,
+    depthWrite: false,
+    side: THREE.DoubleSide,
+  });
+
+  const foot = new THREE.Mesh(new THREE.CylinderGeometry(0.058, 0.075, 0.026, 16), footMat);
+  foot.position.y = 0.013;
+  const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.078, 16, 12), bulbMat);
+  bulb.scale.set(1.0, 0.78, 1.0);
+  bulb.position.y = 0.078;
+  const collar = new THREE.Mesh(new THREE.CylinderGeometry(0.028, 0.040, 0.044, 14), collarMat);
+  collar.position.y = 0.145;
+
+  const flameMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(3.6, 2.25, 0.78), toneMapped: false });
+  const flame = new THREE.Mesh(new THREE.ConeGeometry(0.016, 0.062, 8), flameMat);
+  flame.position.y = 0.198;
+  flame.userData.noOutline = true;
+
+  const chimneyPts = [
+    new THREE.Vector2(0.032, 0.165),
+    new THREE.Vector2(0.056, 0.220),
+    new THREE.Vector2(0.048, 0.275),
+    new THREE.Vector2(0.025, 0.345),
+    new THREE.Vector2(0.027, 0.382),
+  ];
+  const chimney = new THREE.Mesh(new THREE.LatheGeometry(chimneyPts, 16), glassMat);
+  chimney.userData.noOutline = true;
+
+  group.add(foot, bulb, collar, flame, chimney);
+  attachOutlineRig(group, { pxWidth: 4.8, minWorld: 0.001, maxWorld: 0.012, color: "#06060a" });
+  parent.add(group);
+
+  const setLit = (lit: boolean, frame: number) => {
+    flame.visible = lit;
+    if (lit) {
+      const flk = flickerAt(frame, 29, 0.25, 0.78);
+      flame.scale.set(0.94 + 0.14 * flk, 0.86 + 0.28 * flk, 0.94 + 0.14 * flk);
+      flameMat.color.setRGB(3.6 * flk, 2.25 * flk, 0.78 * flk);
+    }
+  };
+  return { group, flameMat, setLit };
+}
+
+/** Ceramic ancestral incense burner (bát hương) with 3 incense sticks & glowing ember tips. */
+export function addIncenseBurner3D(
+  parent: THREE.Object3D,
+  pos: V3,
+  scale = 1.0,
+): { group: THREE.Group; tipMat: THREE.MeshBasicMaterial } {
+  const group = new THREE.Group();
+  group.name = "IncenseBurner3D";
+  group.position.set(...pos);
+  group.scale.setScalar(scale);
+
+  const bowlMat = phong("v3_incense_bowl", () => ({ color: "#c2b698", specular: "#ece4cf", shininess: 28 }));
+  const stickMat = lam("v3_incense_stick", () => ({ color: "#3d2c24" }));
+  const tipMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(2.6, 0.75, 0.28), toneMapped: false });
+
+  const bowl = new THREE.Mesh(new THREE.CylinderGeometry(0.078, 0.056, 0.095, 16), bowlMat);
+  bowl.position.y = 0.048;
+  group.add(bowl);
+
+  for (const [sx, sz, rz] of [[-0.022, 0.004, 0.06], [0, -0.006, 0], [0.022, 0.005, -0.06]] as const) {
+    const st = new THREE.Mesh(new THREE.CylinderGeometry(0.0035, 0.0035, 0.24, 6), stickMat);
+    st.position.set(sx, 0.18, sz);
+    st.rotation.z = rz;
+    const tip = new THREE.Mesh(new THREE.SphereGeometry(0.0065, 6, 6), tipMat);
+    tip.position.set(sx - Math.sin(rz) * 0.12, 0.30, sz);
+    tip.userData.noOutline = true;
+    group.add(st, tip);
+  }
+  attachOutlineRig(group, { pxWidth: 4.2, minWorld: 0.001, maxWorld: 0.010, color: "#06060a" });
+  parent.add(group);
+  return { group, tipMat };
+}
+
+/** Overhead institutional fluorescent tube light fixture (hospital / apartment / classroom). */
+export function addFluorescentTube3D(
+  parent: THREE.Object3D,
+  pos: V3,
+  length = 1.18,
+  yaw = 0,
+): { group: THREE.Group; tubeMat: THREE.MeshBasicMaterial; setIntensity: (k: number) => void } {
+  const group = new THREE.Group();
+  group.name = "FluorescentTube3D";
+  group.position.set(...pos);
+  group.rotation.y = yaw;
+
+  const housingMat = lam("v3_fluor_housing", () => ({ color: "#424a4c" }));
+  const housing = new THREE.Mesh(new THREE.BoxGeometry(length + 0.08, 0.05, 0.12), housingMat);
+  housing.position.y = 0.025;
+  const tubeMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(1.9, 2.35, 2.15), toneMapped: false });
+  const tube = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.018, length, 10).rotateZ(Math.PI * 0.5), tubeMat);
+  tube.position.y = -0.022;
+  tube.layers.set(NOINK);
+  group.add(housing, tube);
+  parent.add(group);
+
+  const setIntensity = (k: number) => {
+    tubeMat.color.setRGB(1.9 * k, 2.35 * k, 2.15 * k);
+  };
+  return { group, tubeMat, setIntensity };
+}
+
+/** Exterior rural/alley concrete or metal pole streetlamp with warm sodium-vapor bulb. */
+export function addStreetLamp3D(
+  parent: THREE.Object3D,
+  pos: V3,
+  height = 4.6,
+  armYaw = 0,
+): { group: THREE.Group; bulbMat: THREE.MeshBasicMaterial; bulbWorldPos: V3 } {
+  const group = new THREE.Group();
+  group.name = "StreetLamp3D";
+  group.position.set(...pos);
+  group.rotation.y = armYaw;
+
+  const poleMat = lam("v3_street_pole", () => ({ color: "#3d424a" }));
+  const hoodMat = lam("v3_street_hood", () => ({ color: "#272b32" }));
+  const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.065, 0.10, height, 8), poleMat);
+  pole.position.y = height * 0.5;
+  pole.castShadow = true;
+
+  const arm = new THREE.Mesh(new THREE.CylinderGeometry(0.032, 0.036, 1.05, 8).rotateZ(Math.PI * 0.5 - 0.18), poleMat);
+  arm.position.set(0.46, height - 0.12, 0);
+
+  const hood = new THREE.Mesh(new THREE.ConeGeometry(0.24, 0.16, 10), hoodMat);
+  hood.position.set(0.94, height - 0.02, 0);
+
+  const bulbMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(2.9, 1.85, 0.72), toneMapped: false });
+  const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.09, 10, 8), bulbMat);
+  bulb.position.set(0.94, height - 0.11, 0);
+  bulb.layers.set(NOINK);
+
+  group.add(pole, arm, hood, bulb);
+  parent.add(group);
+  group.updateMatrixWorld(true);
+  const wp = new THREE.Vector3();
+  bulb.getWorldPosition(wp);
+  return { group, bulbMat, bulbWorldPos: [wp.x, wp.y, wp.z] };
+}
+
+/** Simple neutral wooden/metal table (for altars, desks, bedside tables, dining tables). */
+export function addSimpleTable(
+  b: Batch,
+  topMat: THREE.Material,
+  legMat: THREE.Material,
+  center: V3,
+  w: number,
+  d: number,
+  h: number,
+): void {
+  const [cx, cy, cz] = center;
+  b.add(boxGeo(V(cx - w * 0.5, cy + h - 0.06, cz - d * 0.5), V(cx + w * 0.5, cy + h, cz + d * 0.5), 1.0), topMat);
+  const ix = w * 0.5 - 0.06, iz = d * 0.5 - 0.06;
+  for (const [lx, lz] of [[-ix, -iz], [ix, -iz], [-ix, iz], [ix, iz]] as const) {
+    b.add(boxGeo(V(cx + lx - 0.038, cy, cz + lz - 0.038), V(cx + lx + 0.038, cy + h - 0.06, cz + lz + 0.038), 1.0), legMat);
+  }
+}
+
+/** Simple neutral wooden bed frame with open under-bed space and mattress slab. */
+export function addWoodenBedFrame(
+  b: Batch,
+  frameMat: THREE.Material,
+  mattressMat: THREE.Material,
+  center: V3,
+  w: number,
+  d: number,
+  h = 0.52,
+): void {
+  const [cx, cy, cz] = center;
+  const hw = w * 0.5, hd = d * 0.5;
+  for (const [lx, lz, ph] of [
+    [-hw + 0.05, -hd + 0.05, h + 0.45],
+    [hw - 0.05, -hd + 0.05, h + 0.45],
+    [-hw + 0.05, hd - 0.05, h + 0.14],
+    [hw - 0.05, hd - 0.05, h + 0.14],
+  ] as const) {
+    b.add(boxGeo(V(cx + lx - 0.04, cy, cz + lz - 0.04), V(cx + lx + 0.04, cy + ph, cz + lz + 0.04), 1.0), frameMat);
+  }
+  b.add(boxGeo(V(cx - hw, cy + h - 0.10, cz - hd), V(cx + hw, cy + h, cz + hd), 1.2), frameMat);
+  b.add(boxGeo(V(cx - hw + 0.06, cy + h, cz - hd + 0.06), V(cx + hw - 0.06, cy + h + 0.14, cz + hd - 0.06), 1.2), mattressMat);
+}
+

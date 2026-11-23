@@ -10,10 +10,14 @@ const cache = new Map<string, THREE.CanvasTexture>();
 export const ctex = (key: string, w: number, h: number, draw: (g: CanvasRenderingContext2D, r: () => number) => void) => {
   let t = cache.get(key);
   if (!t) {
-    const cv = document.createElement("canvas");
-    cv.width = w; cv.height = h;
-    draw(cv.getContext("2d")!, rng(key.length * 131 + key.charCodeAt(0)));
-    t = new THREE.CanvasTexture(cv);
+    if (typeof document !== "undefined" && typeof document.createElement === "function") {
+      const cv = document.createElement("canvas");
+      cv.width = w; cv.height = h;
+      draw(cv.getContext("2d")!, rng(key.length * 131 + key.charCodeAt(0)));
+      t = new THREE.CanvasTexture(cv);
+    } else {
+      t = new THREE.CanvasTexture(null as unknown as HTMLCanvasElement);
+    }
     t.colorSpace = THREE.SRGBColorSpace;
     t.anisotropy = 8;
     t.wrapS = t.wrapT = THREE.RepeatWrapping;
@@ -861,5 +865,348 @@ export const horrorCloudHD = (seed: number, pal = { lit: "#3b547e", mid: "#24355
     g.fillRect(0, 0, W, H);
     g.globalCompositeOperation = "source-over";
   });
+
+// ---------------- Horror Engine v3: 16 Clean Painterly Procedural Textures ----------------
+// Rich hand-painted surface detail without messy cross-hatching or plastic flatness.
+
+/** 1. Layered Vietnamese rural palm/straw thatch roof underside (horizontal overlapping courses + fine reed strips). */
+export const thatchRoofTex = (key = "thatchRoofTex") =>
+  ctex(key, 1024, 1024, (g, r) => {
+    const S = 1024;
+    g.fillStyle = "#3a2e32";
+    g.fillRect(0, 0, S, S);
+    const rows = 8;
+    const rh = S / rows;
+    const cols = ["#66534e", "#564543", "#746058", "#4a3b3b", "#6e5a54", "#3f3235"];
+    for (let row = 0; row < rows; row++) {
+      const y0 = row * rh;
+      // Soft dark underside shadow at top of each overlapping course
+      const sh = g.createLinearGradient(0, y0, 0, y0 + rh);
+      sh.addColorStop(0, "rgba(12,8,14,0.68)");
+      sh.addColorStop(0.24, "rgba(18,14,20,0.18)");
+      sh.addColorStop(1, "rgba(255,235,215,0.05)");
+      for (let i = 0; i < 165; i++) {
+        const x = (i / 165) * S + U(r, -2, 2);
+        const w = U(r, 4.5, 9.5);
+        g.fillStyle = jit(r, pick(r, cols), 0.14, 4, 0.12);
+        g.fillRect(x, y0 + U(r, 0, 5), w, rh - U(r, 0, 6));
+        g.fillStyle = "rgba(12,9,14,0.42)";
+        g.fillRect(x + w - 1.2, y0, 1.4, rh);
+      }
+      g.fillStyle = sh;
+      g.fillRect(0, y0, S, rh);
+      // Horizontal bamboo lath tie line
+      g.fillStyle = "rgba(18,12,16,0.62)";
+      g.fillRect(0, y0 + rh - 5, S, 5);
+    }
+  });
+
+/** 2. Aged curved clay roof tiles (ngói âm dương / ngói ta). */
+export const tileRoofTex = (key = "tileRoofTex") =>
+  ctex(key, 512, 512, (g, r) => {
+    g.fillStyle = "#2b2122";
+    g.fillRect(0, 0, 512, 512);
+    const cols = ["#6a443b", "#5c3b34", "#744c40", "#4f342f"];
+    for (let row = 0; row < 12; row++) {
+      const y = row * 42.67;
+      for (let c = -1; c < 10; c++) {
+        const x = c * 56 + (row % 2) * 28;
+        g.fillStyle = jit(r, pick(r, cols), 0.14, 5, 0.14);
+        g.beginPath();
+        g.moveTo(x + 2, y);
+        g.lineTo(x + 54, y);
+        g.lineTo(x + 54, y + 32);
+        g.quadraticCurveTo(x + 28, y + 46, x + 2, y + 32);
+        g.closePath();
+        g.fill();
+        g.strokeStyle = "rgba(12,9,14,0.72)";
+        g.lineWidth = 2.5;
+        g.stroke();
+      }
+    }
+  });
+
+/** 3. Water-stained institutional concrete ceiling plaster. */
+export const concreteCeilingTex = (key = "concreteCeilingTex") =>
+  ctex(key, 512, 512, (g, r) => {
+    g.fillStyle = "#6d7172";
+    g.fillRect(0, 0, 512, 512);
+    for (let i = 0; i < 42; i++) {
+      const dark = r() < 0.65;
+      blotch(g, U(r, 0, 512), U(r, 0, 512), U(r, 24, 96), U(r, 0.7, 1.5), dark ? "36,42,40" : "150,156,154", U(r, 0.10, 0.24));
+    }
+    g.strokeStyle = "rgba(22,26,28,0.45)";
+    g.lineWidth = 2;
+    for (let x = 0; x < 512; x += 256) {
+      g.beginPath(); g.moveTo(x, 0); g.lineTo(x, 512); g.stroke();
+    }
+  });
+
+/** 4. Weathered rusted corrugated metal tin sheet (tôn cũ). */
+export const corrugatedTinTex = (key = "corrugatedTinTex") =>
+  ctex(key, 512, 512, (g, r) => {
+    for (let x = 0; x < 512; x += 16) {
+      const gr = g.createLinearGradient(x, 0, x + 16, 0);
+      gr.addColorStop(0, "#353940");
+      gr.addColorStop(0.42, "#6a6e76");
+      gr.addColorStop(0.58, "#5e626a");
+      gr.addColorStop(1, "#2a2d34");
+      g.fillStyle = gr;
+      g.fillRect(x, 0, 16, 512);
+    }
+    for (let i = 0; i < 36; i++) {
+      blotch(g, U(r, 0, 512), U(r, 0, 512), U(r, 18, 72), U(r, 0.4, 1.8), "98,48,30", U(r, 0.16, 0.36));
+    }
+  });
+
+/** 5. Aged Vietnamese rural mottled damp lime-and-earth plaster wall (soft damp rings, subtle straw flecks, delicate cracks). */
+export const mottledPlasterTex = (key = "mottledPlasterTex", base = "#7c726f") =>
+  ctex(key, 1024, 1024, (g, r) => {
+    const S = 1024;
+    g.fillStyle = base;
+    g.fillRect(0, 0, S, S);
+    // Soft organic damp mold & plaster blotches (wrapped seamlessly)
+    for (let i = 0; i < 72; i++) {
+      const x = U(r, 0, S), y = U(r, 0, S), rad = U(r, 34, 128);
+      const dark = r() < 0.72;
+      const col = dark ? "42,32,38" : "162,150,144";
+      const a = dark ? U(r, 0.14, 0.32) : U(r, 0.08, 0.16);
+      for (const ox of [-S, 0, S]) for (const oy of [-S, 0, S]) {
+        if (x + ox + rad < 0 || x + ox - rad > S || y + oy + rad < 0 || y + oy - rad > S) continue;
+        blotch(g, x + ox, y + oy, rad, U(r, 0.75, 1.35), col, a);
+      }
+    }
+    // Subtle pale straw / lime flecks embedded in rural plaster
+    g.strokeStyle = "rgba(182,172,160,0.34)";
+    g.lineWidth = 3.2;
+    g.lineCap = "round";
+    for (let i = 0; i < 110; i++) {
+      const x = U(r, 0, S), y = U(r, 0, S), ang = U(r, 0, TAU), len = U(r, 10, 26);
+      g.beginPath();
+      g.moveTo(x, y);
+      g.lineTo(x + Math.cos(ang) * len, y + Math.sin(ang) * len);
+      g.stroke();
+    }
+    // Delicate sparse hairline plaster cracks
+    g.strokeStyle = "rgba(24,18,24,0.52)";
+    g.lineWidth = 2.6;
+    for (let c = 0; c < 10; c++) {
+      let x = U(r, 80, S - 80), y = U(r, 80, S - 80);
+      g.beginPath();
+      g.moveTo(x, y);
+      for (let s = 0; s < 5; s++) {
+        x += U(r, -42, 42);
+        y += U(r, 15, 58);
+        g.lineTo(x, y);
+      }
+      g.stroke();
+    }
+  });
+
+/** 6. Weathered village brick wall with damp mortar seams. */
+export const brickWallTex = (key = "brickWallTex") =>
+  ctex(key, 512, 512, (g, r) => {
+    g.fillStyle = "#3c3736";
+    g.fillRect(0, 0, 512, 512);
+    const cols = ["#7c4a3e", "#6d4036", "#875345", "#5f3932", "#75463b"];
+    for (let row = 0; row < 16; row++) {
+      for (let i = 0; i < 8; i++) {
+        const x = i * 64 + (row % 2) * 32 + 2;
+        const y = row * 32 + 2;
+        const col = jit(r, pick(r, cols), 0.16, 4, 0.12);
+        for (const ox of [0, -512]) {
+          g.fillStyle = col;
+          g.fillRect(x + ox, y, 60, 28);
+          g.fillStyle = "rgba(255,230,210,0.08)";
+          g.fillRect(x + ox, y, 60, 4);
+        }
+      }
+    }
+    for (let i = 0; i < 18; i++) blotch(g, U(r, 0, 512), U(r, 0, 512), U(r, 28, 76), 1.1, "18,22,20", U(r, 0.16, 0.30));
+  });
+
+/** 7. Institutional hospital / corridor pale green-white ceramic wall tiles with grimy grout. */
+export const hospitalTileTex = (key = "hospitalTileTex") =>
+  ctex(key, 512, 512, (g, r) => {
+    g.fillStyle = "#323c3a";
+    g.fillRect(0, 0, 512, 512);
+    const cols = ["#8ea29b", "#839690", "#97aaa3", "#7d908a"];
+    for (let y = 0; y < 8; y++) {
+      for (let x = 0; x < 8; x++) {
+        g.fillStyle = jit(r, pick(r, cols), 0.07, 2, 0.08);
+        g.fillRect(x * 64 + 2, y * 64 + 2, 60, 60);
+        g.fillStyle = "rgba(255,255,255,0.09)";
+        g.fillRect(x * 64 + 3, y * 64 + 3, 58, 4);
+      }
+    }
+    for (let i = 0; i < 24; i++) {
+      blotch(g, U(r, 0, 512), U(r, 0, 512), U(r, 22, 68), U(r, 0.6, 1.4), "32,42,38", U(r, 0.10, 0.24));
+    }
+  });
+
+/** 8. Aged painted concrete apartment corridor wall (upper pale plaster + lower dark green-grey dado band). */
+export const paintedConcreteTex = (key = "paintedConcreteTex", topCol = "#8a8d88", dadoCol = "#485654") =>
+  ctex(key, 512, 512, (g, r) => {
+    g.fillStyle = topCol;
+    g.fillRect(0, 0, 512, 290);
+    g.fillStyle = dadoCol;
+    g.fillRect(0, 290, 512, 222);
+    g.fillStyle = "#262c2c";
+    g.fillRect(0, 286, 512, 8);
+    for (let i = 0; i < 36; i++) {
+      blotch(g, U(r, 0, 512), U(r, 0, 512), U(r, 20, 74), U(r, 0.6, 1.4), "28,28,32", U(r, 0.10, 0.22));
+    }
+  });
+
+/** 9. Clean dark vertical timber boards (doors, shutters, dark wainscoting — NO messy ink scratch). */
+export const darkTimberWallTex = (key = "darkTimberWallTex", cols = ["#4b362e", "#423029", "#553e35", "#3b2a24"]) =>
+  ctex(key, 512, 512, (g, r) => {
+    const bw = 64;
+    for (let i = 0; i < 8; i++) {
+      const x = i * bw;
+      g.fillStyle = jit(r, pick(r, cols), 0.10, 3, 0.10);
+      g.fillRect(x, 0, bw, 512);
+      g.strokeStyle = "rgba(14,10,14,0.28)";
+      g.lineWidth = 1.6;
+      for (let k = 0; k < 5; k++) {
+        const gx = x + U(r, 8, bw - 8);
+        g.beginPath();
+        g.moveTo(gx, 0);
+        g.bezierCurveTo(gx + U(r, -5, 5), 170, gx + U(r, -5, 5), 340, gx, 512);
+        g.stroke();
+      }
+      g.fillStyle = "#161014";
+      g.fillRect(x, 0, 3.5, 512);
+    }
+  });
+
+/** 10. Traditional Vietnamese red terracotta floor tiles (gạch tàu). */
+export const terracottaFloorTex = (key = "terracottaFloorTex") =>
+  ctex(key, 512, 512, (g, r) => {
+    g.fillStyle = "#2e2422";
+    g.fillRect(0, 0, 512, 512);
+    const cols = ["#7b4b3d", "#704336", "#865445", "#683e32"];
+    for (let y = 0; y < 4; y++) {
+      for (let x = 0; x < 4; x++) {
+        g.fillStyle = jit(r, pick(r, cols), 0.10, 3, 0.10);
+        g.fillRect(x * 128 + 3, y * 128 + 3, 122, 122);
+      }
+    }
+    for (let i = 0; i < 16; i++) blotch(g, U(r, 0, 512), U(r, 0, 512), U(r, 24, 70), 1.1, "20,16,18", 0.18);
+  });
+
+/** 11. Vintage Vietnamese colonial patterned floor tiles (gạch bông). */
+export const vintagePatternTileTex = (key = "vintagePatternTileTex") =>
+  ctex(key, 512, 512, (g, r) => {
+    g.fillStyle = "#2a282c";
+    g.fillRect(0, 0, 512, 512);
+    for (let ty = 0; ty < 4; ty++) {
+      for (let tx = 0; tx < 4; tx++) {
+        const x = tx * 128, y = ty * 128;
+        g.fillStyle = jit(r, "#8f8a7c", 0.06, 2, 0.06);
+        g.fillRect(x + 2, y + 2, 124, 124);
+        // Classic dark-slate & ochre diamond motif
+        g.fillStyle = "#485156";
+        g.beginPath();
+        g.moveTo(x + 64, y + 12);
+        g.lineTo(x + 116, y + 64);
+        g.lineTo(x + 64, y + 116);
+        g.lineTo(x + 12, y + 64);
+        g.closePath();
+        g.fill();
+        g.fillStyle = "#9d835c";
+        g.beginPath();
+        g.arc(x + 64, y + 64, 20, 0, TAU);
+        g.fill();
+      }
+    }
+    for (let i = 0; i < 14; i++) blotch(g, U(r, 0, 512), U(r, 0, 512), U(r, 28, 72), 1.0, "20,20,24", 0.16);
+  });
+
+/** 12. Woven Vietnamese reed sleeping mat (chiếu cói) with fine straw ribs and crimson border trim. */
+export const reedMatTex = (key = "reedMatTex") =>
+  ctex(key, 512, 512, (g, r) => {
+    g.fillStyle = "#afa189";
+    g.fillRect(0, 0, 512, 512);
+    for (let y = 0; y < 512; y += 5) {
+      g.fillStyle = y % 10 === 0 ? "rgba(62,48,36,0.22)" : "rgba(235,222,196,0.16)";
+      g.fillRect(0, y, 512, 2.5);
+    }
+    // Vertical weave thread seams
+    g.fillStyle = "rgba(72,56,42,0.20)";
+    for (let x = 24; x < 512; x += 48) g.fillRect(x, 0, 2, 512);
+    // Classic woven crimson-plum border strips along top and bottom
+    g.fillStyle = "#6c2c32";
+    g.fillRect(0, 0, 512, 24);
+    g.fillRect(0, 488, 512, 24);
+    for (let i = 0; i < 8; i++) blotch(g, U(r, 0, 512), U(r, 40, 472), U(r, 24, 65), 1.2, "44,34,28", 0.10);
+  });
+
+/** 13. Wet night asphalt road with subtle damp sheen patches. */
+export const wetAsphaltTex = (key = "wetAsphaltTex") =>
+  ctex(key, 512, 512, (g, r) => {
+    g.fillStyle = "#2d3038";
+    g.fillRect(0, 0, 512, 512);
+    for (let i = 0; i < 48; i++) {
+      const dark = r() < 0.65;
+      blotch(g, U(r, 0, 512), U(r, 0, 512), U(r, 22, 86), U(r, 0.8, 1.8), dark ? "18,20,28" : "76,84,98", U(r, 0.14, 0.28));
+    }
+    for (let i = 0; i < 900; i++) {
+      g.fillStyle = r() < 0.5 ? "rgba(12,14,20,0.4)" : "rgba(120,128,142,0.18)";
+      g.fillRect(r() * 512, r() * 512, 2, 2);
+    }
+  });
+
+/** 14. Packed dark rural house earth / worn cement floor (clean muted matte surface). */
+export const packedEarthTex = (key = "packedEarthTex", base = "#4e4648") =>
+  ctex(key, 512, 512, (g, r) => {
+    g.fillStyle = base;
+    g.fillRect(0, 0, 512, 512);
+    for (let i = 0; i < 45; i++) {
+      const dark = r() < 0.6;
+      blotch(g, U(r, 0, 512), U(r, 0, 512), U(r, 28, 92), U(r, 0.8, 1.5), dark ? "26,22,28" : "104,94,92", U(r, 0.12, 0.22));
+    }
+  });
+
+/** 15. Clean weathered wooden floorboards (warm muted brown without heavy black scratch hatching). */
+export const woodenFloorTex = (key = "woodenFloorTex", cols = ["#665042", "#5c473b", "#705949", "#523f35"]) =>
+  ctex(key, 512, 512, (g, r) => {
+    for (let i = 0; i < 8; i++) {
+      const y = i * 64;
+      g.fillStyle = jit(r, pick(r, cols), 0.10, 3, 0.10);
+      g.fillRect(0, y, 512, 64);
+      g.strokeStyle = "rgba(24,16,14,0.22)";
+      g.lineWidth = 1.6;
+      for (let k = 0; k < 4; k++) {
+        const gy = y + U(r, 8, 56);
+        g.beginPath();
+        g.moveTo(0, gy);
+        g.bezierCurveTo(170, gy + U(r, -4, 4), 340, gy + U(r, -4, 4), 512, gy);
+        g.stroke();
+      }
+      g.fillStyle = "#1c1416";
+      g.fillRect(0, y, 512, 3);
+      const cut = U(r, 60, 450);
+      g.fillRect(cut, y, 3, 64);
+    }
+  });
+
+/** 16. Clean draped cloth / curtain / shroud fabric folds texture. */
+export const garmentFoldTex = (key = "garmentFoldTex", base = "#8a847c") =>
+  ctex(key, 512, 512, (g, r) => {
+    g.fillStyle = base;
+    g.fillRect(0, 0, 512, 512);
+    for (let i = 0; i < 8; i++) {
+      const x = i * 64 + 32;
+      const gr = g.createLinearGradient(x - 28, 0, x + 28, 0);
+      gr.addColorStop(0, "rgba(18,14,22,0)");
+      gr.addColorStop(0.5, "rgba(18,14,22,0.16)");
+      gr.addColorStop(1, "rgba(18,14,22,0)");
+      g.fillStyle = gr;
+      g.fillRect(x - 28, 0, 56, 512);
+    }
+    for (let i = 0; i < 16; i++) blotch(g, U(r, 0, 512), U(r, 0, 512), U(r, 20, 64), 0.9, "24,20,26", 0.08);
+  });
+
 
 
