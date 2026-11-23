@@ -1,34 +1,42 @@
-# Horror Lighting Presets & Palette Reference (`src/engine/`)
+# Horror Lighting Presets, Local PointLights & Palette Reference (`src/engine/`)
 
-Calibrated in `lights.ts`, `grade.ts`, `cardshade.ts`, and verified in `HorrorLab` across both `9:16` and `16:9`.
+Calibrated for Horror Engine v2 ("Gothic Ink-Noir × Shadow-Depth") in `lights.ts`, `shade.ts`, `cardshade.ts`, and `grade.ts`.
 
-## 1. Five Calibrated Horror Presets
+## 1. Five Dedicated Horror Presets
 
-| Preset | Mood & Use Case | Sun `(az, el)` | `charGain` & Rim | Fog Range (`m`) | Vignette `(k, r0)` | Sky / Fog Mood |
+| Preset | Mood & Use Case | Sun `(az, el)` | `charGain` & Rim | Fog Range (`m`) | Vignette `(k, r0)` | Sky / Atmosphere |
 |---|---|---|---|---|---|---|
-| `night` | Moonlight exterior, graveyard, forest road | `(22, 24)` | `0.64` / cool `[0.42,0.62,0.96]` @ `0.45` | `12 -> 125` (`#1a2b48`) | `(0.36, 0.34)` | Deep moonlight navy |
-| `candle` | Ancestral house, cabin, oil lamp interior | `(48, 18)` | `0.68` / warm `[0.95,0.46,0.14]` @ `0.50` | `8 -> 65` (`#1d141a`) | `(0.44, 0.28)` | Amber key, plum-brown shade |
-| `storm` | Heavy rain, wind, sudden lightning | `(105, 34)` | `0.66` / steel `[0.62,0.76,0.92]` @ `0.32` | `10 -> 95` (`#233340`) | `(0.38, 0.32)` | Cold slate storm grey |
-| `eerie` | Liminal hallway, 3 AM elevator, clinic | `(60, 52)` | `0.68` / sickly `[0.36,0.84,0.66]` @ `0.38` | `9 -> 85` (`#162a2a`) | `(0.40, 0.30)` | Sickly fluorescent jade-teal |
-| `blood` | Climax, curse trigger, supernatural reveal | `(12, 14)` | `0.62` / red `[0.96,0.20,0.18]` @ `0.65` | `10 -> 90` (`#330e15`) | `(0.50, 0.24)` | Crimson haze & black-plum shade |
+| `night` | Moonlit river, graveyard, forest road | `(28, 26)` | `0.68` / cool `[0.46,0.68,1.0]` @ `0.52` | `7 -> 68` (`#1d3152`) | `(0.40, 0.34)` | Deep ink-navy moonlight |
+| `candle` | Watchman's shack, ancestral hall, oil lamp | `(44, 22)` | `0.70` / amber `[1.0,0.52,0.18]` @ `0.55` | `6 -> 46` (`#24181f`) | `(0.46, 0.28)` | Warm amber key, deep plum shadows |
+| `storm` | Driving rain, wind, 3D lightning strikes | `(102, 34)` | `0.68` / steel `[0.68,0.82,0.98]` @ `0.42` | `6 -> 54` (`#243646`) | `(0.42, 0.32)` | Cold storm slate + high-contrast flash |
+| `eerie` | Liminal corridor, 3 AM apartment, dread peer | `(56, 46)` | `0.70` / jade `[0.36,0.90,0.72]` @ `0.48` | `6 -> 52` (`#193332`) | `(0.44, 0.30)` | Sickly fluorescent jade-teal |
+| `blood` | Climax struggle, curse trigger, haunting twist | `(18, 18)` | `0.68` / crimson `[1.0,0.26,0.22]` @ `0.70` | `6 -> 54` (`#3a1019`) | `(0.50, 0.26)` | Crimson mist & obsidian-plum shade |
 
-## 2. Albedo Guidelines for Inked Dark Worlds
+## 2. Real Dynamic Local PointLights (`setLocalLights`) & 3D Lightning (`setLightningFlash`)
 
-- **Never use pure `#000000` or pure `#ffffff` on 3D meshes:** Near-black `#000000` swallows `#030303` `InkPass` outlines; bright `#ffffff` blows out under `Bloom`.
-- **Safe stone / plaster / concrete:** `#5c5a5f` to `#8f8882` (low saturation `< 20%`).
-- **Safe wood / timber / wet dirt:** `#4d443d` to `#705c4d`.
-- **Safe foliage / night grass:** `#38443c` to `#4d564c`.
-- **HDR Emissives (Bloom > 1.0):** Use `new THREE.MeshBasicMaterial({ color: new THREE.Color(...), toneMapped: false })`:
-  - Warm lantern / window: `(2.0, 1.25, 0.52)` × `(0.85 + 0.3 * flickerAt(...))`
-  - Eerie fluorescent: `(0.55, 1.85, 1.35)`
-  - Blood warning / eyes: `(2.2, 0.45, 0.40)`
+Both world geometry (`twoTone`) and 2D character cards (`cardShade`) evaluate up to **3 real local point lights** every frame:
 
-## 3. Orientation Framing (`9:16` vs `16:9`)
+```ts
+setLocalLights([
+  // 1. Handheld storm lantern moving dynamically with character (warms face, coat, planks & water!)
+  { pos: [tuX + 0.32, tuY + 1.02, tuZ - 0.35], color: [2.15 * k, 1.18 * k, 0.42], radius: 5.2 },
+  // 2. Architectural oil lamp / hanging lantern post
+  { pos: [lx, ly, lz], color: [1.85 * k, 1.05 * k, 0.38], radius: 5.8 },
+  // 3. Distant glowing window beacon
+  { pos: [wx, wy, wz], color: [1.5, 0.85, 0.32], radius: 5.0 },
+]);
+```
 
-Post-processing (`InkPass`, `LensBlur`, `Bloom`, `GrainEffect`, and `CARD_K.uPx`) automatically scales by `Math.min(width, height) / 1080`, so pixel line weights and DOF CoC match identically across vertical and horizontal compositions.
+- **Rule:** Never fake a practical lamp with only a flat `fxFlickerGlow` sprite! Always pair every visible lantern, candle, flashlight, or glowing window with a real `setLocalLights()` entry so nearby characters and surfaces actually catch directional warmth/glow.
+- **Lightning:** `ShortPlayer` automatically feeds `lightningAt(overlays, frame)` into `setLightningFlash()`, blasting real cold-blue 3D light across meshes, water, and characters during `{ kind: "lightning", f }` strikes while keeping screen overlays subtle (`0.28` screen sheen).
 
-| Setting | `9:16` Vertical (`1080x1920`) | `16:9` Wide (`1920x1080`) |
-|---|---|---|
-| Typical FOV | `38–44 deg` | `38–46 deg` (horizontal FOV naturally ~`65–74 deg`) |
-| Staging Strength | Tight vertical corridors, looming ceilings, close-up tension | Negative space on flanks (lurking silhouette at frame edge!) |
-| Safe Camera Clear | Pull back `~0.5–1.0 m` on full-body shots so boots + contact shadow stay above bottom edge | Keep characters off exact dead-center; pair subject left with ominous window/doorway right |
+## 3. Albedo & Texture Guidelines for Gothic Inked Worlds
+
+- **Never use pure `#000000` or pure `#ffffff` on lit 3D meshes:** `#000000` kills `#060409` `InkPass` edges; `#ffffff` blows out `Bloom`.
+- **Use Gothic HD Painters (`paint.ts`):** `darkPlanksHD()`, `mudBankHD()`, `crackedPlasterHD()`, `horrorCloudHD()` (streaky storm stratus — never bright cartoon `grass()` or puffy `cloudHD()`!).
+- **Safe albedos:** Stone/plaster `#565258`–`#7c7672`; damp timber `#3d3028`–`#6e5a4c`; night foliage/reeds `#243228`–`#3b463a`.
+- **HDR Emissives (`Bloom > 1.0`):** `new THREE.MeshBasicMaterial({ color: new THREE.Color(...), toneMapped: false })`:
+  - Oil lamp / storm lantern core: `(2.6, 1.65, 0.65)` × `(0.85 + 0.35 * flk)`
+  - Eerie tube / spirit glow: `(0.55, 1.85, 1.35)`
+  - Blood beacon: `(2.4, 0.55, 0.48)`
+- **Volumetric Shafts (`addVolumetricShaft`):** Place angled soft moonbeams or window shafts (`opacity: 0.10–0.16`) to carve depth through dark interiors and misty exteriors.

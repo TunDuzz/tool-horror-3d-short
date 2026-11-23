@@ -1,5 +1,5 @@
-// Timeline, camera choreography, DOF, impact kicks, and full-screen overlays for HorrorLab look-dev rig.
-// Covers all 5 horror lighting presets (night, candle, storm, eerie, blood) across 150 frames @ 30 fps (5 s).
+// Horror Engine v2 Look-Dev Rig: Gothic Ink-Noir x Shadow-Depth across all 5 horror lighting presets.
+// Tests distinct shot scales (WS / OTS / LOW / MCU / Dutch CU), foreground silhouettes, real PointLights, and 3D lightning.
 
 import {
   CamKey,
@@ -11,6 +11,7 @@ import {
   ShotBase,
   V3,
   atAnchor,
+  camOTS,
   clamp01,
   dollyZoom,
   handheld,
@@ -25,55 +26,54 @@ export const TOTAL = 150;
 export const ANCHORS = {
   PORCH: [0, 0, -2.6] as V3,
   DOOR: [0, 0, -2.0] as V3,
-  WINDOW: [-2.1, 1.55, -2.1] as V3,
-  TRAVELER_NEAR: [-0.65, 0, 1.4] as V3,
-  TRAVELER_MID: [-0.58, 0, 0.45] as V3,
-  GHOST_FAR: [0.32, 0, -2.15] as V3,
-  GHOST_NEAR: [0.35, 0, -0.75] as V3,
-  LANTERN_POST: [1.75, 0, 0.2] as V3,
+  WINDOW: [-2.1, 1.62, -2.1] as V3,
+  TRAVELER_NEAR: [-0.62, 0, 1.55] as V3,
+  TRAVELER_MID: [-0.55, 0, 0.45] as V3,
+  GHOST_FAR: [0.35, 0, -2.05] as V3,
+  GHOST_NEAR: [0.32, 0, -0.55] as V3,
+  LANTERN_POST: [1.65, 0, 0.25] as V3,
 };
 
 export type HorrorShot = ShotBase<HorrorLightKey>;
 
 export const SHOTS: HorrorShot[] = [
-  { id: 1, a: 0, b: 30, light: "night" },
-  { id: 2, a: 30, b: 60, light: "candle" },
-  { id: 3, a: 60, b: 90, light: "storm" },
-  { id: 4, a: 90, b: 120, light: "eerie" },
-  { id: 5, a: 120, b: TOTAL, light: "blood" },
+  { id: 1, a: 0, b: 30, light: "night", scale: "WS", note: "Moonlit wide establishing through foreground gnarled branches" },
+  { id: 2, a: 30, b: 60, light: "candle", scale: "OTS", note: "Over-the-shoulder candle lantern glow toward dark porch" },
+  { id: 3, a: 60, b: 90, light: "storm", scale: "LOW", note: "Low-angle storm reveal with real 3D lightning flash" },
+  { id: 4, a: 90, b: 120, light: "eerie", scale: "MCU", note: "Side profile vertigo dolly-zoom under eerie jade glow" },
+  { id: 5, a: 120, b: TOTAL, light: "blood", scale: "CU", note: "Tight Dutch-tilt blood climax with lunging specter" },
 ];
 
 export const XFADE: Record<number, number> = {};
 
 export const OVERLAYS: ScreenBeat[] = [
-  { kind: "lightning", f: 72, peak: 0.85 },
-  { kind: "flicker", a: 94, b: 108, seed: 7, strength: 0.45 },
+  { kind: "lightning", f: 72, peak: 0.90 },
+  { kind: "flicker", a: 94, b: 108, seed: 7, strength: 0.42 },
   { kind: "blackout", a: 116, b: 120 },
+  { kind: "vignettePulse", a: 120, b: TOTAL, freq: 2.2, strength: 0.42 },
+  { kind: "aberration", a: 72, b: TOTAL, strength: 0.85, pulse: true },
 ];
 
 export const KICKS: Kick[] = [
-  [72 / FPS, 1.1],   // lightning thunder strike in storm shot
-  [121 / FPS, 1.4],  // blood reveal impact kick
+  [72 / FPS, 1.1],
+  [121 / FPS, 1.4],
 ];
 
 export const DOF: DofBeat[] = [
-  { f: 0, cInf: 4 },
-  { f: 30, cInf: 9 },
-  { f: 60, cInf: 5 },
-  { f: 90, cInf: 8 },
-  { f: 120, cInf: 11 },
+  { f: 0, cInf: 3.5 },
+  { f: 30, cInf: 7.5 },
+  { f: 60, cInf: 5.0 },
+  { f: 90, cInf: 8.5 },
+  { f: 120, cInf: 10.5 },
 ];
-
-const LOOK_TRV: V3 = atAnchor(ANCHORS.TRAVELER_NEAR, 0.42, 1.15, -0.6);
-const LOOK_MID: V3 = atAnchor(ANCHORS.TRAVELER_MID, 0.48, 1.12, -0.55);
 
 export const CAMS: Record<number, CamKey[]> = {
   1: [
     {
       f: 0,
       s: (f) => ({
-        pos: atAnchor(ANCHORS.TRAVELER_NEAR, 0.2, 1.55, 4.9 * pushK(f, 0, 0.0025)),
-        look: atAnchor(ANCHORS.DOOR, 0.15, 1.25, 0.4),
+        pos: atAnchor(ANCHORS.TRAVELER_NEAR, 0.35, 1.52, 5.2 * pushK(f, 0, 0.0028)),
+        look: atAnchor(ANCHORS.DOOR, 0.1, 1.25, 0.4),
         fov: 40,
       }),
     },
@@ -81,18 +81,16 @@ export const CAMS: Record<number, CamKey[]> = {
   2: [
     {
       f: 30,
-      s: (f) =>
-        handheld(
-          {
-            pos: atAnchor(ANCHORS.TRAVELER_MID, -0.75, 1.48, 4.3 * pushK(f, 30, 0.003)),
-            look: atAnchor(ANCHORS.TRAVELER_MID, 0.15, 1.15, -0.4),
-            fov: 40,
-          },
+      s: (f) => {
+        const u = clamp01((f - 30) / 30);
+        return handheld(
+          camOTS(ANCHORS.TRAVELER_MID, [0, 1.25, -2.0], 1, 2.55 - 0.15 * u, 0.62, 1.62, 42),
           f,
-          0.015,
-          0.3,
-          3,
-        ),
+          0.014,
+          0.32,
+          2,
+        );
+      },
     },
   ],
   3: [
@@ -101,14 +99,14 @@ export const CAMS: Record<number, CamKey[]> = {
       s: (f) =>
         handheld(
           {
-            pos: atAnchor(ANCHORS.TRAVELER_MID, 0.55, 1.50, 4.7 * snapZoom(f, 72, 10, 1.0, 0.90)),
-            look: LOOK_MID,
-            fov: 41,
+            pos: atAnchor(ANCHORS.TRAVELER_MID, -1.65, 0.78, 3.85 * snapZoom(f, 72, 10, 1.0, 0.88)),
+            look: atAnchor(ANCHORS.GHOST_FAR, -0.15, 1.32, 0.6),
+            fov: 42,
           },
           f,
-          0.02,
-          0.38,
-          9,
+          0.022,
+          0.44,
+          3,
         ),
     },
   ],
@@ -116,8 +114,14 @@ export const CAMS: Record<number, CamKey[]> = {
     {
       f: 90,
       s: (f) => {
-        const u = clamp01((f - 90) / 26);
-        return dollyZoom(atAnchor(ANCHORS.TRAVELER_MID, 0.32, 1.48, 4.45), LOOK_MID, 39, 1.0 - 0.22 * u);
+        const u = clamp01((f - 90) / 30);
+        return handheld(
+          dollyZoom(atAnchor(ANCHORS.TRAVELER_MID, 2.35, 1.42, 2.65), atAnchor(ANCHORS.TRAVELER_MID, 0.0, 1.35, -0.15), 37, 1.0 - 0.18 * u),
+          f,
+          0.016,
+          0.34,
+          4,
+        );
       },
     },
   ],
@@ -125,12 +129,19 @@ export const CAMS: Record<number, CamKey[]> = {
     {
       f: 120,
       s: rolled(
-        (f) => ({
-          pos: atAnchor(ANCHORS.TRAVELER_NEAR, -0.25, 1.38, 4.25 * pushK(f, 120, 0.005, 0.012, 18)),
-          look: atAnchor(LOOK_TRV, 0.12, -0.05, -0.35),
-          fov: 42,
-        }),
-        0.075,
+        (f) =>
+          handheld(
+            {
+              pos: atAnchor(ANCHORS.GHOST_NEAR, -0.55, 1.38, 3.35 * pushK(f, 120, 0.0022)),
+              look: atAnchor(ANCHORS.GHOST_NEAR, -0.25, 1.24, 0.25),
+              fov: 40,
+            },
+            f,
+            0.026,
+            0.50,
+            5,
+          ),
+        0.085,
       ),
     },
   ],

@@ -1,9 +1,9 @@
-// Neutral 2D billboard cast & effect pool in the 3D world.
-// Characters are yaw-only billboards shaded by cardShade() (scene tint, bright shadow floor, side gradient
-// toward the sun) and live on layer NOINK so the world ink pass never draws boxes around their quads.
+// Horror Engine v2: 2D Gothic Billboard Cast & Flat Decal Pool in the 3D world.
+// Supports 3 views (front / side / back with over-the-shoulder glance), translucent ghosts, unlit eye glints,
+// perspective-locked flat ground/water decals (`pushFlatDecal`), and real dynamic PointLight card shading.
 
 import * as THREE from "three";
-import { Pen, bodyFront, bodySide, fxShadow, fxContact, Outfit, FrontOpts, SideOpts } from "./toon";
+import { Pen, bodyFront, bodySide, bodyBack, fxContact, Outfit, PoseOpts } from "./toon";
 import { FPS, LightKey, clamp01 } from "./camera";
 import { NOINK } from "./ink";
 import { cardShade, blobMaterial, CARD_K } from "./cardshade";
@@ -14,7 +14,8 @@ export type Req = { key: string; w: number; h: number; k: number; draw: (p: Pen)
 
 const makeEntry = (w: number, h: number): Entry => {
   const cv = document.createElement("canvas");
-  cv.width = w; cv.height = h;
+  cv.width = w;
+  cv.height = h;
   const tex = new THREE.CanvasTexture(cv);
   tex.colorSpace = THREE.SRGBColorSpace;
   tex.anisotropy = 8;
@@ -36,10 +37,14 @@ export class Pool {
     const want = new Map<string, Req[]>();
     for (const r of this.reqs) {
       const l = want.get(r.key);
-      if (l) l.push(r); else want.set(r.key, [r]);
+      if (l) l.push(r);
+      else want.set(r.key, [r]);
     }
     for (const [key, e] of this.live) {
-      if (!want.has(key)) { this.live.delete(key); this.free.push(e); }
+      if (!want.has(key)) {
+        this.live.delete(key);
+        this.free.push(e);
+      }
     }
     for (const [key, rs] of want) {
       let e = this.live.get(key);
@@ -74,15 +79,15 @@ const blank = (() => {
   c.width = c.height = 2;
   return new THREE.CanvasTexture(c);
 })();
-export const SU = 0.00216; // metres per design unit: 1000 units = 2.16 m
+export const SU = 0.00215; // metres per design unit (~1.84 m tall Gothic adult)
 export const BODY = (() => {
   const g = new THREE.PlaneGeometry(600 * SU, 1000 * SU);
-  g.translate(0, (975 - 500) * SU, 0);
+  g.translate(0, (970 - 500) * SU, 0);
   return g;
 })();
 export const CARD = new THREE.PlaneGeometry(1, 1);
 
-/** Lit flat character card: cardShade() material, receives shadows, NOINK layer, renderOrder 1 (2 when translucent). */
+/** Lit flat Gothic character card: cardShade() with real PointLight & lightning sync, NOINK layer. */
 export class Actor {
   mesh: THREE.Mesh;
   mat: THREE.MeshLambertMaterial;
@@ -140,7 +145,7 @@ export class Actor {
   }
 }
 
-/** Unlit effect card: hard cut-out (ink drawings), soft see-through (dust, mist), or multiply ground blob. */
+/** Effect card: hard cut-out, soft atmospheric sprite, perspective-locked flat decal, or multiply ground blob. */
 export class Fx {
   mesh: THREE.Mesh;
   mat: THREE.MeshBasicMaterial;
@@ -159,36 +164,68 @@ export class Fx {
     parent.add(this.mesh);
   }
 
-  use(soft: boolean) { this.mesh.material = soft ? this.soft : this.mat; }
+  use(soft: boolean) {
+    this.mesh.material = soft ? this.soft : this.mat;
+  }
 
-  bind() {
+  bind(renderOrder = 0) {
     const t = this.r?.tex;
     if (!t) return;
     if (this.r!.key.includes("|blob|")) {
-      if (t.generateMipmaps) { t.generateMipmaps = false; t.minFilter = THREE.LinearFilter; t.needsUpdate = true; }
+      if (t.generateMipmaps) {
+        t.generateMipmaps = false;
+        t.minFilter = THREE.LinearFilter;
+        t.needsUpdate = true;
+      }
       this.blob.map = t;
       this.mesh.material = this.blob;
       this.mesh.renderOrder = 0.5;
     } else {
       this.mat.map = t;
       this.soft.map = t;
-      this.mesh.renderOrder = 0;
+      this.mesh.renderOrder = renderOrder;
     }
   }
 }
 
-// ---------------- placements & pure helpers ----------------
+// ---------------- placements & view helpers ----------------
+export type ViewKind = "front" | "side" | "back";
+export type ViewResult = { view: ViewKind; side: boolean; back: boolean; mirror: boolean; facing: -1 | 0 | 1; fs: number };
+
 export type Place = {
-  key: string; draw: (p: Pen) => void; x: number; y: number; z: number;
-  scale?: number; mirror?: boolean; yaw?: number; roll?: number;
-  opacity?: number; unlit?: boolean;
-  size?: [number, number, number]; geo?: THREE.BufferGeometry; castShadow?: boolean; cull?: boolean;
+  key: string;
+  draw: (p: Pen) => void;
+  x: number;
+  y: number;
+  z: number;
+  scale?: number;
+  mirror?: boolean;
+  yaw?: number;
+  roll?: number;
+  opacity?: number;
+  unlit?: boolean;
+  size?: [number, number, number];
+  geo?: THREE.BufferGeometry;
+  castShadow?: boolean;
+  cull?: boolean;
 };
+
 export type FxPlace = {
-  key: string; cw: number; ch: number; draw: (p: Pen) => void;
-  x: number; y: number; z: number; w: number; h: number;
-  flat?: boolean; rot?: number; soft?: boolean;
+  key: string;
+  cw: number;
+  ch: number;
+  draw: (p: Pen) => void;
+  x: number;
+  y: number;
+  z: number;
+  w: number;
+  h: number;
+  flat?: boolean;
+  rot?: number;
+  soft?: boolean;
+  renderOrder?: number;
 };
+
 export type CamInfo = { pos: THREE.Vector3; right: THREE.Vector3; sun?: THREE.Vector3 };
 export type Stage = { places: Place[]; fx: FxPlace[] };
 
@@ -196,33 +233,42 @@ const hh = (i: number, s = 0) => {
   const v = Math.sin(i * 127.1 + s * 311.7) * 43758.5453;
   return v - Math.floor(v);
 };
-const q = (v: number, n = 120) => Math.round(v * n) / n;
+const q = (v: number, n = 60) => Math.round(v * n) / n;
 const seedOf = (i: number) => ((i * 5 + 3) % 7) + 1;
 const tmp = new THREE.Vector3();
 
-/** Drawing resolution tier by distance from camera (sized for 1440 x 2560 final). */
+/** Drawing resolution tier by distance from camera. */
 export const tierForDistance = (d: number): [number, number, number] =>
-  d < 3.2 ? [1800, 3000, 3.0] : d < 6.5 ? [1080, 1800, 1.8] : d < 16 ? [480, 800, 0.8] : [240, 400, 0.4];
+  d < 3.4 ? [1500, 2500, 2.5] : d < 7.0 ? [960, 1600, 1.6] : d < 16 ? [480, 800, 0.8] : [240, 400, 0.4];
 
-/** Canvas angle the sun comes FROM on an upright billboard facing the camera, quantised to 45-degree steps. */
+/** Canvas angle the key light comes FROM on an upright billboard facing the camera, quantised to 45-deg steps. */
 export const light2D = (cam: CamInfo, sunDir: THREE.Vector3, mirror: boolean): number => {
   const sx = sunDir.dot(cam.right) * (mirror ? -1 : 1), sy = -sunDir.y;
   return Math.round(Math.atan2(sy, sx) / (Math.PI / 4)) * (Math.PI / 4);
 };
 
-/** Front / side view and mirroring for someone at (x, z) facing/walking along (dx, dz). */
-export const viewOf = (cam: CamInfo, x: number, z: number, dx: number, dz: number) => {
+/** Compute true 3-way view (front / side / back), horizontal mirroring, and 3/4 facing bias from character heading (dx, dz). */
+export const viewOf = (cam: CamInfo, x: number, z: number, dx: number, dz: number): ViewResult => {
+  const fl = Math.hypot(dx, dz) || 1;
+  const fdx = dx / fl, fdz = dz / fl;
   const tx = cam.pos.x - x, tz = cam.pos.z - z, tl = Math.hypot(tx, tz) || 1;
-  const c = (tx * dx + tz * dz) / tl;
+  const c = (tx * fdx + tz * fdz) / tl; // +1 = facing camera, 0 = side, -1 = back to camera
+  const rightDot = fdx * cam.right.x + fdz * cam.right.z;
+  const mirror = rightDot < 0;
+  const view: ViewKind = c < -0.45 ? "back" : c < 0.48 ? "side" : "front";
+  const facing: -1 | 0 | 1 = view === "front" ? (rightDot > 0.22 ? 1 : rightDot < -0.22 ? -1 : 0) : 0;
   return {
-    side: c < 0.57,
-    mirror: dx * cam.right.x + dz * cam.right.z < 0,
+    view,
+    side: view === "side",
+    back: view === "back",
+    mirror,
+    facing,
     fs: Math.round(Math.sqrt(Math.max(0, 1 - c * c)) * 20) / 20,
   };
 };
 
 const LID = [0.5, 1, 1, 0.5];
-/** Eyelid openness (0 open .. 1 shut): 4-frame blinks every 0.5-2.3 s plus blink across expression swaps. */
+/** Eyelid openness (0 open .. 1 shut): deterministic blinks + shock blink cues. */
 export const lidAt = (t: number, i: number, swaps: number[] = [], fps = FPS): number => {
   const lead = 2 / fps, f = Math.round(t * fps);
   for (const ts of swaps) {
@@ -233,15 +279,14 @@ export const lidAt = (t: number, i: number, swaps: number[] = [], fps = FPS): nu
   for (let n = 0; s <= f && n < 400; n++) {
     const k = f - s;
     if (k >= 0 && k < 4) return LID[k];
-    s += Math.round(15 + 54 * hh(i * 31 + n, 13));
+    s += Math.round(24 + 66 * hh(i * 31 + n, 13));
   }
   return 0;
 };
 
-/** Deterministic cache key for character option objects (quantising floats). */
 export const fkey = (o: object) => JSON.stringify(o, (_k, v) => (typeof v === "number" ? q(v) : v));
 
-/** Build a Place record for a 600 x 1000 character drawing scaled by camera distance and lit from `sunDir`. */
+/** Place a Gothic Ink-Noir character supporting front, side, and back views with continuous pose animation. */
 export const placePerson = (
   cam: CamInfo,
   sunDir: THREE.Vector3,
@@ -249,19 +294,24 @@ export const placePerson = (
   x: number,
   y: number,
   z: number,
-  view: { side: boolean; mirror: boolean },
-  fo: FrontOpts,
-  so: SideOpts,
+  view: Partial<ViewResult> & { view?: ViewKind; side?: boolean; back?: boolean; mirror?: boolean },
+  opts: PoseOpts,
   scale = 1,
 ): Place => {
-  const d = cam.pos.distanceTo(tmp.set(x, y + 1.2 * scale, z)) / scale;
+  const d = cam.pos.distanceTo(tmp.set(x, y + 1.15 * scale, z)) / scale;
   const [w, h, k] = tierForDistance(d);
-  const mirror = view.side && view.mirror;
+  const vKind: ViewKind = view.view ?? (view.back ? "back" : view.side ? "side" : "front");
+  const mirror = vKind === "side" && !!view.mirror;
   const light = light2D(cam, sunDir, mirror);
   const seed = seedOf(who.i);
-  const f2: FrontOpts = { ...fo, light, seed };
-  const s2: SideOpts = { ...so, light, seed };
-  const key = view.side ? `S|${who.okey}|${fkey(s2)}` : `F|${who.okey}|${fkey(f2)}`;
+  const pOpts: PoseOpts = {
+    facing: view.facing ?? 0,
+    ...opts,
+    light,
+    seed,
+  };
+  const prefix = vKind === "back" ? "B" : vKind === "side" ? "S" : "F";
+  const key = `${prefix}|${who.okey}|${fkey(pOpts)}`;
   return {
     key,
     x,
@@ -269,21 +319,71 @@ export const placePerson = (
     z,
     scale,
     mirror,
-    draw: (p) => (view.side ? bodySide(p, who.o, s2) : bodyFront(p, who.o, f2)),
+    draw: (p) =>
+      vKind === "back" ? bodyBack(p, who.o, pOpts) : vKind === "side" ? bodySide(p, who.o, pOpts) : bodyFront(p, who.o, pOpts),
     size: [w, h, k],
   };
 };
 
-const CONTACT: Record<LightKey, [number, number, number]> = {
-  day: [0.2, 0.21, 0.33],
-  golden: [0.24, 0.2, 0.33],
-  night: [0.16, 0.18, 0.28],
-  candle: [0.18, 0.14, 0.20],
-  storm: [0.18, 0.21, 0.26],
-  eerie: [0.16, 0.20, 0.24],
-  blood: [0.20, 0.12, 0.18],
+/** Push 1–2 offset translucent double-exposure afterimages beside an entity for hallucinatory horror smear / twitch trails. */
+export const pushAfterimage = (
+  out: Stage,
+  base: Place,
+  offsets: [number, number, number, number][], // [dx, dy, dz, opacity]
+  extraRoll = 0.04,
+): void => {
+  offsets.forEach(([dx, dy, dz, op], idx) => {
+    out.places.push({
+      ...base,
+      x: base.x + dx,
+      y: base.y + dy,
+      z: base.z + dz,
+      opacity: op,
+      roll: (base.roll ?? 0) + (idx % 2 === 0 ? extraRoll : -extraRoll),
+      castShadow: false,
+    });
+  });
 };
-const TAIL: [number, number, number] = [0.42, 0.44, 0.62];
+
+/** Push a perspective-locked HORIZONTAL decal (water ripples, wet mud footprints, puddles, ground markings). */
+export const pushFlatDecal = (
+  out: Stage,
+  key: string,
+  cw: number,
+  ch: number,
+  draw: (p: Pen) => void,
+  x: number,
+  y: number,
+  z: number,
+  w: number,
+  h: number,
+  rot = 0,
+  renderOrder = 0.6,
+): void => {
+  out.fx.push({
+    key,
+    cw,
+    ch,
+    draw,
+    x,
+    y,
+    z,
+    w,
+    h,
+    flat: true,
+    rot,
+    soft: true,
+    renderOrder,
+  });
+};
+
+const CONTACT: Record<LightKey, [number, number, number]> = {
+  night: [0.14, 0.16, 0.26],
+  candle: [0.16, 0.12, 0.18],
+  storm: [0.16, 0.19, 0.24],
+  eerie: [0.14, 0.18, 0.22],
+  blood: [0.18, 0.10, 0.16],
+};
 const toSrgb = (v: number) => {
   const c = clamp01(v);
   return c <= 0.0031308 ? 12.92 * c : 1.055 * c ** (1 / 2.4) - 0.055;
@@ -291,7 +391,7 @@ const toSrgb = (v: number) => {
 const hexOf = (c: [number, number, number], k: number) =>
   "#" + c.map((v) => Math.round(255 * toSrgb(1 - (1 - v) * k)).toString(16).padStart(2, "0")).join("");
 
-/** Push a tight ground contact shadow (plus a soft directional tail by day) into `out.fx`. */
+/** Push a tight ground contact shadow under a character's boots. */
 export const pushContactShadow = (
   out: Stage,
   sunDir: THREE.Vector3,
@@ -303,23 +403,23 @@ export const pushContactShadow = (
   k = 1,
 ): void => {
   const hl = Math.hypot(sunDir.x, sunDir.z) || 1, ox = -sunDir.x / hl, oz = -sunDir.z / hl, rot = Math.atan2(-ox, -oz);
-  if (light === "day") {
-    const el = Math.asin(Math.min(0.99, Math.max(0.1, sunDir.y)));
-    const len = Math.min(2.4, Math.max(0.5, 1.6 / Math.tan(el))) * sc, h = len + 0.55 * sc, c = 0.3 * h;
-    const tc = hexOf(TAIL, k);
-    out.fx.push({
-      key: `blob|shadow|${tc}`, cw: 128, ch: 256, draw: (p) => fxShadow(p, tc),
-      x: x + ox * c, y: y + 0.018, z: z + oz * c, w: 0.72 * sc, h, flat: true, rot,
-    });
-  }
   const cc = hexOf(CONTACT[light], k);
   out.fx.push({
-    key: `blob|contact|${cc}`, cw: 128, ch: 128, draw: (p) => fxContact(p, cc),
-    x: x + ox * 0.03 * sc, y: y + 0.022, z: z + oz * 0.03 * sc, w: 0.52 * sc, h: 0.4 * sc, flat: true, rot,
+    key: `blob|contact|${cc}`,
+    cw: 128,
+    ch: 128,
+    draw: (p) => fxContact(p, cc),
+    x: x + ox * 0.03 * sc,
+    y: y + 0.014,
+    z: z + oz * 0.03 * sc,
+    w: 0.62 * sc,
+    h: 0.44 * sc,
+    flat: true,
+    rot,
   });
 };
 
-/** Manages Actor/Fx billboard pools for a World, frustum-culls, flushes canvases, and hides unused sprites every frame. */
+/** Manages Actor/Fx billboard pools, frustum-culls, flushes canvases, and hides unused sprites every frame. */
 export class CastStage {
   readonly pool = new Pool();
   private actors: Actor[] = [];
@@ -347,11 +447,11 @@ export class CastStage {
     const used: { a: Actor; opacity: number; unlit: boolean }[] = [];
     for (const p of stage.places) {
       const sc2 = p.scale ?? 1;
-      if (p.cull !== false && !this.frustum.intersectsSphere(this.sph.set(this.v.set(p.x, p.y + 1.1 * sc2, p.z), 3.5 * Math.max(1, sc2)))) continue;
+      if (p.cull !== false && !this.frustum.intersectsSphere(this.sph.set(this.v.set(p.x, p.y + 1.0 * sc2, p.z), 3.6 * Math.max(1, sc2)))) continue;
       const a = this.actor(ai++);
       const targetGeo = p.geo ?? BODY;
       if (a.mesh.geometry !== targetGeo) a.mesh.geometry = targetGeo;
-      const [w, h, k] = p.size ?? [300, 500, 0.5];
+      const [w, h, k] = p.size ?? [480, 800, 0.8];
       a.r = this.pool.req(p.key, w, h, k, p.draw);
       const opacity = p.opacity ?? 1;
       const unlit = !!p.unlit;
@@ -365,24 +465,28 @@ export class CastStage {
     for (let i = ai; i < this.actors.length; i++) this.actors[i].mesh.visible = false;
 
     let fi = 0;
-    const fused: Fx[] = [];
+    const fused: { e: Fx; order: number }[] = [];
     for (const p of stage.fx) {
-      if (!this.frustum.intersectsSphere(this.sph.set(this.v.set(p.x, p.y, p.z), Math.max(p.w, p.h)))) continue;
+      if (!this.frustum.intersectsSphere(this.sph.set(this.v.set(p.x, p.y, p.z), Math.max(p.w, p.h) * 1.4))) continue;
       const e = this.fx(fi++);
       e.r = this.pool.req(p.key, p.cw, p.ch, 1, p.draw);
       e.use(!!p.soft);
       e.mesh.visible = true;
       e.mesh.position.set(p.x, p.y, p.z);
-      if (p.flat) e.mesh.rotation.set(-Math.PI / 2, 0, p.rot ?? 0);
-      else { e.mesh.quaternion.copy(cam.quaternion); e.mesh.rotateZ(p.rot ?? 0); }
+      if (p.flat) {
+        e.mesh.rotation.set(-Math.PI / 2, 0, p.rot ?? 0);
+      } else {
+        e.mesh.quaternion.copy(cam.quaternion);
+        e.mesh.rotateZ(p.rot ?? 0);
+      }
       e.mesh.scale.set(p.w, p.h, 1);
-      fused.push(e);
+      fused.push({ e, order: p.renderOrder ?? 0 });
     }
     for (let i = fi; i < this.fxs.length; i++) this.fxs[i].mesh.visible = false;
 
     this.pool.flush();
     for (const u of used) u.a.bind(u.opacity, u.unlit);
-    for (const e of fused) e.bind();
+    for (const f of fused) f.e.bind(f.order);
   }
 
   dispose() {

@@ -1,43 +1,45 @@
 ---
 name: horror-script-storyboard
-description: Write suspenseful horror narration scripts (2.7-3.2 words/s with deliberate pauses and Dead Silence beats), lock words.json timestamps, and map story.ts shot plans (SHOTS, CAMS, DOF, KICKS, OVERLAYS) for standalone 1-min horror shorts or 8-10 Part horror series. Use when scripting or storyboarding horror videos in Vietnamese or English.
+description: Use when writing suspenseful horror narration scripts (2.7-3.2 words/s with [PAUSE]/[DEAD SILENCE] beats), locking words.json timestamps, or choreographing cinematic multi-angle shot plans (SHOTS, CAMS, DOF, KICKS, OVERLAYS) in story.ts.
 ---
 
-# Horror Scriptwriting & Storyboarding (`SCRIPT.md` -> `story.ts`)
+# Horror Scriptwriting & Cinematic Storyboarding (`SCRIPT.md` -> `story.ts`)
 
-## 1. Pacing & Voice Rules (Distinct from Comedy/Explainer Shorts)
+## 1. Pacing & Voice Rules
 
-- **Speed:** **`2.7–3.2 words/s`** (~150–185 words per 60 s). Slower, intimate, ominous delivery outperforms rapid-fire narration in horror.
-- **Strategic Silence:** Leave explicit `[PAUSE 0.5s]` or `[DEAD SILENCE 0.6s]` gaps in `SCRIPT.md` before twists/reveals so the listener feels tension build.
-- **No On-Screen Captions by Default:** Keep 100% atmospheric visual immersion unless the user explicitly asks for captions (`GEMINI.md`).
-- **Platform-Safe Dread:** Rely on psychological uncanny detail, folk rules, acoustic suspense, and eerie silhouettes—avoid gratuitous gore or self-harm themes.
+- **Speed:** **`2.7–3.2 words/s`** (~150–185 words per 60 s). Slower, intimate, ominous delivery builds dread far better than rapid-fire narration.
+- **Strategic Silence:** Write explicit `[PAUSE 0.35s]` and `[DEAD SILENCE 0.65s]` tags directly in `SCRIPT.md` before twists and climax reveals.
+- **No On-Screen Captions by Default:** Preserve 100% atmospheric visual immersion unless explicitly requested (`GEMINI.md`).
+- **Platform-Safe Psychological Dread:** Focus on uncanny rules, atmospheric folklore, silhouettes, and psychological twists — avoid gratuitous gore.
 
-## 2. The 8-Beat Standalone Horror Short Formula (55–70 s)
+## 2. The 8-Beat Standalone Horror Short Formula (55–75 s)
 
-1. **Cold Hook (`0–4 s`):** State a chilling rule, eerie paradox, or uncanny sensory detail in sentence 1—zero preamble.
-2. **Normalcy with Tension (`4–12 s`):** Time (`2:17 AM`), lonely place, mundane sensory detail (flickering hallway bulb, rain on tin roof).
-3. **First Uncanny Cue (`12–22 s`):** One small rule breaks (a reflection blinks late, footsteps repeat one step too many, an old portrait looks sideways).
-4. **Escalation (`22–36 s`):** 2–3 beats of the protagonist testing reality while isolation deepens.
-5. **Dead Silence (`~36–37 s`):** Cut narration + music beds (`0.4–0.8 s`); camera creeps (`dollyZoom` or `pushK`).
-6. **Climax / Reveal (`37–46 s`):** Trigger `lightning` / `flicker` / `blackout` + `KICKS` + visual reveal (`0–2 frames` before trigger word).
-7. **Dark Realization (`46–56 s`):** Uncover the haunting truth behind what happened (folk curse logic, survival rule violated, or historical archive fact).
-8. **Lingering Twist (`56–65 s`):** Final chilling line ending cleanly on a haunting visual hold.
+1. **Cold Hook (`0–8 s`, `WS`):** Chilling rule or paradox — **DO NOT spoil the monster here!** Establish lonely atmosphere through dark foreground silhouettes.
+2. **Approach / Setting (`8–16 s`, `OTS`):** Track behind the protagonist (`bodyBack` + `camOTS`) entering the haunted space with a real `PointLight` lantern/flashlight.
+3. **First Uncanny Cue (`16–25 s`, `LOW` or `CU`):** Low-angle or close prop shot showing one eerie anomaly breaking reality (drifting nón lá, blinking reflection, extra elevator floor).
+4. **Investigation (`25–32 s`, `MCU`):** Side/3-4 medium close-up with `action: "peer"` + `dollyZoom` compression + lantern under-lighting.
+5. **Threat Tease & Dead Silence (`32–38 s`, `ECU` / `POV`):** Steep POV/ECU on a partial horror cue (clawed hand on rope, shadow under door) → lantern `flicker` → `blackout` across `[DEAD SILENCE]`.
+6. **Climax Reveal (`38–46 s`, `LOW`):** Dramatic upward reveal with real 3D `lightning` flash + entity `emerge`, protagonist `recoil`.
+7. **Struggle & Escape (`46–64 s`, `CU` Dutch tilt → `Reverse WS` → `MS`):** Tight dynamic lunge/recoil confrontation → reverse wide shot of protagonist `flee`ing while entity looms behind → `dipBlack` transition into sanctuary (`boltDoor`).
+8. **Lingering Twist (`64–74 s`, `OTS` → Floor/Prop Reveal):** Protagonist faces safety (`bodyBack`), slowly turns in an over-the-shoulder **`glance: 1`** as camera tilts down to the chilling final evidence (`vignettePulse`).
 
-## 3. Synthesizing Narrator Voice & Locking `words.json` -> `story.ts`
+## 3. Mandatory Cinematography & Transition Rules (`story.ts`)
 
-1. Write `[PAUSE Xs]` and `[DEAD SILENCE Xs]` directives directly inside `SCRIPT.md` (either on separate lines or between sentences).
-2. Generate `voice.wav` + `words.json` (converted through the `ngan` So-VITS-SVC deep horror narrator model by default):
-   ```powershell
-   python scripts/gen_horror_voice.py --script out/<project>/SCRIPT.md --out-dir out/<project>/voice
-   ```
-3. Verify `words`, `sentences`, and `dead_silences` timestamps in `out/<project>/voice/words.json`.
-4. Map beats directly into `src/<project>/story.ts`:
-   - `SHOTS`: `{ id, a, b, light: "night" | "candle" | "storm" | "eerie" | "blood", ... }`
-   - `CAMS`: combine `pushK` (`0.0015–0.004`), `dollyZoom` (Vertigo compression), `handheld` (uneasy micro-drift), `snapZoom`, and `rolled` (`0.06–0.09` rad Dutch tilt). **Never leave any hold flat >= 4 frames** (prevents QA freeze alerts and keeps dread moving).
-   - `OVERLAYS`: `ScreenBeat[]` (`lightning`, `flicker`, `blackout`, `flash`). Always pair `blackout` beats cleanly so `extract_shots.py` emits `planned_black`.
-   - `KICKS`: `[t_sec, gain]` aligned `0–2 frames` before visual/audio impacts.
-   - `DOF`: shallow depth (`cInf: 10–15`) on tense close-ups & over-the-shoulder reveals; sharp wide (`cInf: 0–4`) to emphasize lonely negative space.
+1. **Zero Repeated Camera Angles:** Every shot in `SHOTS` MUST declare `scale: "WS" | "OTS" | "LOW" | "MCU" | "ECU" | "CU" | "MS" | "POV"`. Consecutive shots MUST NOT reuse the same camera vantage or `scale` (`short_qa.py` flags repeated scales & static-layout jump-cuts with `corr > 0.88`).
+2. **Use Engine Camera Archetypes (`camera.ts`):** Combine `camOTS`, `camArc`, `camPOV`, `camECU`, `dollyZoom`, `handheld`, `snapZoom`, `pushK`, and `rolled` (`0.06–0.095` rad Dutch tilt). Keep subtle motion on every shot (zero dead holds `>= 4f`).
+3. **Purposeful Transitions (`OVERLAYS`):**
+   - Use `{ kind: "dipBlack", at, dur: 12, hold: 2 }` when changing major locations/eras (`wharf` → `shack`).
+   - Use `{ kind: "blackout", a, b }` for `[DEAD SILENCE]` beats and `{ kind: "lightning", f }` for real 3D storm flashes.
+   - Use `{ kind: "vignettePulse", a, b, freq, strength }` for creeping dread/heartbeat tension.
+4. **Action-to-Word Lock:** Land visual impacts (`KICKS`, `lightning`, `doorBolt`, `lunge`, `glance`) **0–2 frames before** the matching trigger word in `words.json`.
+
+## 4. Generating Narrator Voice (`words.json`)
+
+```bash
+python3 scripts/gen_horror_voice.py --script out/<project>/SCRIPT.md --out-dir out/<project>/voice
+```
+*(Pass `--no-vc` to use plain `edge-tts` if no local So-VITS-SVC checkpoint is configured.)*
 
 ## Formulas & Multi-Part Series Arc
 
-See [HORROR_FORMULAS.md](./references/HORROR_FORMULAS.md) for beat templates across all 3 sub-genres (Vietnamese Folk/Spiritual, Urban/Rules/Liminal, True Historical Mysteries) and the 3-Act 8–10 Part Series structure.
+See [HORROR_FORMULAS.md](./references/HORROR_FORMULAS.md) for beat templates across all 3 sub-genres and the 8–10 Part Series structure.

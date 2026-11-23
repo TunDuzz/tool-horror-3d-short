@@ -4,7 +4,7 @@
 #   2. Single-call edge-tts synthesis (WordBoundary) -> ffmpeg atempo -> 44.1 kHz mono WAV.
 #   3. Splice exact silence durations at declared [PAUSE]/[DEAD SILENCE] boundaries & align words.json.
 #   4. So-VITS-SVC (`ngan` deep narrator by default) conversion on GPU -> exact sample parity -> dead-silence gate.
-#   5. 65 Hz highpass + 48 kHz mono WAV export.
+#   5. 45 Hz highpass + 48 kHz mono WAV export.
 #
 # Usage:
 #   python scripts/gen_horror_voice.py --script out/<project>/SCRIPT.md --out-dir out/<project>/voice
@@ -342,9 +342,9 @@ def main():
             vc_44k = tts_44k
             vc_label = None
         else:
-            svc_exe = os.path.join(args.vc_venv, "Scripts", "svc.exe")
-            if not os.path.isfile(svc_exe):
-                raise FileNotFoundError(f"svc.exe not found at {svc_exe}")
+            svc_bin = os.path.join(args.vc_venv, "Scripts", "svc.exe") if os.name == "nt" else os.path.join(args.vc_venv, "bin", "svc")
+            if not os.path.isfile(svc_bin):
+                raise FileNotFoundError(f"svc executable not found at {svc_bin} (pass --no-vc to synthesize plain edge-tts)")
             if not os.path.isfile(args.vc_model) or not os.path.isfile(args.vc_config):
                 raise FileNotFoundError(f"Missing VC model/config: {args.vc_model} / {args.vc_config}")
 
@@ -358,7 +358,7 @@ def main():
             vc_env["TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD"] = "1"
 
             cmd = [
-                svc_exe, "infer", tts_wav,
+                svc_bin, "infer", tts_wav,
                 "-o", vc_raw_wav,
                 "-s", args.speaker,
                 "-m", args.vc_model,
