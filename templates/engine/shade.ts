@@ -1,50 +1,53 @@
-// Stylised Gothic two-tone lighting for world materials + up to 3 real dynamic local PointLights (lanterns,
-// oil lamps, candles, flashlights) + real 3D lightning flash illumination.
-// Shared uniforms (TONE, CHAR, DYNAMIC_LIGHTS) are synced every frame via applyLightUniforms / setLocalLights / setLightningFlash.
+// Horror Engine v3: Soft stylized cel/Lambert lighting for 3D worlds & 3D dark-horror characters.
+// Supports up to 6 real dynamic local PointLights (oil lamps, candles, phone screen, streetlamps),
+// 1 real directional SpotLight cone (flashlight / doorway beam), real Three.js soft shadow maps,
+// subtle 3D rim light, and real 3D lightning flash illumination.
 
 import * as THREE from "three";
-import type { LightPreset, LocalLight, WorldLook } from "./lights";
+import type { LightPreset, LocalLight, SpotLightCfg, WorldLook } from "./lights";
+
+export const MAX_LOCAL_LIGHTS = 6;
 
 export const TONE = {
-  uLitCol: { value: new THREE.Vector3(0.62, 0.84, 1.24) },
-  uShadeCol: { value: new THREE.Vector3(0.08, 0.11, 0.20) },
-  uShadeLift: { value: new THREE.Vector3(0.02, 0.03, 0.06) },
-  uLambert: { value: 0.42 },
+  uLitCol: { value: new THREE.Vector3(0.68, 0.50, 0.36) },
+  uShadeCol: { value: new THREE.Vector3(0.068, 0.052, 0.072) },
+  uShadeLift: { value: new THREE.Vector3(0.018, 0.014, 0.022) },
+  uLambert: { value: 0.65 },
   uSideK: { value: 0.78 },
-  uTerm: { value: 0.24 },
-  uBounce: { value: new THREE.Vector3() },
-  uSat: { value: 0.74 },
+  uWrapLo: { value: -0.18 },
+  uWrapHi: { value: 0.72 },
+  uRimCol: { value: new THREE.Vector3(0.95, 0.64, 0.34) },
+  uRimStrength: { value: 0.34 },
+  uBounce: { value: new THREE.Vector3(0.038, 0.022, 0.014) },
+  uSat: { value: 0.88 },
 };
 
-/** Character-card uniforms synced from LIGHTS every frame for cardshade.ts. */
-export const CHAR = {
-  uCharTint: { value: new THREE.Vector3(0.76, 0.87, 1.0) },
-  uCharShade: { value: 0.74 },
-  uGrad: { value: 0.14 },
-  uBodyGrad: { value: 0.30 },
-  uSideTint: { value: new THREE.Vector3(0.46, 0.58, 0.88) },
-  uLightGain: { value: 0.68 },
-  uRimCol: { value: new THREE.Vector3(0.46, 0.68, 1.0) },
-  uRimK: { value: 0.52 },
-};
-
-/** Shared dynamic local point lights (max 3) + real 3D lightning flash uniform (used by BOTH world & character shaders). */
+/** Shared dynamic lights (6 local PointLights + 1 SpotLight cone + 3D lightning flash). */
 export const DYNAMIC_LIGHTS = {
-  uPtPos: { value: [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()] },
-  uPtCol: { value: [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()] },
-  uPtRad: { value: new THREE.Vector3(0, 0, 0) },
+  uPtPos: { value: Array.from({ length: MAX_LOCAL_LIGHTS }, () => new THREE.Vector3(0, -999, 0)) },
+  uPtCol: { value: Array.from({ length: MAX_LOCAL_LIGHTS }, () => new THREE.Vector3(0, 0, 0)) },
+  uPtRad: { value: new Float32Array(MAX_LOCAL_LIGHTS) },
+  uSpPos: { value: new THREE.Vector3(0, -999, 0) },
+  uSpDir: { value: new THREE.Vector3(0, 0, -1) },
+  uSpCol: { value: new THREE.Vector3(0, 0, 0) },
+  uSpDist: { value: 0.0 },
+  uSpCosIn: { value: 0.96 },
+  uSpCosOut: { value: 0.88 },
   uFlashAmt: { value: 0.0 },
-  uFlashCol: { value: new THREE.Vector3(0.82, 0.94, 1.18) },
+  uFlashCol: { value: new THREE.Vector3(0.84, 0.94, 1.18) },
 };
 
-/** Sync all global TONE and CHAR uniforms from a LightPreset (and optional WorldLook). */
-export function applyLightUniforms(L: LightPreset, K?: WorldLook) {
+/** Sync global TONE uniforms from a LightPreset (and optional WorldLook). */
+export function applyLightUniforms(L: LightPreset, K?: WorldLook): void {
   TONE.uLitCol.value.set(...L.lit);
   TONE.uShadeCol.value.set(...L.shade);
   TONE.uShadeLift.value.set(...L.lift);
   TONE.uLambert.value = L.lambert;
   TONE.uSideK.value = L.sideK;
-  TONE.uTerm.value = L.term;
+  TONE.uWrapLo.value = L.wrapLo;
+  TONE.uWrapHi.value = L.wrapHi;
+  TONE.uRimCol.value.set(...L.rimCol);
+  TONE.uRimStrength.value = L.rimStrength;
   if (K) {
     TONE.uBounce.value.set(...K.bounce);
     TONE.uSat.value = K.sat;
@@ -52,39 +55,49 @@ export function applyLightUniforms(L: LightPreset, K?: WorldLook) {
     TONE.uBounce.value.set(0, 0, 0);
     TONE.uSat.value = 1;
   }
-  CHAR.uCharTint.value.set(...L.charTint);
-  CHAR.uCharShade.value = L.charShade;
-  CHAR.uGrad.value = L.charGrad;
-  CHAR.uBodyGrad.value = L.bodyGrad;
-  CHAR.uSideTint.value.set(...L.sideTint);
-  CHAR.uLightGain.value = L.charGain;
-  CHAR.uRimCol.value.set(...L.rimCol);
-  CHAR.uRimK.value = L.rimStrength;
 }
 
-/** Update up to 3 real local point lights (lanterns, candles, flashlights) for the current frame. Pass [] to clear. */
-export function setLocalLights(lights: LocalLight[]) {
+/** Update up to 6 real local PointLights for the current frame. Pass [] to clear. */
+export function setLocalLights(lights: LocalLight[]): void {
   const pos = DYNAMIC_LIGHTS.uPtPos.value;
   const col = DYNAMIC_LIGHTS.uPtCol.value;
   const rad = DYNAMIC_LIGHTS.uPtRad.value;
-  const rArr = [0, 0, 0];
-  for (let i = 0; i < 3; i++) {
+  for (let i = 0; i < MAX_LOCAL_LIGHTS; i++) {
     const lt = lights[i];
     if (lt && lt.radius > 0.01) {
       pos[i].set(...lt.pos);
       col[i].set(...lt.color);
-      rArr[i] = lt.radius;
+      rad[i] = lt.radius;
     } else {
       pos[i].set(0, -999, 0);
       col[i].set(0, 0, 0);
-      rArr[i] = 0;
+      rad[i] = 0;
     }
   }
-  rad.set(rArr[0], rArr[1], rArr[2]);
 }
 
-/** Update real 3D lightning flash illumination (0..1) across both world geometry and character cards. */
-export function setLightningFlash(amount: number, color: [number, number, number] = [0.82, 0.94, 1.18]) {
+/** Update the active 3D SpotLight cone (e.g. handheld flashlight or moonlight doorway beam). Pass null to disable. */
+export function setSpotLight(spot: SpotLightCfg | null): void {
+  if (!spot || spot.distance <= 0.01) {
+    DYNAMIC_LIGHTS.uSpDist.value = 0;
+    DYNAMIC_LIGHTS.uSpCol.value.set(0, 0, 0);
+    return;
+  }
+  DYNAMIC_LIGHTS.uSpPos.value.set(...spot.pos);
+  DYNAMIC_LIGHTS.uSpDir.value
+    .set(spot.target[0] - spot.pos[0], spot.target[1] - spot.pos[1], spot.target[2] - spot.pos[2])
+    .normalize();
+  DYNAMIC_LIGHTS.uSpCol.value.set(...spot.color);
+  DYNAMIC_LIGHTS.uSpDist.value = spot.distance;
+  const outRad = (Math.max(1, Math.min(85, spot.angleDeg)) * Math.PI) / 180;
+  const pen = Math.max(0.02, Math.min(0.95, spot.penumbra));
+  const inRad = outRad * (1 - pen);
+  DYNAMIC_LIGHTS.uSpCosIn.value = Math.cos(inRad);
+  DYNAMIC_LIGHTS.uSpCosOut.value = Math.cos(outRad);
+}
+
+/** Update real 3D lightning flash illumination (0..1). */
+export function setLightningFlash(amount: number, color: [number, number, number] = [0.84, 0.94, 1.18]): void {
   DYNAMIC_LIGHTS.uFlashAmt.value = Math.max(0, amount);
   DYNAMIC_LIGHTS.uFlashCol.value.set(...color);
 }
@@ -109,56 +122,60 @@ const VERT_WORLD_POS = /* glsl */ `
   vToneWorldPos = ( modelMatrix * tWp ).xyz;
 `;
 
-const TWO_TONE = /* glsl */ `
+const STYLIZED_SHADE = /* glsl */ `
 #if NUM_DIR_LIGHTS > 0
 {
   vec3 sunV = directionalLights[ 0 ].direction;
   vec3 upV = normalize( ( viewMatrix * vec4( 0.0, 1.0, 0.0, 0.0 ) ).xyz );
-  float ndl = max( dot( geometryNormal, sunV ), 0.0 );
-  float sunTerm = sunVis * smoothstep( 0.0, uTerm, ndl );
+  float ndl = dot( geometryNormal, sunV );
+  float softRamp = smoothstep( uWrapLo, uWrapHi, ndl );
+  float sunTerm = sunVis * softRamp;
   float skyK = mix( uSideK, 1.0, 0.5 + 0.5 * dot( geometryNormal, upV ) );
-  vec3 lit = uLitCol * mix( 1.0, ndl, uLambert );
+  vec3 lit = uLitCol * mix( 1.0, max( ndl, 0.0 ), uLambert );
   float facing = max( dot( geometryNormal, geometryViewDir ), 0.0 );
   vec3 alb = max( mix( vec3( dot( diffuseColor.rgb, vec3( 0.2126, 0.7152, 0.0722 ) ) ), diffuseColor.rgb, uSat ), 0.0 );
   vec3 baseDiff = alb * ( mix( uShadeCol, lit, sunTerm ) * skyK + uBounce * facing * clamp( 1.0 - dot( geometryNormal, upV ), 0.0, 1.0 ) * ( 1.0 - sunTerm ) )
     + uShadeLift * LIFT_K * ( 1.0 - sunTerm );
 
-  // Real local dynamic PointLights (lanterns, candles, oil lamps) with tight Chiaroscuro island-of-light falloff
+  // Subtle 3D stylized rim highlight separating dark silhouettes from shadowed backgrounds
+  float fres = pow( clamp( 1.0 - facing, 0.0, 1.0 ), 2.6 );
+  vec3 rimDiff = alb * uRimCol * uRimStrength * fres * ( 0.30 + 0.70 * sunTerm );
+
+  // 6 real local dynamic PointLights (oil lamps, candles, phone screen glow, streetlamps)
   vec3 fragV = -vViewPosition;
   vec3 ptSum = vec3( 0.0 );
-  float r0 = uPtRad.x;
-  if ( r0 > 0.01 ) {
-    float d = length( uPtPos[0] - vToneWorldPos );
-    float att = pow( clamp( 1.0 - d / r0, 0.0, 1.0 ), 2.25 ) * 1.28;
-    vec3 lDir = normalize( ( viewMatrix * vec4( uPtPos[0], 1.0 ) ).xyz - fragV );
-    float pndl = 0.22 + 0.78 * smoothstep( -0.15, 0.62, dot( geometryNormal, lDir ) );
-    ptSum += uPtCol[0] * att * pndl;
-  }
-  float r1 = uPtRad.y;
-  if ( r1 > 0.01 ) {
-    float d = length( uPtPos[1] - vToneWorldPos );
-    float att = pow( clamp( 1.0 - d / r1, 0.0, 1.0 ), 2.25 ) * 1.28;
-    vec3 lDir = normalize( ( viewMatrix * vec4( uPtPos[1], 1.0 ) ).xyz - fragV );
-    float pndl = 0.22 + 0.78 * smoothstep( -0.15, 0.62, dot( geometryNormal, lDir ) );
-    ptSum += uPtCol[1] * att * pndl;
-  }
-  float r2 = uPtRad.z;
-  if ( r2 > 0.01 ) {
-    float d = length( uPtPos[2] - vToneWorldPos );
-    float att = pow( clamp( 1.0 - d / r2, 0.0, 1.0 ), 2.25 ) * 1.28;
-    vec3 lDir = normalize( ( viewMatrix * vec4( uPtPos[2], 1.0 ) ).xyz - fragV );
-    float pndl = 0.22 + 0.78 * smoothstep( -0.15, 0.62, dot( geometryNormal, lDir ) );
-    ptSum += uPtCol[2] * att * pndl;
+  for ( int i = 0; i < 6; i++ ) {
+    float r = uPtRad[ i ];
+    if ( r > 0.01 ) {
+      float d = length( uPtPos[ i ] - vToneWorldPos );
+      float att = pow( clamp( 1.0 - d / r, 0.0, 1.0 ), 1.85 ) * 1.32;
+      vec3 lDir = normalize( ( viewMatrix * vec4( uPtPos[ i ], 1.0 ) ).xyz - fragV );
+      float pndl = 0.24 + 0.76 * smoothstep( -0.22, 0.68, dot( geometryNormal, lDir ) );
+      ptSum += uPtCol[ i ] * att * pndl;
+    }
   }
 
-  // Real 3D lightning flash illuminating scene geometry
+  // 1 real dynamic SpotLight cone (handheld flashlight / narrow doorway light shaft)
+  if ( uSpDist > 0.01 ) {
+    vec3 toFragW = vToneWorldPos - uSpPos;
+    float sd = length( toFragW );
+    if ( sd < uSpDist && sd > 0.001 ) {
+      float satt = pow( clamp( 1.0 - sd / uSpDist, 0.0, 1.0 ), 1.55 ) * 1.65;
+      float cone = smoothstep( uSpCosOut, uSpCosIn, dot( toFragW / sd, uSpDir ) );
+      vec3 lDir = normalize( ( viewMatrix * vec4( uSpPos, 1.0 ) ).xyz - fragV );
+      float sndl = 0.18 + 0.82 * smoothstep( -0.15, 0.58, dot( geometryNormal, lDir ) );
+      ptSum += uSpCol * satt * cone * sndl;
+    }
+  }
+
+  // Real 3D lightning flash
   vec3 flashDiff = vec3( 0.0 );
   if ( uFlashAmt > 0.001 ) {
     float fndl = 0.32 + 0.68 * smoothstep( -0.15, 0.65, dot( geometryNormal, normalize( vec3( 0.22, 0.88, 0.42 ) ) ) );
     flashDiff = alb * uFlashCol * uFlashAmt * 1.45 * fndl;
   }
 
-  reflectedLight.directDiffuse = baseDiff + alb * ptSum + flashDiff;
+  reflectedLight.directDiffuse = baseDiff + rimDiff + alb * ptSum + flashDiff;
   reflectedLight.indirectDiffuse = vec3( 0.0 );
 }
 #endif
@@ -167,11 +184,14 @@ const TWO_TONE = /* glsl */ `
 const DECL =
   "#include <common>\n" +
   "varying vec3 vToneWorldPos;\n" +
-  "uniform vec3 uLitCol; uniform vec3 uShadeCol; uniform vec3 uShadeLift; uniform float uLambert; uniform float uSideK; uniform float uTerm; uniform vec3 uBounce; uniform float uSat;\n" +
-  "uniform vec3 uPtPos[3]; uniform vec3 uPtCol[3]; uniform vec3 uPtRad; uniform float uFlashAmt; uniform vec3 uFlashCol;";
+  "uniform vec3 uLitCol; uniform vec3 uShadeCol; uniform vec3 uShadeLift; uniform float uLambert; uniform float uSideK;\n" +
+  "uniform float uWrapLo; uniform float uWrapHi; uniform vec3 uRimCol; uniform float uRimStrength; uniform vec3 uBounce; uniform float uSat;\n" +
+  "uniform vec3 uPtPos[6]; uniform vec3 uPtCol[6]; uniform float uPtRad[6];\n" +
+  "uniform vec3 uSpPos; uniform vec3 uSpDir; uniform vec3 uSpCol; uniform float uSpDist; uniform float uSpCosIn; uniform float uSpCosOut;\n" +
+  "uniform float uFlashAmt; uniform vec3 uFlashCol;";
 
-/** Lambert (or Phong: specular preserved) -> Gothic two-tone with real local PointLights & lightning flash. */
-export function twoTone<T extends THREE.MeshLambertMaterial | THREE.MeshPhongMaterial>(m: T, liftK = 1): T {
+/** Upgrade Lambert / Phong material to Horror Engine v3 soft stylized shading with 6 PointLights + 1 SpotLight. */
+export function stylizedShade<T extends THREE.MeshLambertMaterial | THREE.MeshPhongMaterial>(m: T, liftK = 1): T {
   m.onBeforeCompile = (sh) => {
     Object.assign(sh.uniforms, TONE, DYNAMIC_LIGHTS);
     sh.vertexShader = sh.vertexShader
@@ -180,11 +200,14 @@ export function twoTone<T extends THREE.MeshLambertMaterial | THREE.MeshPhongMat
     sh.fragmentShader = sh.fragmentShader
       .replace("#include <common>", DECL + `\n#define LIFT_K ${liftK.toFixed(3)}`)
       .replace("#include <lights_fragment_begin>", "float sunVis = 1.0;\n" + LFB)
-      .replace("#include <lights_fragment_end>", "#include <lights_fragment_end>\n" + TWO_TONE);
+      .replace("#include <lights_fragment_end>", "#include <lights_fragment_end>\n" + STYLIZED_SHADE);
   };
-  m.customProgramCacheKey = () => "twoToneV2_" + liftK.toFixed(3);
+  m.customProgramCacheKey = () => "stylizedShadeV3_" + liftK.toFixed(3);
   return m;
 }
+
+/** Alias kept strictly for internal convenience. */
+export const twoTone = stylizedShade;
 
 // ---------------- tone-map inversion ----------------
 const neutral = (c: number[]) => {
@@ -195,8 +218,8 @@ const neutral = (c: number[]) => {
   return v.map((k) => (k * np) / peak * (1 - g) + np * g);
 };
 
-/** Linear input that the PBR-Neutral tone map turns into the given on-screen sRGB colour. */
-export const untone = (target: THREE.ColorRepresentation, out = new THREE.Color()) => {
+/** Linear input that PBR-Neutral tone mapping turns into the given on-screen sRGB colour. */
+export const untone = (target: THREE.ColorRepresentation, out = new THREE.Color()): THREE.Color => {
   const t = new THREE.Color(target);
   const tt = [t.r, t.g, t.b].map((k) => Math.min(k, 0.985));
   let c = tt.slice();

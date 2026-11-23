@@ -128,7 +128,7 @@ void mainImage(const in vec4 inputColor, const in vec2 uv, out vec4 outputColor)
 }`;
 
 export class GrainEffect extends Effect {
-  constructor({ amount = 0.025, cellPx = 1.5 }: { amount?: number; cellPx?: number } = {}) {
+  constructor({ amount = 0.008, cellPx = 1.4 }: { amount?: number; cellPx?: number } = {}) {
     super("GrainEffect", grainFrag, {
       blendFunction: BlendFunction.NORMAL,
       uniforms: new Map<string, Uniform>([["seed", new Uniform(0)], ["amount", new Uniform(amount)], ["cellPx", new Uniform(cellPx)]]),
