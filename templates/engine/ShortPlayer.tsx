@@ -1,6 +1,6 @@
-// Reusable Remotion + Three.js + Post-processing player for Horror Engine v2 ("Gothic Ink-Noir x Shadow-Depth").
-// Builds postprocessing.EffectComposer synchronously so Remotion's frameloop="never" renders frame 0 cleanly.
-// Chain: RenderPass -> InkPass -> LensBlur (pre + main) -> [Bloom (HDR > 1) + NEUTRAL ToneMapping + GradeEffect + GrainEffect], MSAA 4.
+// Horror Engine v3: Unified Remotion + Three.js + Post-processing + POV Narrative HUD player.
+// Builds postprocessing.EffectComposer synchronously so Remotion frameloop="never" renders every frame cleanly.
+// Chain: RenderPass (MSAA 4) -> InkPass (arch layer 0) -> LensBlur -> WhipMotionBlur -> [Bloom (thr 0.92) + NEUTRAL ToneMap] -> [Grade + subtle Grain] -> HorrorHUD DOM overlay.
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
@@ -16,16 +16,31 @@ import {
   ToneMappingEffect,
   ToneMappingMode,
 } from "postprocessing";
-import { DofBeat, LightKey, ScreenBeat, ShotBase, aberrationAt, evalDof, evalLayers, evalOverlays, lightningAt } from "./camera";
+import {
+  CamVelocity,
+  DofBeat,
+  LightKey,
+  ScreenBeat,
+  ShotBase,
+  aberrationAt,
+  evalDof,
+  evalLayers,
+  evalOverlays,
+  lightningAt,
+} from "./camera";
 import { InkOptions, InkPass, noInkFallback } from "./ink";
+import { WhipMotionBlurEffect } from "./motionblur";
 import { LensBlur, GrainEffect } from "./lensblur";
 import { GradeEffect, GRADES, GRADE_STRENGTH, gradeFor } from "./grade";
 import { setLightningFlash } from "./shade";
+import { HorrorHUD, type HorrorHudConfig } from "./HorrorHUD";
 
 export interface ShortWorld {
   root: THREE.Object3D;
   update(shotId: number, frame: number, camera: THREE.PerspectiveCamera, scene: THREE.Scene): THREE.Vector3;
   syncLighting?(shotId: number, frame: number): void;
+  getMotionVelocity?(shotId: number, frame: number, aspect: number, heightPx: number): CamVelocity;
+  getLightBlend?(shotId: number, frame: number): { to: LightKey; t: number } | null;
   dispose?(): void;
 }
 
@@ -37,6 +52,7 @@ export type ShortPlayerProps<TAssets = undefined> = {
   xfade?: Record<number, number>;
   flashes?: number[];
   overlays?: ScreenBeat[];
+  hud?: HorrorHudConfig;
   inkOptions?: InkOptions;
   grainAmount?: number;
   width?: number;
@@ -44,11 +60,21 @@ export type ShortPlayerProps<TAssets = undefined> = {
   background?: string;
 };
 
-type PostToggles = { ink: boolean; lens: boolean; pre: boolean; bloom: boolean; grade: boolean; grain: boolean };
+type PostToggles = {
+  ink: boolean;
+  lens: boolean;
+  pre: boolean;
+  motionBlur: boolean;
+  bloom: boolean;
+  grade: boolean;
+  grain: boolean;
+};
+
 const toggles = (grainAmount = 0): PostToggles => ({
   ink: true,
   lens: true,
   pre: true,
+  motionBlur: true,
   bloom: true,
   grade: true,
   grain: grainAmount > 0,
@@ -56,16 +82,16 @@ const toggles = (grainAmount = 0): PostToggles => ({
 });
 const dprOverride = () => (getInputProps() as { post?: { dpr?: number } }).post?.dpr;
 
-/** Bloom for HDR emissive sources only (threshold 1.0, short-edge 1080 mip base for 9:16 & 16:9 invariance). */
+/** Lush cinema HDR Bloom on flames, lamp chimneys, Phone3D screens, and entity eye glints. */
 const makeBloom = () => {
   const b = new BloomEffect({
     blendFunction: BlendFunction.ADD,
-    intensity: 0.55,
-    luminanceThreshold: 1.0,
-    luminanceSmoothing: 0.22,
+    intensity: 0.68,
+    luminanceThreshold: 0.92,
+    luminanceSmoothing: 0.24,
     mipmapBlur: true,
     levels: 6,
-    radius: 0.65,
+    radius: 0.72,
   });
   const mip = b.mipmapBlurPass;
   const setSize = mip.setSize.bind(mip);
@@ -130,7 +156,7 @@ function Inner<TAssets>({
   assets,
   createWorld,
   inkOptions,
-  grainAmount = 0.026,
+  grainAmount = 0.008,
 }: InnerProps<TAssets>) {
   const f = useCurrentFrame();
   const { camera, scene, gl, size } = useThree();
@@ -154,11 +180,12 @@ function Inner<TAssets>({
   const fx = useMemo(
     () => ({
       ink: new InkPass(scene, camera as THREE.PerspectiveCamera),
-      lens: new LensBlur({ maxCoC: 24, nearScale: 1.25 }),
+      lens: new LensBlur({ maxCoC: 20, nearScale: 1.2 }),
+      motionBlur: new WhipMotionBlurEffect({ thresholdPx: 2.5, maxUv: 0.055 }),
       bloom: makeBloom(),
       tone: new ToneMappingEffect({ mode: ToneMappingMode.NEUTRAL }),
-      grade: new GradeEffect(GRADES.night, GRADE_STRENGTH.night),
-      grain: new GrainEffect({ amount: 0.018, cellPx: 1.4 }),
+      grade: new GradeEffect(GRADES.warmLamp, GRADE_STRENGTH.warmLamp),
+      grain: new GrainEffect({ amount: 0.008, cellPx: 1.4 }),
     }),
     [camera, scene],
   );
@@ -173,13 +200,9 @@ function Inner<TAssets>({
     if (on.ink) c.addPass(fx.ink);
     if (on.lens && on.pre) c.addPass(new EffectPass(camera, fx.lens.pre));
     if (on.lens) c.addPass(new EffectPass(camera, fx.lens.main));
-    // Pass A: HDR Bloom + Neutral ToneMapping (writes display-referred 0..1 to buffer)
+    if (on.motionBlur) c.addPass(new EffectPass(camera, fx.motionBlur));
     c.addPass(new EffectPass(camera, ...(on.bloom ? [fx.bloom] : []), fx.tone));
-    // Pass B: GradeEffect (reads bloomed & tonemapped inputBuffer for clean RGB aberration) + GrainEffect
-    const gradeTail = [
-      ...(on.grade ? [fx.grade] : []),
-      ...(on.grain ? [fx.grain] : []),
-    ];
+    const gradeTail = [...(on.grade ? [fx.grade] : []), ...(on.grain ? [fx.grain] : [])];
     if (gradeTail.length) c.addPass(new EffectPass(camera, ...gradeTail));
     const w0 = size.width || width;
     const h0 = size.height || height;
@@ -200,6 +223,7 @@ function Inner<TAssets>({
       if (!on.ink) fx.ink.dispose();
       if (!on.lens) fx.lens.dispose();
       else if (!on.pre) fx.lens.pre.dispose();
+      if (!on.motionBlur) fx.motionBlur.dispose();
       if (!on.bloom) fx.bloom.dispose();
       if (!on.grade) fx.grade.dispose();
       if (!on.grain) fx.grain.dispose();
@@ -236,12 +260,17 @@ function Inner<TAssets>({
   cam.getWorldDirection(fwd);
   if (d.focus) fpt.set(...d.focus(f));
   else fpt.copy(target);
-  fx.lens.focus = Math.max(0.3, fpt.sub(cam.position).dot(fwd));
+  fx.lens.focus = Math.max(0.18, fpt.sub(cam.position).dot(fwd));
   fx.lens.cInf = d.cInf;
 
+  // Deterministic per-frame Whip-Pan motion blur velocity
+  const vel = world.getMotionVelocity?.(id, f, cam.aspect, height) ?? { vx: 0, vy: 0, speedPx: 0 };
+  fx.motionBlur.setVelocity(vel.vx, vel.vy, vel.speedPx);
+
   const shot = shots.find((s) => s.id === id) ?? shots[0];
-  const extraAb = aberrationAt(overlays, f) + lightningAt(overlays, f) * 0.65;
-  gradeFor(fx.grade, shot.light, f, extraAb);
+  const blend = world.getLightBlend?.(id, f);
+  const extraAb = aberrationAt(overlays, f) + lightningAt(overlays, f) * 0.45;
+  gradeFor(fx.grade, shot.light, f, extraAb, blend?.to, blend?.t ?? 0);
   fx.grain.seed = f;
 
   return <primitive object={world.root} dispose={null} />;
@@ -281,7 +310,7 @@ function ShotView<TAssets>({
         width={width}
         height={height}
         {...(dpr ? { dpr } : {})}
-        shadows
+        shadows="soft"
         gl={{
           antialias: false,
           stencil: false,
@@ -289,7 +318,7 @@ function ShotView<TAssets>({
           powerPreference: "high-performance",
           toneMappingExposure: 1.0,
         }}
-        camera={{ fov: 40, near: 0.2, far: 1500 }}
+        camera={{ fov: 56, near: 0.08, far: 1500 }}
       >
         <Inner
           id={id}
@@ -316,11 +345,12 @@ export function ShortPlayer<TAssets = undefined>({
   xfade = {},
   flashes = [],
   overlays = [],
+  hud,
   inkOptions,
-  grainAmount = 0.026,
+  grainAmount = 0.008,
   width,
   height,
-  background = "#06080f",
+  background = "#06060b",
 }: ShortPlayerProps<TAssets>) {
   const f = useCurrentFrame();
   const vc = useVideoConfig();
@@ -359,17 +389,14 @@ export function ShortPlayer<TAssets = undefined>({
           key={`ov-${i}`}
           style={{
             ...(ov.radial
-              ? {
-                  background: `radial-gradient(ellipse at center, rgba(0,0,0,0) 34%, ${ov.color} 100%)`,
-                }
-              : {
-                  background: ov.color,
-                }),
+              ? { background: `radial-gradient(ellipse at center, rgba(0,0,0,0) 34%, ${ov.color} 100%)` }
+              : { background: ov.color }),
             opacity: ov.opacity,
             ...(ov.blend === "screen" ? { mixBlendMode: "screen" } : {}),
           }}
         />
       ))}
+      {hud && <HorrorHUD config={hud} frame={f} width={w} height={h} />}
     </AbsoluteFill>
   );
 }

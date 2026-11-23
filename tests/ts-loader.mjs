@@ -1,15 +1,17 @@
-// Test-only Node 22 ESM hook: resolves extensionless .ts/.tsx relative imports and bare packages from shorts-project/node_modules.
+// Test-only Node 22 ESM hook: resolves extensionless .ts/.tsx relative imports, .tsx JSX via esbuild,
+// and bare packages from shorts-project/node_modules.
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { registerHooks } from "node:module";
+import { registerHooks, createRequire } from "node:module";
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const SP_NODE_MODULES = path.join(REPO_ROOT, "shorts-project", "node_modules");
+const spRequire = createRequire(path.join(SP_NODE_MODULES, "_synthetic.js"));
+const esbuild = spRequire("esbuild");
 
 registerHooks({
   resolve(specifier, context, nextResolve) {
-    // 1. Extensionless relative imports inside templates/engine or tests
     if ((specifier.startsWith("./") || specifier.startsWith("../")) && !path.extname(specifier) && context.parentURL) {
       const parentDir = path.dirname(fileURLToPath(context.parentURL));
       for (const ext of [".ts", ".tsx", ".mjs", ".js"]) {
@@ -23,7 +25,6 @@ registerHooks({
         return { url: pathToFileURL(idx).href, shortCircuit: true };
       }
     }
-    // 2. Bare package specifiers resolved against shorts-project/node_modules when root has no node_modules
     if (!specifier.startsWith(".") && !specifier.startsWith("/") && !specifier.startsWith("node:") && !specifier.startsWith("file:")) {
       try {
         return nextResolve(specifier, context);
@@ -33,5 +34,14 @@ registerHooks({
       }
     }
     return nextResolve(specifier, context);
+  },
+  load(url, context, nextLoad) {
+    if (url.endsWith(".tsx")) {
+      const filePath = fileURLToPath(url);
+      const src = fs.readFileSync(filePath, "utf-8");
+      const out = esbuild.transformSync(src, { loader: "tsx", format: "esm", jsx: "automatic", target: "node22" });
+      return { format: "module", source: out.code, shortCircuit: true };
+    }
+    return nextLoad(url, context);
   },
 });
