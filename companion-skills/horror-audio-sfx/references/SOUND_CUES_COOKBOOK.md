@@ -1,8 +1,44 @@
-# Horror Sound Cues & Expressive Voice Cookbook v5.0
+# Horror Sound Cues & Declarative `cues.json` Cookbook v7.0
 
-Recipes below assume `sys.path.insert(0, os.path.abspath("audio"))` inside `shorts-project/`.
+## 0. Four Golden Rules of Sparse Horror Sound Design (Enforced by `mix_cues.py --strict`)
 
-## 1. Standard Imports & Shared Space Setup
+1. **Story-Driven Setting Bed (`<= 1 Bed Only` — NEVER hardcode one bed for every video!):**
+   - Pick **exactly ONE** subtle ambience matching the story's location/weather (rainy rural house → indoor rain from Openverse; empty hospital ward → sterile low room tone; midnight alley → faint wind; closed attic → near-silent dark room tone).
+   - Carve the vocal band (`voice_notch_db: -4.0`, `lp_hz: 2400`) and automatically duck `-12..-16 dB` during `mood == "whisper"` acts.
+2. **Sparse Horror Spotting (`4–6 Hero Cues` per 45–60 s):**
+   - Place SFX **only** where the story or visual shot has a physical action or dread reveal.
+   - **Anti-Crowding:** One hero sound per moment; never start `>= 2` spot SFX inside `0.60 s` (unless explicitly marked `allow_layer: true` across separate frequency bands).
+   - **Silent Whisper Rule:** Keep `mood == "whisper"` acts completely free of intrusive spot SFX so breathy narration dominates.
+3. **Exact `onset` / `peak` / `end` Alignment via `cues.json`:**
+   - Hits / door latches / flashlight clicks → `"align": "onset"` anchored to `at_act`, `at_word`, or `at_dead_silence`.
+   - Whip-pan whooshes → `"align": "peak"` on the cut midpoint.
+   - Pre-silence `reverse_suck` / risers → `"align": "end"` at `at_dead_silence: 0, edge: "start"`.
+4. **Measurement-First Verification & Attribution:**
+   - Always run `scripts/mix_cues.py --cues cues.json --out mix.wav --strict`, confirm `PASS 6/6`, ship `credits.txt`, and hand the user the 5 headphone timestamps from `mix_report.md`.
+
+```json
+{
+  "voice": "voice/voice.wav",
+  "words": "voice/words.json",
+  "target_lufs": -15.0,
+  "ceil_db": -1.2,
+  "dead_silence_floor_db": -48.0,
+  "beds": [
+    {"sound": "night_rain_indoor", "gain_db": -27.0, "hp_hz": 120, "lp_hz": 2400, "voice_notch_db": -4.5, "duck_db": -5.5, "whisper_duck_db": -14.0, "label": "Story-matched rainy night bed"}
+  ],
+  "events": [
+    {"sound": "wooden_door_creak_ov", "bus": "sfx", "at_act": 2, "offset_s": -0.18, "align": "onset", "gain_db": -12.0, "pan": -0.35, "label": "Door creak in pause before Act 2"},
+    {"synth": "reverse_suck", "bus": "score", "at_dead_silence": 0, "edge": "start", "align": "end", "dur_s": 0.72, "gain_db": -10.5, "label": "Vacuum pull into Dead Silence"},
+    {"sound": "door_bolt_latch", "bus": "sfx", "at_dead_silence": 0, "edge": "end", "offset_s": 0.04, "align": "onset", "gain_db": -9.0, "pan": -0.25, "label": "Iron bolt sliding after Dead Silence"},
+    {"sound": "heavy_door_slam", "bus": "sfx", "at_act": 5, "offset_s": -0.08, "align": "onset", "gain_db": -8.0, "pan": -0.15, "label": "Door slams open on panic act"},
+    {"sound": "cello_dread_sting", "bus": "score", "at_act": 6, "offset_s": 0.35, "align": "onset", "gain_db": -15.0, "lp_hz": 1200, "reverb": 0.25, "label": "Low C2 cello swell under final twist"}
+  ]
+}
+```
+
+---
+
+## 1. Legacy / Custom Python Mixing Reference (Advanced)
 
 ```python
 import os, sys

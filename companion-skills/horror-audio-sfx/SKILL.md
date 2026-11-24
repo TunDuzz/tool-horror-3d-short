@@ -26,9 +26,12 @@ Zero-distortion, act-level coherent Vietnamese horror voice + **Asset-First Real
      - **[`nguyenthienhy/F5-TTS-Vietnamese`](https://github.com/nguyenthienhy/F5-TTS-Vietnamese):** Flow-matching zero-shot emotional reference cloning.
    - **2-Machine So-VITS-SVC 1-File VC-Pack (`--export-vc-pack` → `-na` → `--vc-pack` + `--narrator-vc-wav`):** Exports a clean, distortion-free act-level `narrator_guide_44k.wav` (supports `--multi-style-guide` when no `emotion_refs/` exist) and always runs So-VITS-SVC with **`-na`** so natural pitch & pacing are preserved 100%.
    - **Clean Fallbacks:** `--tts-engine edge` (whole-act distortion-free `edge-tts`) or `--tts-engine gemini` (Gemini 2.5 Flash TTS Free Tier via `GEMINI_API_KEY`).
-3. **Asset-First Real Cinema Foley (`sfx_manager.py` + `mix_base.load_sfx_asset`):**
-   - Prefer **real recorded CC0 Foley** or **neural generated SFX** over synthetic math Foley for doors, footsteps, rain, glass scrapes, gasps, and room ambiences.
-   - Use procedural `horror_instruments.py` primarily for clean sub-bass & musical tension reinforcement (`sub_drone`, `riser`, `stinger("boom")`, `folk_wail`, `woodblock_omen`).
+3. **Asset-First Real Cinema Foley & Story-Driven Sparse Rules (v7.0 — Openverse 5.2M API + `cues.json` + 6 Anti-Clutter QA Gates):**
+   - **NEVER hardcode one ambience bed across different stories!** Pick **at most 1 setting-matched bed** per story (e.g., rainy night house → indoor rain; sterile corridor → quiet room tone; dark alley → light cold wind) with dialog-safe EQ (`lp_hz`, `voice_notch_db`) so it never fights the narrator's voice.
+   - **Sparse Horror Budget (`4–6` hero SFX per 45–60s):** One hero sound per moment; **NEVER** stack `>= 2` spot SFX inside `0.60s` (anti-crowding); keep `mood == "whisper"` acts **completely free of intrusive spot SFX** and automatically duck the bed `-12..-16 dB` during whispers!
+   - **Openverse Audio API (`sfx_manager.py search-openverse` / `fetch-openverse`, ZERO API key):** Searches 5.2M real Freesound/Jamendo files strictly filtered to commercial-safe licenses (`cc0,pdm` default, optional `--allow-cc-by`, **NEVER `nc`/`nd`**), measures `onset_s`/`peak_s`/`tail_end_s`, tracks `history.jsonl --fresh` to avoid repeating sounds across videos, and auto-writes verbatim attributions to `credits.txt`.
+   - **Declarative `cues.json` + `scripts/mix_cues.py --strict`:** Align hits via `align: "onset"`, whooshes via `"peak"`, reverse swells via `"end"`, anchored to `at_act`, `at_word`, or `at_dead_silence`. Always verify with `mix_report.md` and hand the user **5 concrete timestamps to check with headphones** — never claim a mix "sounds good" by feel alone!
+   - Restrict procedural `horror_instruments.py` strictly to clean non-intrusive sub-bass (`sub_drone < 90 Hz`) and pre-silence `reverse_suck`.
 4. **TRUE Psychoacoustic Dead Silence (`-48 dB` Vacuum):**
    - Pass `dead_silences=load_dead_silences(words_json)` directly into `master_mix(..., dead_silences=..., ds_floor_db=-48.0)` so BOTH music and ambient SFX drop smoothly (`22 ms / 10 ms` cosine edges) into a **`-48 dB` vacuum** across every `[DEAD SILENCE Xs]` span.
 5. **Voice-First Sparse Scoring & Dynamic Range (`-15.0 LUFS`, `LRA ~5–9 LU`, `<= -1.2 dBTP`):**
@@ -38,20 +41,24 @@ Zero-distortion, act-level coherent Vietnamese horror voice + **Asset-First Real
 
 ## 2. Managing Real Cinema SFX (`scripts/sfx_manager.py`)
 
-### A. Free Real Recorded CC0 Horror Foley (25-Clip Open Pack — ZERO API Key + Freesound + Local)
+### A. Openverse 5.2M Audio API (ZERO API Key, Commercial-Safe) + Local CC0 Library
 ```bash
-# 1. Fetch 25 verified 100% CC0 real-recorded horror Foley clips (ZERO API key, commercial-safe!)
+# 1. Search real Freesound/Jamendo recordings via Openverse (CC0/PDM default; add --allow-cc-by if needed; --fresh skips recent history)
+python3 scripts/sfx_manager.py search-openverse --query "wooden door creak" --fresh --library shorts-project/audio/sfx_library
+
+# 2. Fetch chosen sound into 48 kHz stereo library + measure onset/peak/tail + auto-write credits.txt
+python3 scripts/sfx_manager.py fetch-openverse --id <OPENVERSE_UUID> --name wooden_door_creak_ov --category foley --library shorts-project/audio/sfx_library
+
+# 3. Bootstrap 25 verified strict-CC0 starter Foley clips + analyze onset/peak timings + verify 0 clipping
 python3 scripts/sfx_manager.py fetch-cc0-open --library shorts-project/audio/sfx_library
-
-# 2. Verify all library WAVs (48 kHz stereo PCM16, 0 clipping)
+python3 scripts/sfx_manager.py analyze --library shorts-project/audio/sfx_library
 python3 scripts/sfx_manager.py verify --library shorts-project/audio/sfx_library
+```
 
-# 3. Optional: fetch additional custom CC0 queries via Freesound API (free key: https://freesound.org/apiv2/apply/)
-export FREESOUND_API_KEY="your_free_key"
-python3 scripts/sfx_manager.py fetch-freesound --preset horror-starter --library shorts-project/audio/sfx_library
-
-# 4. Or import your own local WAV/MP3/FLAC Foley folder (normalized cleanly to 48kHz stereo WAV)
-python3 scripts/sfx_manager.py import-local --src /path/to/my_foley --library shorts-project/audio/sfx_library
+### B. Declarative `cues.json` Mixing With 6 Anti-Clutter Horror QA Gates (`scripts/mix_cues.py`)
+```bash
+# Mix voice + 1 story-matched bed + 4-6 onset/peak/end aligned SFX + TRUE -48 dB Dead Silence + mix_report.md + credits.txt
+python3 scripts/mix_cues.py --cues out/<project>/cues.json --out out/<project>/mix.wav --strict
 ```
 
 ### B. Open-Source Local GPU Neural SFX Packs (`TangoFlux` & `MMAudio`)

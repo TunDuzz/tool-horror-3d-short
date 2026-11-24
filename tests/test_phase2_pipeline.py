@@ -23,6 +23,7 @@ for p in (SCRIPTS_DIR, AUDIO_DIR):
 import gen_horror_voice as ghv  # noqa: E402
 import prepare_emotion_refs as per  # noqa: E402
 import curate_emotion_candidates as cec  # noqa: E402
+import mix_cues as mc  # noqa: E402
 import sfx_manager as sm  # noqa: E402
 import align_manifest as am  # noqa: E402
 import horror_instruments as hi  # noqa: E402
@@ -733,6 +734,119 @@ class TestPhase2Pipeline(unittest.TestCase):
             syn_arr = mb.load_sfx_or_fallback("nonexistent_foley_xyz", fallback_fn=_fb, library_dir=lib, dur_sec=0.1)
             self.assertEqual(fallback_called["n"], 1)
             self.assertEqual(syn_arr.shape, (2, 4800))
+
+    def test_v7_openverse_search_envelope_and_mix_cues_anti_crowding(self):
+        # 1. Openverse license safety: block NC/ND unconditionally, default CC0/PDM only, allow BY only when opted in
+        fake_resp = {
+            "results": [
+                {"id": "id-cc0", "title": "Door Creak", "creator": "A", "source": "freesound", "license": "cc0", "duration": 2400, "url": "https://x/1.mp3", "attribution": "CC0 attr"},
+                {"id": "id-by", "title": "Door BY", "creator": "B", "source": "freesound", "license": "by", "duration": 2100, "url": "https://x/2.mp3", "attribution": "BY attr"},
+                {"id": "id-nc", "title": "Door NC", "creator": "C", "source": "freesound", "license": "by-nc", "duration": 2200, "url": "https://x/3.mp3", "attribution": "NC attr"},
+                {"id": "id-nd", "title": "Door ND", "creator": "D", "source": "freesound", "license": "by-nd", "duration": 2200, "url": "https://x/4.mp3", "attribution": "ND attr"},
+            ]
+        }
+        hits_cc0 = sm.openverse_search("door", allow_cc_by=False, http_get_fn=lambda _u: fake_resp)
+        self.assertEqual([h["id"] for h in hits_cc0], ["id-cc0"])
+        hits_comm = sm.openverse_search("door", allow_cc_by=True, http_get_fn=lambda _u: fake_resp)
+        self.assertEqual([h["id"] for h in hits_comm], ["id-cc0", "id-by"])
+        hits_fresh = sm.openverse_search("door", allow_cc_by=True, exclude_ids={"id-cc0"}, http_get_fn=lambda _u: fake_resp)
+        self.assertEqual([h["id"] for h in hits_fresh], ["id-by"])
+
+        # 2. Envelope onset/peak detection + declarative mix_cues.py 6 Anti-Clutter QA Gates
+        sr = sm.SR_LIB
+        with tempfile.TemporaryDirectory() as td:
+            lib = os.path.join(td, "sfx_library")
+            os.makedirs(lib)
+            # Build a 1.0s click whose sharp attack starts at 0.30s and peaks at 0.35s
+            n = int(1.0 * sr)
+            click = np.zeros(n, dtype=np.float64)
+            t_b = np.arange(int(0.18 * sr), dtype=np.float64) / sr
+            click[int(0.30 * sr) : int(0.48 * sr)] = 0.65 * np.sin(2.0 * np.pi * 420.0 * t_b) * np.hanning(len(t_b))
+            click_p = os.path.join(lib, "door_click.wav")
+            sm.write_wav_stereo16(click_p, np.stack([click, click]), sr)
+            env = sm.analyze_sfx_envelope(click_p)
+            self.assertAlmostEqual(env["onset_s"], 0.30, delta=0.04)
+            self.assertAlmostEqual(env["peak_s"], 0.39, delta=0.05)
+
+            # Build a 1.0s smooth rain bed
+            rng = np.random.default_rng(70)
+            bed = 0.15 * rng.normal(0.0, 1.0, (2, int(2.0 * sr)))
+            sm.write_wav_stereo16(os.path.join(lib, "rain_bed.wav"), bed, sr)
+            sm.save_manifest(lib, {
+                "version": "v7.0-sfx-library",
+                "sr": sr,
+                "assets": {
+                    "door_click": {"file": "door_click.wav", "license": "CC0", "attribution": '"Door Click" by Test (CC0)', **env},
+                    "rain_bed": {"file": "rain_bed.wav", "license": "CC0", "attribution": '"Rain Bed" by Test (CC0)', "onset_s": 0.0, "peak_s": 0.1, "tail_end_s": 2.0, "dur_s": 2.0},
+                },
+            })
+
+            # Synthetic 8.0s voice with 3 acts: calm (0.2..2.2), whisper (2.6..4.4), DEAD SILENCE (4.4..5.2), panic (5.2..7.2)
+            dur = 8.0
+            t_v = np.arange(int(dur * sr), dtype=np.float64) / sr
+            v = np.zeros(len(t_v), dtype=np.float64)
+            for s0, s1 in ((0.2, 2.2), (2.6, 4.4), (5.2, 7.2)):
+                sl = slice(int(s0 * sr), int(s1 * sr))
+                v[sl] = 0.22 * np.sin(2.0 * np.pi * 195.0 * t_v[sl])
+            voice_p = os.path.join(td, "voice.wav")
+            per.write_wav_mono16(voice_p, v, sr)
+            words_p = os.path.join(td, "words.json")
+            wdata = {
+                "dur": dur,
+                "words": [
+                    {"w": "Đêm", "s": 0.2, "e": 0.9}, {"w": "mưa.", "s": 1.0, "e": 2.2},
+                    {"w": "Suỵt", "s": 2.6, "e": 3.4}, {"w": "nhỏ.", "s": 3.5, "e": 4.4},
+                    {"w": "Cửa", "s": 5.2, "e": 6.0}, {"w": "bật!", "s": 6.1, "e": 7.2},
+                ],
+                "sentences": [
+                    {"sent": 1, "mood": "calm_omen", "s": 0.2, "e": 2.2, "text": "Đêm mưa."},
+                    {"sent": 2, "mood": "whisper", "s": 2.6, "e": 4.4, "text": "Suỵt nhỏ."},
+                    {"sent": 3, "mood": "panic", "s": 5.2, "e": 7.2, "text": "Cửa bật!"},
+                ],
+                "dead_silences": [{"s": 4.4, "e": 5.2}],
+            }
+            with open(words_p, "w", encoding="utf-8") as fp:
+                json.dump(wdata, fp)
+
+            # A. Bad cluttered cues.json MUST fail strict anti-clutter audit (2 beds + crowding + whisper intrusion)
+            bad_cfg = {
+                "beds": [{"sound": "rain_bed"}, {"sound": "rain_bed"}],
+                "events": [],
+            }
+            bad_events = [
+                {"label": "a", "bus": "sfx", "target_t": 3.10},
+                {"label": "b", "bus": "sfx", "target_t": 3.25},
+            ]
+            bad_warns = mc.audit_cues(bad_cfg, bad_events, wdata, dur)
+            codes = {w["code"] for w in bad_warns}
+            self.assertIn("MAX_BEDS_EXCEEDED", codes)
+            self.assertIn("SFX_CROWDING_WARN", codes)
+            self.assertIn("WHISPER_INTRUSION_WARN", codes)
+
+            # B. Clean sparse horror cues.json MUST PASS --strict with 0 warnings, TRUE Dead Silence, credits.txt & mix_report.md
+            good_cues = {
+                "voice": voice_p,
+                "words": words_p,
+                "library_dir": lib,
+                "skip_history": True,
+                "beds": [{"sound": "rain_bed", "gain_db": -22.0, "hp_hz": 120, "lp_hz": 2400, "voice_notch_db": -4.0, "whisper_duck_db": -14.0}],
+                "events": [
+                    {"synth": "reverse_suck", "bus": "score", "at_dead_silence": 0, "edge": "start", "align": "end", "dur_s": 0.60, "gain_db": -12.0, "allow_in_whisper": True, "label": "pull into void"},
+                    {"sound": "door_click", "bus": "sfx", "at_dead_silence": 0, "edge": "end", "offset_s": 0.05, "align": "onset", "gain_db": -8.0, "label": "latch after void"},
+                ],
+            }
+            cues_p = os.path.join(td, "cues.json")
+            with open(cues_p, "w", encoding="utf-8") as fp:
+                json.dump(good_cues, fp)
+            out_wav = os.path.join(td, "out", "mix.wav")
+            res = mc.render_cues_mix(cues_p, out_wav, library_dir=lib, strict=True)
+            self.assertEqual(res["verdict"], "PASS")
+            self.assertEqual(res["clips"], 0)
+            self.assertGreaterEqual(res["dead_silences"][0]["drop_db"], 38.0)
+            self.assertTrue(os.path.isfile(res["report"]))
+            self.assertTrue(os.path.isfile(res["credits"]))
+            with open(res["credits"], encoding="utf-8") as fp:
+                self.assertIn('"Rain Bed" by Test (CC0)', fp.read())
 
 
 if __name__ == "__main__":

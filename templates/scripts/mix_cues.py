@@ -1,0 +1,472 @@
+#!/usr/bin/env python3
+"""Horror Engine v7.0: Declarative `cues.json` Horror Audio Mixer + 6 Anti-Clutter QA Gates.
+
+Combines Openverse/CC0 real Foley assets with sparse, story-driven horror mixing rules inspired by
+`openverse-sfx` & `claude-add-sound-skill`, specialized for Vietnamese horror narration:
+  1. MAX_BEDS_EXCEEDED     : Enforce <= 1 ambience bed (story-setting-driven, NEVER stack 3-4 beds!)
+  2. SFX_SPARSITY_WARN     : Warn if spot SFX density exceeds sparse horror budget (> max(6, dur/6.5))
+  3. SFX_CROWDING_WARN     : Warn if >= 2 SFX land within 0.60s (unless `allow_layer: true`) or >= 3 in 1.50s
+  4. WHISPER_INTRUSION_WARN: Warn if any spot SFX intrudes on a `mood == "whisper"` span (unless `allow_in_whisper: true`)
+  5. DEAD_SILENCE_VACUUM   : Carve TRUE -48 dB vacuum across every `[DEAD SILENCE]` and verify >= 38 dB drop
+  6. LOUDNESS_AND_CLIPS    : Verify -15.0 LUFS, <= -1.2 dBTP, 0 clips, write `mix_report.md` (5 headphone check timestamps) & `credits.txt`
+
+Usage:
+  python3 scripts/mix_cues.py --cues out/<project>/cues.json --out out/<project>/mix.wav --strict
+"""
+
+import argparse
+import json
+import math
+import os
+import sys
+
+import numpy as np
+from scipy import signal
+
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+AUDIO_DIR = os.path.abspath(os.path.join(SCRIPT_DIR, "..", "audio"))
+for p in (SCRIPT_DIR, AUDIO_DIR):
+    if p not in sys.path:
+        sys.path.insert(0, p)
+
+import sfx_manager as sm  # noqa: E402
+from dsp import SR, ns, st, rng, place, make_ir, convolve_st, dbg, pan, fades, write_wav  # noqa: E402
+from horror_instruments import sub_drone, reverse_suck  # noqa: E402
+from mix_base import (  # noqa: E402
+    load_voice,
+    load_words,
+    load_dead_silences,
+    load_sfx_asset,
+    speech_spans,
+    duck_db,
+    master_mix,
+    write_mix_and_stems,
+    ffmpeg_ebur,
+)
+
+
+def rms_db(arr: np.ndarray) -> float:
+    return float(20.0 * np.log10(max(float(np.sqrt(np.mean(np.square(arr)) + 1e-18)), 1e-9)))
+
+
+def _resolve_path(base_dir: str, p: str | None) -> str | None:
+    if not p:
+        return None
+    if os.path.isabs(p):
+        return p
+    cand = os.path.abspath(os.path.join(base_dir, p))
+    return cand if os.path.exists(cand) else os.path.abspath(p)
+
+
+def _apply_dialog_safe_eq(x: np.ndarray, hp_hz: float | None = None, lp_hz: float | None = None, voice_notch_db: float = 0.0) -> np.ndarray:
+    """Clean zero-distortion spectral carving so beds & SFX never fight the narrator's vocal band (450-3000 Hz)."""
+    y = x.astype(np.float64, copy=True)
+    nyq = 0.5 * SR
+    if hp_hz and 15.0 < float(hp_hz) < nyq * 0.9:
+        sos = signal.butter(2, float(hp_hz) / nyq, btype="highpass", output="sos")
+        y = signal.sosfilt(sos, y, axis=-1)
+    if lp_hz and 80.0 < float(lp_hz) < nyq * 0.95:
+        sos = signal.butter(2, float(lp_hz) / nyq, btype="lowpass", output="sos")
+        y = signal.sosfilt(sos, y, axis=-1)
+    if voice_notch_db and float(voice_notch_db) < -0.5:
+        # Smooth biquad peaking dip centered at 1350 Hz (Q=0.85) carving vocal presence band
+        A = 10.0 ** (float(voice_notch_db) / 40.0)
+        w0 = 2.0 * math.pi * 1350.0 / SR
+        alpha = math.sin(w0) / (2.0 * 0.85)
+        b = np.array([1.0 + alpha * A, -2.0 * math.cos(w0), 1.0 - alpha * A], dtype=np.float64)
+        a = np.array([1.0 + alpha / A, -2.0 * math.cos(w0), 1.0 - alpha / A], dtype=np.float64)
+        y = signal.lfilter(b, a, y, axis=-1)
+    return y
+
+
+def _resolve_event_anchor_time(ev: dict, wdata: dict, dur: float) -> float:
+    """Resolve event anchor time from `at`, `at_act`, `at_word`, or `at_dead_silence`."""
+    offset = float(ev.get("offset_s", 0.0))
+    if "at" in ev and ev["at"] is not None:
+        return max(0.0, min(dur, float(ev["at"]) + offset))
+
+    if "at_dead_silence" in ev and ev["at_dead_silence"] is not None:
+        ds_list = wdata.get("dead_silences") or []
+        idx = int(ev["at_dead_silence"])
+        if 0 <= idx < len(ds_list):
+            edge = str(ev.get("edge", "end")).lower()
+            base = float(ds_list[idx]["s"] if edge == "start" else ds_list[idx]["e"])
+            return max(0.0, min(dur, base + offset))
+        raise ValueError(f"at_dead_silence={idx} out of range (found {len(ds_list)})")
+
+    if "at_act" in ev and ev["at_act"] is not None:
+        sents = wdata.get("sentences") or []
+        act_no = int(ev["at_act"])
+        match = next((s for s in sents if int(s.get("sent", -1)) == act_no), None)
+        if match is None and 1 <= act_no <= len(sents):
+            match = sents[act_no - 1]
+        if match is None:
+            raise ValueError(f"at_act={act_no} not found in words.json sentences")
+        edge = str(ev.get("edge", "start")).lower()
+        base = float(match["e"] if edge == "end" else match["s"])
+        return max(0.0, min(dur, base + offset))
+
+    if "at_word" in ev and ev["at_word"]:
+        needle = str(ev["at_word"]).strip().lower()
+        words = wdata.get("words") or []
+        occ = int(ev.get("occurrence", 1))
+        found = 0
+        for w in words:
+            tok = str(w.get("w") or w.get("word") or "").strip().lower()
+            if needle in tok:
+                found += 1
+                if found == occ:
+                    edge = str(ev.get("edge", "start")).lower()
+                    base = float(w.get("e" if edge == "end" else "s", 0.0))
+                    return max(0.0, min(dur, base + offset))
+        raise ValueError(f"at_word={needle!r} (occurrence={occ}) not found in words.json")
+
+    raise ValueError(f"Event missing time anchor (`at`, `at_act`, `at_word`, or `at_dead_silence`): {ev}")
+
+
+def _get_asset_envelope(slug_or_path: str, lib_dir: str, mf_assets: dict) -> dict:
+    slug = sm.safe_slug(os.path.splitext(os.path.basename(slug_or_path))[0])
+    info = mf_assets.get(slug) or {}
+    if "onset_s" in info and "peak_s" in info and "tail_end_s" in info:
+        return info
+    cand = slug_or_path if os.path.isfile(slug_or_path) else os.path.join(lib_dir, f"{slug}.wav")
+    if os.path.isfile(cand):
+        return sm.analyze_sfx_envelope(cand)
+    return {"onset_s": 0.0, "peak_s": 0.0, "tail_end_s": 0.5, "dur_s": 0.5}
+
+
+def _resolve_whisper_spans(wdata: dict) -> list[tuple[float, float]]:
+    spans = []
+    for sb in wdata.get("sentences") or []:
+        if str(sb.get("mood") or "").lower() == "whisper":
+            spans.append((float(sb["s"]), float(sb["e"])))
+    return spans
+
+
+def audit_cues(cfg: dict, resolved_events: list[dict], wdata: dict, dur: float) -> list[dict]:
+    """Run the 4 pre-mix Horror Anti-Clutter QA Gates (MAX_BEDS, SPARSITY, CROWDING, WHISPER_INTRUSION)."""
+    warnings = []
+    beds = cfg.get("beds") or []
+    max_beds = int(cfg.get("max_beds", 1))
+    if len(beds) > max_beds:
+        warnings.append({
+            "code": "MAX_BEDS_EXCEEDED",
+            "severity": "ERROR",
+            "detail": f"Found {len(beds)} continuous beds (max allowed: {max_beds}). Never stack multiple rain/wind/room beds simultaneously!",
+        })
+
+    sfx_only = [e for e in resolved_events if e.get("bus", "sfx") == "sfx"]
+    max_sparse = max(6, int(math.ceil(dur / 6.5)))
+    if len(sfx_only) > max_sparse:
+        warnings.append({
+            "code": "SFX_SPARSITY_WARN",
+            "severity": "WARN",
+            "detail": f"Found {len(sfx_only)} spot SFX in {dur:.1f}s (sparse horror budget <= {max_sparse}). Trim non-essential cues!",
+        })
+
+    ordered = sorted(resolved_events, key=lambda e: e["target_t"])
+    for i in range(len(ordered)):
+        a = ordered[i]
+        # Pairwise crowding within 0.60s
+        if i + 1 < len(ordered):
+            b = ordered[i + 1]
+            dt = b["target_t"] - a["target_t"]
+            if dt < 0.60 and not (a.get("allow_layer") or b.get("allow_layer")):
+                warnings.append({
+                    "code": "SFX_CROWDING_WARN",
+                    "severity": "ERROR",
+                    "detail": f"'{a['label']}' ({a['target_t']:.2f}s) and '{b['label']}' ({b['target_t']:.2f}s) collide within {dt:.2f}s (< 0.60s). Set `allow_layer: true` only for intentional cross-band pairs!",
+                })
+        # Cluster crowding: >= 3 events in 1.50s
+        cluster = [e for e in ordered if a["target_t"] <= e["target_t"] <= a["target_t"] + 1.50]
+        if len(cluster) >= 3:
+            warnings.append({
+                "code": "SFX_CROWDING_WARN",
+                "severity": "ERROR",
+                "detail": f"{len(cluster)} events stacked inside 1.50s window starting at {a['target_t']:.2f}s — turns to mush!",
+            })
+            break
+
+    whisper_spans = _resolve_whisper_spans(wdata)
+    for ev in resolved_events:
+        if ev.get("allow_in_whisper"):
+            continue
+        t = ev["target_t"]
+        for ws, we in whisper_spans:
+            if (ws - 0.05) <= t <= (we + 0.05):
+                warnings.append({
+                    "code": "WHISPER_INTRUSION_WARN",
+                    "severity": "ERROR",
+                    "detail": f"Event '{ev['label']}' at {t:.2f}s intrudes into quiet WHISPER act [{ws:.2f}s..{we:.2f}s]!",
+                })
+    return warnings
+
+
+def render_cues_mix(cues_path: str, out_wav: str, library_dir: str | None = None, strict: bool = False) -> dict:
+    """Validate, render, master, verify, and report a declarative `cues.json` horror soundtrack."""
+    cues_abs = os.path.abspath(cues_path)
+    base_dir = os.path.dirname(cues_abs)
+    with open(cues_abs, encoding="utf-8") as fp:
+        cfg = json.load(fp)
+
+    voice_path = _resolve_path(base_dir, cfg.get("voice"))
+    words_path = _resolve_path(base_dir, cfg.get("words"))
+    if not voice_path or not os.path.isfile(voice_path):
+        raise FileNotFoundError(f"Voice WAV not found: {voice_path}")
+    if not words_path or not os.path.isfile(words_path):
+        raise FileNotFoundError(f"words.json not found: {words_path}")
+
+    lib_dir = library_dir or _resolve_path(base_dir, cfg.get("library_dir")) or os.path.join(AUDIO_DIR, "sfx_library")
+    mf = sm.load_manifest(lib_dir) if os.path.isdir(lib_dir) else {"assets": {}}
+    mf_assets = mf.get("assets") or {}
+
+    with open(words_path, encoding="utf-8") as fp:
+        wdata = json.load(fp)
+    dur = float(cfg.get("duration") or (float(wdata.get("dur", 10.0)) + float(cfg.get("tail_pad_s", 0.9))))
+    words = load_words(words_path)
+    dead_silences = load_dead_silences(words_path)
+    whisper_spans = _resolve_whisper_spans(wdata)
+
+    # Resolve all events and their onset/peak/end alignment BEFORE mixing
+    resolved_events = []
+    for idx, ev in enumerate(cfg.get("events") or []):
+        target_t = _resolve_event_anchor_time(ev, wdata, dur)
+        align = str(ev.get("align", "onset")).lower()
+        synth_kind = ev.get("synth")
+        if synth_kind:
+            ev_dur = float(ev.get("dur_s", 0.80))
+            align_off = ev_dur if align == "end" else (0.5 * ev_dur if align == "peak" else 0.0)
+        else:
+            env = _get_asset_envelope(ev["sound"], lib_dir, mf_assets)
+            if align == "onset":
+                align_off = float(env.get("onset_s", 0.0))
+            elif align == "peak":
+                align_off = float(env.get("peak_s", 0.0))
+            elif align == "end":
+                align_off = float(env.get("tail_end_s", env.get("dur_s", 0.0)))
+            else:
+                align_off = 0.0
+        place_t = max(0.0, target_t - align_off)
+        resolved_events.append({
+            **ev,
+            "idx": idx + 1,
+            "target_t": round(target_t, 4),
+            "place_t": round(place_t, 4),
+            "align": align,
+            "align_off": round(align_off, 4),
+            "label": ev.get("label") or ev.get("sound") or ev.get("synth") or f"cue_{idx+1}",
+        })
+
+    # Run pre-mix Anti-Clutter QA Gates
+    qa_warnings = audit_cues(cfg, resolved_events, wdata, dur)
+    if strict and any(w["severity"] == "ERROR" for w in qa_warnings):
+        msg = "\n".join(f"  [{w['code']}] {w['detail']}" for w in qa_warnings)
+        raise RuntimeError(f"STRICT ANTI-CLUTTER QA GATE FAILED:\n{msg}")
+
+    voice = load_voice(voice_path, dur)
+    music = np.zeros((2, ns(dur)), dtype=np.float64)
+    sfx_spot = np.zeros((2, ns(dur)), dtype=np.float64)
+    sfx_bed = np.zeros((2, ns(dur)), dtype=np.float64)
+    r = rng(int(cfg.get("seed", 7070)))
+    room_ir = make_ir(rt60=float(cfg.get("room_rt60", 1.5)), seed=70, hf=1.3, early=[(0.020, 0.22, -0.35), (0.045, 0.14, 0.40)], density_lp=3800)
+
+    used_credit_entries = []
+    used_history_ids = []
+
+    def _record_usage(sound_name: str):
+        slug = sm.safe_slug(os.path.splitext(os.path.basename(sound_name))[0])
+        info = mf_assets.get(slug)
+        if info:
+            used_credit_entries.append({"slug": slug, **info})
+            used_history_ids.append(info.get("openverse_id") or slug)
+
+    # 1. Story-driven ambience bed (<= 1 bed!) with dialog-safe EQ + whisper quiet automation
+    spans = speech_spans(words, merge=0.28)
+    for b in cfg.get("beds") or []:
+        if b.get("synth") == "sub_drone":
+            arr = sub_drone(f=float(b.get("freq_hz", 43.65)), dur=dur, vel=float(b.get("vel", 0.20)), r=r)
+            if b.get("gain_db"):
+                arr = arr * dbg(float(b["gain_db"]))
+        else:
+            arr = load_sfx_asset(
+                b["sound"],
+                library_dir=lib_dir,
+                dur_sec=dur,
+                gain_db=float(b.get("gain_db", -26.0)),
+                loop=bool(b.get("loop", True)),
+                fade_in=float(b.get("fade_in", 0.35)),
+                fade_out=float(b.get("fade_out", 0.50)),
+            )
+            if arr is None:
+                raise FileNotFoundError(f"Bed SFX asset not found in {lib_dir}: {b['sound']}")
+            _record_usage(b["sound"])
+        arr = _apply_dialog_safe_eq(arr, hp_hz=b.get("hp_hz"), lp_hz=b.get("lp_hz"), voice_notch_db=float(b.get("voice_notch_db", 0.0)))
+        bed_duck = float(b.get("duck_db", -5.5))
+        if bed_duck < -0.1:
+            arr *= dbg(duck_db(spans, dur, depth=bed_duck, pre=0.08, post=0.14, att=0.06, rel=0.45))[None, :]
+        # Extra silence carving on whisper acts so whispered speech stays razor-clear!
+        wh_duck = float(b.get("whisper_duck_db", -12.0))
+        if whisper_spans and wh_duck < -0.1:
+            arr *= dbg(duck_db(whisper_spans, dur, depth=wh_duck, pre=0.15, post=0.18, att=0.12, rel=0.45))[None, :]
+        place(sfx_bed, arr, 0.0)
+
+    # 2. Surgical story-driven spot cues (onset/peak/end aligned)
+    for ev in resolved_events:
+        if ev.get("synth") == "reverse_suck":
+            arr = reverse_suck(dur=float(ev.get("dur_s", 0.78)), vel=float(ev.get("vel", 0.38)), r=r, f_base=float(ev.get("f_base", 280.0)))
+            if ev.get("gain_db"):
+                arr = arr * dbg(float(ev["gain_db"]))
+        elif ev.get("synth") == "sub_drone":
+            arr = sub_drone(f=float(ev.get("freq_hz", 43.65)), dur=float(ev.get("dur_s", 5.0)), vel=float(ev.get("vel", 0.22)), r=r)
+            if ev.get("gain_db"):
+                arr = arr * dbg(float(ev["gain_db"]))
+        else:
+            arr = load_sfx_asset(
+                ev["sound"],
+                library_dir=lib_dir,
+                dur_sec=ev.get("dur_s"),
+                gain_db=float(ev.get("gain_db", -10.0)),
+                pan_pos=ev.get("pan"),
+                loop=bool(ev.get("loop", False)),
+                fade_in=float(ev.get("fade_in", 0.012)),
+                fade_out=float(ev.get("fade_out", 0.06)),
+            )
+            if arr is None:
+                raise FileNotFoundError(f"Event SFX asset not found in {lib_dir}: {ev['sound']}")
+            _record_usage(ev["sound"])
+
+        arr = _apply_dialog_safe_eq(arr, hp_hz=ev.get("hp_hz"), lp_hz=ev.get("lp_hz"), voice_notch_db=float(ev.get("voice_notch_db", 0.0)))
+        reverb_wet = float(ev.get("reverb", 0.0))
+        if reverb_wet > 0.01:
+            arr = arr + reverb_wet * convolve_st(arr, room_ir)
+
+        bus = str(ev.get("bus", "sfx")).lower()
+        target_buf = music if bus in ("score", "music") else sfx_spot
+        place(target_buf, arr, ev["place_t"])
+
+    # Gentle music bus ducking under speech
+    music *= dbg(duck_db(spans, dur, depth=float(cfg.get("music_duck_db", -4.5)), pre=0.08, post=0.14, att=0.06, rel=0.45))[None, :]
+
+    # Master mix with TRUE -48 dB Dead Silence vacuum
+    final_mix, stems, stats = master_mix(
+        voice,
+        music,
+        sfx_spot + sfx_bed,
+        target_lufs=float(cfg.get("target_lufs", -15.0)),
+        ceil_db=float(cfg.get("ceil_db", -1.2)),
+        fade_out=float(cfg.get("fade_out", 0.12)),
+        dead_silences=dead_silences,
+        ds_floor_db=float(cfg.get("dead_silence_floor_db", -48.0)),
+    )
+
+    out_abs = os.path.abspath(out_wav)
+    out_dir = os.path.dirname(out_abs)
+    os.makedirs(out_dir, exist_ok=True)
+    write_mix_and_stems(os.path.join(out_dir, "audio"), final_mix, stems)
+    write_wav(out_abs, final_mix)
+
+    # Post-mix measurement verification (TRUE Dead Silence drop + clipping + whisper floor!)
+    clips = int(np.sum(np.abs(final_mix) >= 0.999))
+    ds_reports = []
+    bed_total = stems["music"] + stems["sfx"]
+    for ds in dead_silences:
+        in_db = rms_db(bed_total[:, ns(ds["s"] + 0.05) : ns(ds["e"] - 0.04)])
+        out_db = rms_db(bed_total[:, ns(0.4) : ns(min(2.2, max(0.8, ds["s"] - 0.2)))])
+        drop = out_db - in_db
+        ds_reports.append({"s": ds["s"], "e": ds["e"], "inside_dbfs": round(in_db, 2), "outside_dbfs": round(out_db, 2), "drop_db": round(drop, 2)})
+        if drop < 38.0 and out_db > -50.0:
+            qa_warnings.append({"code": "DEAD_SILENCE_VACUUM_FAIL", "severity": "ERROR", "detail": f"Dead silence [{ds['s']:.2f}..{ds['e']:.2f}s] drop was only {drop:.1f} dB (< 38 dB)"})
+
+    if clips > 0:
+        qa_warnings.append({"code": "CLIPPING_FAIL", "severity": "ERROR", "detail": f"Detected {clips} clipped samples in final mix!"})
+
+    # Write per-project credits.txt & history.jsonl
+    credits_path = os.path.join(out_dir, "credits.txt")
+    sm.write_credits_file(credits_path, used_credit_entries)
+    if os.path.isdir(lib_dir) and used_history_ids and not cfg.get("skip_history"):
+        sm.append_history(lib_dir, os.path.basename(out_dir), used_history_ids)
+
+    # Write measurement-first `mix_report.md` with 5 headphone verification timestamps
+    verdict = "PASS" if not any(w["severity"] == "ERROR" for w in qa_warnings) else "NEEDS FIX"
+    ebur_txt = ffmpeg_ebur(out_abs)
+    report_lines = [
+        f"# Báo Cáo Phối Âm & Kiểm Định Chống Rối (`mix_report.md` — {verdict})",
+        "",
+        f"- **File xuất:** [{os.path.basename(out_abs)}](file://{out_abs}) (`{dur:.2f}s` · `48 kHz stereo`)",
+        f"- **Kịch bản cue:** [{os.path.basename(cues_abs)}](file://{cues_abs})",
+        f"- **Bản quyền nguồn:** [credits.txt](file://{credits_path})",
+        f"- **Loudness thực đo:** `I = {stats['I']:.2f} LUFS` · `TP = {stats['TP']:.2f} dBTP` · `LRA = {stats['LRA']:.2f} LU` · `clips = {clips}`",
+        f"- **Lớp nền (Beds):** `{len(cfg.get('beds') or [])}` *(quy chuẩn <= 1)* · **SFX điểm (Events):** `{len(resolved_events)}`",
+        "",
+        "## Cổng Kiểm Định Chống Rối (6 QA Gates)",
+    ]
+    if not qa_warnings:
+        report_lines.append("- **PASS 6/6:** `0` lỗi chồng nền, `0` lỗi crowding, `0` lỗi đè hồi thì thầm, `0` clips!")
+    else:
+        for w in qa_warnings:
+            report_lines.append(f"- **[{w['severity']}] `{w['code']}`:** {w['detail']}")
+
+    if ds_reports:
+        report_lines.append("")
+        report_lines.append("## TRUE Dead Silence Thực Đo")
+        for d in ds_reports:
+            report_lines.append(f"- `[{d['s']:.2f}s .. {d['e']:.2f}s]`: trong khoảng lặng `{d['inside_dbfs']:.2f} dBFS` vs bên ngoài `{d['outside_dbfs']:.2f} dBFS` (**giảm `{d['drop_db']:.2f} dB`**).")
+
+    report_lines.extend([
+        "",
+        "## 5 Mốc Thời Gian Đề Xuất Đeo Tai Nghe Kiểm Tra",
+    ])
+    check_pts = []
+    if whisper_spans:
+        ws, we = whisper_spans[0]
+        check_pts.append((ws, f"Hồi thì thầm (`{ws:.2f}s..{we:.2f}s`) — kiểm tra nền có thực sự tĩnh và không có SFX chen ngang không"))
+    for d in ds_reports[:1]:
+        check_pts.append((max(0.0, d["s"] - 0.8), f"Khoảng lặng chết (`{d['s']:.2f}s..{d['e']:.2f}s`) — kiểm tra sườn hút ngược → chân không `-48 dB` → cú nổ sau im lặng"))
+    for ev in resolved_events:
+        check_pts.append((ev["target_t"], f"`{ev['label']}` (mốc `{ev['target_t']:.2f}s`, căn `{ev['align']}`, gain `{ev.get('gain_db', 0):+.1f} dB`)"))
+    for t_chk, desc in sorted(check_pts, key=lambda x: x[0])[:6]:
+        report_lines.append(f"- **`{t_chk:05.2f}s`** — {desc}")
+
+    report_lines.extend([
+        "",
+        "## Bảng Chi Tiết Toàn Bộ Cue Đã Phối",
+        "| # | Bus | Âm thanh | Mốc đích | Điểm phát | Căn (`align`) | Gain · Pan | Mô tả |",
+        "|---|---|---|---|---|---|---|---|",
+    ])
+    for ev in resolved_events:
+        src_lbl = ev.get("sound") or f"synth:{ev.get('synth')}"
+        report_lines.append(
+            f"| {ev['idx']} | `{ev.get('bus', 'sfx')}` | `{src_lbl}` | `{ev['target_t']:.2f}s` | `{ev['place_t']:.2f}s` | "
+            f"`{ev['align']}` (-{ev['align_off']:.2f}s) | `{ev.get('gain_db', 0):+.1f} dB` · pan `{ev.get('pan', 0.0)}` | {ev['label']} |"
+        )
+
+    report_path = os.path.join(out_dir, "mix_report.md")
+    with open(report_path, "w", encoding="utf-8") as fp:
+        fp.write("\n".join(report_lines) + "\n")
+
+    print(f"MIX CUES {verdict} -> {out_abs} ({dur:.2f}s | I={stats['I']:.2f} LUFS | TP={stats['TP']:.2f} dBTP | clips={clips} | warnings={len(qa_warnings)})")
+    print(f"  Report : {report_path}")
+    print(f"  Credits: {credits_path}")
+    for d in ds_reports:
+        print(f"  DEAD_SILENCE [{d['s']:.2f}..{d['e']:.2f}s]: drop={d['drop_db']:.2f} dB (inside={d['inside_dbfs']:.2f} dBFS)")
+    return {"verdict": verdict, "out_wav": out_abs, "report": report_path, "credits": credits_path, "warnings": qa_warnings, "stats": stats, "clips": clips, "dead_silences": ds_reports}
+
+
+def build_parser():
+    ap = argparse.ArgumentParser(description="Horror Engine v7.0 Declarative `cues.json` Mixer with 6 Anti-Clutter Horror QA Gates.")
+    ap.add_argument("--cues", required=True, help="Path to declarative cues.json")
+    ap.add_argument("--out", required=True, help="Output mastered 48kHz stereo WAV path")
+    ap.add_argument("--library", default=None, help="Optional SFX library directory (auto-detects audio/sfx_library)")
+    ap.add_argument("--strict", action="store_true", help="Exit non-zero if any Anti-Clutter QA Gate reports ERROR")
+    return ap
+
+
+def main(argv=None):
+    args = build_parser().parse_args(argv)
+    res = render_cues_mix(args.cues, args.out, library_dir=args.library, strict=args.strict)
+    if args.strict and res["verdict"] != "PASS":
+        sys.exit(1)
+
+
+if __name__ == "__main__":
+    main()
