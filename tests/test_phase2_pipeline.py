@@ -1025,6 +1025,91 @@ class TestPhase2Pipeline(unittest.TestCase):
             updated_m, _ = am.align_manifest_data(am_man, words_list, fps=30.0)
             self.assertEqual(updated_m["beats"][0]["propStates"]["P01"]["triggerFrame"], 36)
 
+    def test_v9_horror_story_v3_longform_24_gates_tension_svg_and_all_parts_export(self):
+        import argparse
+        import horror_story as hs
+
+        sample_path = os.path.join(REPO_ROOT, "companion-skills", "horror-story", "examples", "sample-short-210s-v3.json")
+        self.assertTrue(os.path.isfile(sample_path))
+        doc = hs.read_json(sample_path)
+
+        # 1. Sample 216s (4-chapter short) passes all 3 stages (lore, structure, full = 24/24 gates)
+        for stg in ("lore", "structure", "full"):
+            gates, failed = hs.evaluate_gates(doc, stage=stg)
+            self.assertEqual(len(gates), 24, f"Expected 24 gates for v3.0 at stage={stg}")
+            self.assertEqual(failed, [], f"Expected 24/24 PASS at stage={stg}, got failed: {failed}")
+
+        # 2. HTML Story Bible contains BOTH Tension Curve SVG + 2D Floorplan SVG + Lore/Clues/Subtext panels
+        html_out = hs.render_html(doc)
+        self.assertIn("class='tc-svg'", html_out)
+        self.assertIn("class='fp-svg'", html_out)
+        self.assertIn("Thế Giới Quan & Hệ Quy Tắc Thực Thể", html_out)
+        self.assertIn("Kinh Tế Manh Mối", html_out)
+        self.assertIn("Nội tâm:", html_out)
+
+        # 3. seed --format series --total-sec 600 builds a 10-part 16:9 5-act skeleton
+        with tempfile.TemporaryDirectory() as td:
+            ser_p = os.path.join(td, "series.json")
+            hs.cmd_seed(argparse.Namespace(
+                title="Series 10 Phút", format="series", parts=None, total_sec=600,
+                mode="auto", aspect=None, pov="first_person_survivor", genre="rules",
+                adapt_mode="original", out=ser_p,
+            ))
+            ser_doc = hs.read_json(ser_p)
+            self.assertEqual(ser_doc["schemaVersion"], "3.0")
+            self.assertEqual(ser_doc["params"]["format"], "series")
+            self.assertEqual(ser_doc["params"]["aspect"], "16:9")
+            self.assertEqual(ser_doc["params"]["parts"], 10)
+            self.assertEqual(len(ser_doc["acts"]), 5)
+
+            # 4. export-blueprint --all-parts scaffolds OUTLINE.json, CONTINUITY.init.json & p01..p04
+            #    and every chapter's manifest.draft.json passes validate_manifest.py WITH shared LOCATION_REGISTRY.json!
+            bp_dir = os.path.join(td, "bp_all")
+            hs.cmd_export_blueprint(argparse.Namespace(
+                story=sample_path, out=bp_dir, part=1, all_parts=True,
+                project_id="tram-pha-test", aspect=None, bed_sound="night_rain_indoor",
+            ))
+            self.assertTrue(os.path.isfile(os.path.join(bp_dir, "OUTLINE.json")))
+            self.assertTrue(os.path.isfile(os.path.join(bp_dir, "CONTINUITY.init.json")))
+            reg_path = os.path.join(td, "LOCATION_REGISTRY.json")
+            val_script = os.path.join(SCRIPTS_DIR, "validate_manifest.py")
+            for p_idx in range(1, 5):
+                pdir = os.path.join(bp_dir, f"p{p_idx:02d}")
+                man_p = os.path.join(pdir, "manifest.draft.json")
+                cues_p = os.path.join(pdir, "cues.draft.json")
+                scr_p = os.path.join(pdir, "SCRIPT.skeleton.md")
+                self.assertTrue(os.path.isfile(scr_p))
+                self.assertIn("Nội tâm:", open(scr_p, encoding="utf-8").read())
+                proc = subprocess.run(
+                    [sys.executable, val_script, man_p, "--cues", cues_p, "--registry", reg_path, "--update-registry"],
+                    capture_output=True, text=True, check=False,
+                )
+                self.assertEqual(proc.returncode, 0, f"p{p_idx:02d} failed validate_manifest:\n{proc.stdout}\n{proc.stderr}")
+
+            # 5. Negative tests: corrupting each of the 6 new v3.0 dimensions MUST fail its exact gate!
+            bad = json.loads(json.dumps(doc))
+            bad["parts"][0]["target_sec"] = 90  # pushes total to 252 OK, but P1 actionBeats sum=54s deviates >20% from 90s!
+            bad["worldLore"]["backstory"] = ""
+            bad["characters"][0]["trappedReason"] = ""
+            bad["clues"][0]["plantedInPart"] = 4
+            bad["clues"][0]["payoffInPart"] = 2  # plot hole!
+            for p in bad["parts"]:
+                p["tensionStart"] = 9
+                p["tensionPeak"] = 10
+                p["tensionEnd"] = 9  # flat 9-10 tension, no breather!
+            bad["parts"][2]["actionBeats"][0]["propChanges"][0]["fromState"] = "ajar"  # cross-part prop drift from lockedInside!
+            _, bad_failed = hs.evaluate_gates(bad, stage="full")
+            bad_ids = {g["id"] for g in bad_failed}
+            for expected_gate in (
+                "format-duration-budget",
+                "world-lore-and-entity-rules",
+                "character-depth-and-stakes",
+                "clue-twist-economy",
+                "multi-act-tension-curve",
+                "cross-part-continuity-and-dialogue-briefs",
+            ):
+                self.assertIn(expected_gate, bad_ids, f"Missing expected gate failure: {expected_gate} (got {bad_ids})")
+
 
 if __name__ == "__main__":
     unittest.main()

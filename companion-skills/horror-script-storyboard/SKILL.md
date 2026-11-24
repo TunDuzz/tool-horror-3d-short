@@ -100,7 +100,10 @@ python3 scripts/validate_manifest.py src/<project>/manifest.json \
 
 ---
 
-## 4. The 8-Beat Dark-Horror POV Standalone Formula (55–75 s)
+## 4. Narrative Pacing Blueprints (`150–300s` Short & `8–15 Min` Series, plus Legacy `45–90s` Micro)
+
+- **Default Standalone Short (`150–300s` = 2.5–5 min, `3–5` seamless Chapters × `50–65s`)** and **Full Series (`8–15 min`, `8–15` Chapters):** Follow `horror-story` v3.0's `STORYTELLING_CRAFT.md` and exported `p01..pNN/SCRIPT.skeleton.md` (with `subtext`, `sensoryDetails`, `wordBudget`, and zero repeated intro recaps when `seamlessStitch: true`).
+- **Legacy Micro Test (`55–75s`, 1 Chapter) — 8-Beat Dark-Horror POV Formula:**
 
 1. **Cold Hook (`0–8 s`, `POV` or `WS`, `mood=calm_omen`):** Establish the chilling rule/atmosphere and unique `LocationBlueprint` — **DO NOT spoil the entity's full face here!** Optional subtle distant `addCornerLurker3D` (`breathing: false`).
 2. **POV Interaction / Inciting Cue (`8–16 s`, `POV_TURN` → `POV_PROP`, `mood=curious`):** 6–8f deterministic `whipPan` toward a diegetic 3D prop (`Phone3D` lockscreen alert synced with `HorrorHUD`, `PaperProp3D`, or `HandheldOilLamp3D`).

@@ -1,108 +1,200 @@
-# Horror Story Schema v2.0 (`story.json` · Engine v8.0 Spatial & Action Blocking)
+# Horror Story Schema v3.0 (`story.json` · Narrative Studio — Phim ngắn 150–300s & Series 8–15 phút)
 
-Toàn bộ dữ liệu cốt truyện + mặt bằng 2D + bảng blocking hành động do Agent điền vào 1 file `story.json` (`schemaVersion: "2.0"`). Báo cáo HTML kèm **Sơ đồ Mặt bằng 2D SVG** (`story-report.html`), Markdown (`STORY_BIBLE.md`), `OUTLINE.json`, và gói đồng bộ 3 file (`SCRIPT.skeleton.md`, `manifest.draft.json`, `cues.draft.json`) đều được sinh tự động bằng `scripts/horror_story.py`.
+Toàn bộ dữ liệu thế giới quan, quy tắc thực thể, tâm lý nhân vật, kinh tế manh mối, cấu trúc đa hồi, mặt bằng 2D và bảng blocking hành động + định hướng thoại do Agent điền vào 1 file `story.json` (`schemaVersion: "3.0"`). Báo cáo HTML (**Biểu đồ Tension Curve SVG + Sơ đồ Mặt bằng 2D SVG**), `STORY_BIBLE.md`, `OUTLINE.json`, `CONTINUITY.init.json` và gói từng chương `p01..pNN/{SCRIPT.skeleton.md, manifest.draft.json, cues.draft.json}` đều sinh tự động từ `scripts/horror_story.py`.
+
+*(Hoàn toàn tương thích ngược với `schemaVersion: "1.0"` — 14 cổng và `"2.0"` — 18 cổng.)*
+
+## 3 Định Dạng Chuẩn (`params.format`)
+
+| `format` | Tổng thời lượng | Số chương sản xuất (`parts`) | Thời lượng / chương | Khung hình mặc định | Trần Jumpscare toàn phim |
+|---|---|---|---|---|---|
+| **`short`** *(Mặc định phim ngắn)* | **`150s–300s`** *(2.5–5 phút)* | **`3–5` chương liền mạch** | `45–90s` *(khuyến nghị `50–65s`)* | `9:16` *(hỗ trợ `16:9`)* | `<= 4` *(tối đa `<= 2`/chương)* |
+| **`series`** *(Tập dài / Series)* | **`480s–900s`** *(8–15 phút)* | **`8–15` chương** | `45–90s` *(khuyến nghị `55–65s`)* | `16:9` *(hỗ trợ `9:16`)* | `<= round(phút × 0.65)` *(có chương thở `0` JS)* |
+| **`micro`** *(Test nhanh / Legacy)* | `45s–90s` | `1` phần | `45–90s` | `9:16` | `<= 2` |
+
+## Cấu Trúc JSON Đầy Đủ (`schemaVersion: "3.0"`)
 
 ```json
 {
-  "schemaVersion": "2.0",
+  "schemaVersion": "3.0",
   "title": "Tên cốt truyện",
   "lang": "vi",
   "params": {
-    "mode": "standalone",
-    "parts": 1,
-    "secondsPerPart": 55,
+    "format": "short",
+    "mode": "short",
+    "parts": 4,
+    "secondsPerPart": 52,
+    "targetTotalSec": 210,
     "wordsPerSecond": 2.9,
+    "aspect": "9:16",
+    "seamlessStitch": true,
     "genre": "folklore",
     "adaptMode": "original",
     "thresholds": {
       "maxLeads": 5,
       "maxSupport": 10,
       "maxFunctional": 10,
-      "maxProps": 8,
+      "maxProps": 10,
       "maxBeatGap": 1,
-      "maxPrimaryScenes": 3
+      "maxPrimaryScenes": 5,
+      "maxJumpscaresTotal": 4
     }
+  },
+  "narrativeStyle": {
+    "pov": "first_person_survivor",
+    "narratorVoice": "Giọng nam kể chuyện đêm khuya trầm ấm nhưng biết run rẩy khi sợ hãi (Thiện Minh)",
+    "dialogueDensity": "balanced_dialogue",
+    "toneKeywords": ["tâm lý âm ỉ", "dân gian thực tế", "PSX VHS chân thực"],
+    "forbiddenCliches": ["Hóa ra là mơ", "Nhân vật tự lao vào chỗ chết không lý do"]
   },
   "premise": {
     "core": "Một câu nêu xung đột trung tâm...",
-    "entityRule": "Luật ngầm hoặc cách thực thể hoạt động...",
-    "twistCore": "Sự thật hoặc cú lật cuối cùng...",
-    "keep": [{ "what": "Chi tiết giữ lại", "why": "Lý do", "evidence": "Trích dẫn nguồn" }],
-    "cut": [{ "what": "Tuyến phụ bị cắt", "why": "Lý do giữ truyện gọn" }],
-    "risks": [{ "what": "Rủi ro mạch truyện", "plan": "Cách xử lý" }]
+    "entityRule": "Luật sinh tồn / cấm kỵ cốt lõi...",
+    "twistCore": "Sự thật lật ngược toàn bộ các manh mối đã gieo..."
+  },
+  "worldLore": {
+    "era": "Miền Tây Việt Nam, tháng 11 năm 1998",
+    "settingDetail": "Chi tiết không gian địa lý, hạ tầng, ánh sáng, sự cô lập...",
+    "weatherProgression": ["Mưa nhỏ 22:30", "Gió giật cúp điện 00:15", "Tĩnh lặng bất thường 01:06"],
+    "backstory": "Bi kịch gốc giải thích tại sao địa điểm bị ám / quy tắc tồn tại...",
+    "tabooLore": "Tục kiêng kỵ dân gian địa phương gắn với câu chuyện..."
+  },
+  "entityProfile": {
+    "name": "Danh xưng thực thể",
+    "origin": "Bản chất & nguồn gốc hình thành thực thể",
+    "rules": [
+      {
+        "rule": "Quy tắc sinh tồn số 1",
+        "trigger": "Hành động/tình huống kích hoạt",
+        "consequence": "Hậu quả cụ thể khi phạm luật",
+        "loophole": "Cái bẫy ẩn hoặc kẽ hở mà thực thể lợi dụng"
+      }
+    ],
+    "sensoryTells": ["Mùi bùn tanh đột ngột", "Ngọn đèn dầu thu nhỏ ngả xanh", "Nhiễu băng VHS kèm tiếng kéo lê"],
+    "escalationStages": [
+      "Cấp 1: Dấu hiệu ngoại vi (vật thể dịch chuyển, mùi lạ)",
+      "Cấp 2: Bóng rình góc khuất & tiếng giả giọng",
+      "Cấp 3: Xâm nhập vùng an toàn & phá chốt bảo vệ",
+      "Cấp 4: Hiện nguyên hình toàn thân & bộc phát cao trào"
+    ]
   },
   "characters": [
     {
       "id": "C01",
-      "name": "Nhân vật chính",
+      "name": "Tên nhân vật",
+      "age": 24,
       "tier": "lead",
       "roleType": "human",
-      "role": "Người sống sót (POV)",
+      "role": "Nhân vật chính (POV)",
       "heightMeters": 1.72,
-      "trait": "Cảnh giác nhưng hoảng loạn khi quy tắc bị phá vỡ",
-      "appearanceBrief": "Thanh niên mặc áo khoác mỏng tối màu, cầm đèn pin nhỏ trong nhà gỗ cũ.",
-      "movementRules": "Chạy qua đúng cửa thông phòng BEDROOM_DOOR để sang phòng ngủ S02",
-      "arc": "Tin tưởng chốt sắt khóa cửa -> nghi ngờ tiếng cào -> hoảng loạn chạy trốn -> sụp đổ khi mối họa nằm dưới gầm giường",
+      "trait": "Tính cách bề mặt",
+      "goal": "Mục tiêu sống còn trước khi gặp biến cố",
+      "trappedReason": "Lý do vật lý/tâm lý khiến nhân vật KHÔNG THỂ bỏ chạy ngay lập tức!",
+      "flaw": "Điểm yếu / vết thương quá khứ khiến nhân vật dễ sập bẫy",
+      "secret": "Bí mật giấu kín liên quan tới cú twist",
+      "voiceProfile": "Tông giọng, nhịp thở, khẩu ngữ địa phương, cách ngắt câu khi hoảng",
+      "wardrobe": "Trang phục bất biến xuyên suốt đêm",
+      "carriedItems": ["Đèn pin cầm tay", "Điện thoại pin 14%"],
+      "appearanceBrief": "Mô tả ngoại hình chi tiết chuyển thẳng sang CharacterBlueprint...",
+      "movementRules": "Lộ trình di chuyển hợp lý qua đúng cửa thông phòng",
+      "arc": "Biến đổi tâm lý từ đầu đến cuối truyện",
+      "relationships": [{ "targetId": "C02", "relation": "Loại quan hệ", "tension": "Xung đột/nghi ngờ ngầm" }],
       "from": ["Sáng tác mới"]
     }
   ],
   "scenes": [
     {
       "id": "S01",
-      "name": "Gian nhà gỗ cũ lúc 01:06",
+      "name": "Tên phòng / không gian",
       "primary": true,
       "archetype": "oldRuralWoodenHouse",
       "dimensions": [6.0, 7.2, 4.0],
       "ceilingType": "aFrameThatch",
-      "atmosphere": "Tối sâu, mưa bão ngoài cửa chớp vỡ, cửa gỗ 2 cánh cài chốt sắt",
-      "practicalLights": ["oilLamp", "phoneScreen", "handheldFlashlight"],
+      "atmosphere": "Không khí, mùi vị, nguồn sáng vật lý",
+      "practicalLights": ["oilLamp", "handheldFlashlight"],
       "landmarks": [
-        { "id": "POV_SEAT", "kind": "stance", "pos": [0.05, 0.0, 1.95], "note": "Chiếu giữa phòng" },
-        { "id": "FRONT_DOOR", "kind": "portal", "pos": [0.0, 0.0, -3.45], "note": "Cửa gỗ 2 cánh thông ra hành lang tối" },
-        { "id": "BEDROOM_DOOR", "kind": "portal", "pos": [2.95, 0.0, 1.80], "connectsTo": "S02:ENTRY_DOOR", "note": "Cửa sang phòng ngủ S02" }
+        { "id": "POV_START", "kind": "stance", "pos": [0.0, 0.0, 1.8], "note": "Điểm xuất phát" },
+        { "id": "MAIN_DOOR", "kind": "portal", "pos": [0.0, 0.0, -3.45], "connectsTo": "S02:PORCH_ENTRY", "note": "Cửa chính nối sang S02" }
       ]
     }
   ],
+  "acts": [
+    {
+      "act": 1,
+      "name": "Hồi 1: Đời thường & Cài luật",
+      "partRange": [1, 1],
+      "goal": "Tạo đồng cảm nhân vật + khóa lý do mắc kẹt + gieo manh mối đầu tiên",
+      "turningPoint": "Sự kiện kết thúc Hồi 1 buộc nhân vật phải đối mặt dị biến",
+      "dominantEmotion": "calm_omen -> curious"
+    }
+  ],
+  "clues": [
+    {
+      "id": "CL01",
+      "kind": "physical_clue",
+      "plantedInPart": 1,
+      "plantedDetail": "Chi tiết nhỏ gieo ở Chương 1 qua hình ảnh/lời thoại",
+      "payoffInPart": 4,
+      "recontextualization": "Ý nghĩa rợn người hoàn toàn khác khi lật kèo ở Chương 4"
+    }
+  ],
   "beats": [
-    { "id": "B01", "part": 1, "type": "hook", "weight": "minor", "setup": "Lời dặn không mở cửa sau nửa đêm", "payoff": "Khóa luật sinh tử" }
+    { "id": "B01", "part": 1, "type": "hook", "weight": "minor", "setup": "...", "payoff": "..." }
   ],
   "props": [
     {
       "id": "P01",
-      "name": "Cửa gỗ 2 cánh & chốt sắt",
+      "name": "Tên đạo cụ gánh cốt truyện",
       "sceneId": "S01",
-      "landmarkId": "FRONT_DOOR",
+      "landmarkId": "MAIN_DOOR",
       "initialState": "closedBolted",
       "states": ["closedBolted", "boltSliding", "slammedOpen"],
-      "function": "Ngăn cách giữa an toàn và thực thể ngoài hành lang; tự trượt chốt rồi bật tung ở cao trào",
-      "beatIds": ["B01", "B02"]
+      "function": "Vai trò sống còn trong cốt truyện",
+      "beatIds": ["B01"]
     }
   ],
   "parts": [
     {
       "part": 1,
-      "title": "Đừng mở cửa sau nửa đêm",
-      "target_sec": 50,
+      "act": 1,
+      "title": "Tên chương",
+      "target_sec": 52,
       "light": "warmLamp",
-      "synopsis": "Văn xuôi kể diễn biến phần này (không chứa lời thoại ngoặc kép)...",
-      "hook": "Lời dặn cấm mở cửa sau 01:06 giữa đêm mưa...",
-      "suspense": "Đèn pin phụt tắt và đôi mắt trắng dã lao ra từ gầm giường.",
+      "pacingType": "setup",
+      "tensionStart": 2,
+      "tensionPeak": 5,
+      "tensionEnd": 4,
+      "newInfoRevealed": "Thông tin mới bắt buộc hé lộ trong chương này (cấm câu giờ rỗng ruột)",
+      "cliffhangerType": "question",
+      "transitionOut": "cut",
+      "synopsis": "Văn xuôi kể diễn biến chương (KHÔNG chứa ngoặc kép đối thoại)...",
+      "hook": "Móc mở đầu chương...",
+      "suspense": "Điểm treo dẫn sang chương tiếp theo...",
       "sceneIds": ["S01"],
       "characterIds": ["C01"],
       "propIds": ["P01"],
-      "soundCues": ["Mưa đêm", "Chốt sắt trượt", "Jumpscare"],
-      "warnings": ["Cấm để cửa mở rồi tự đóng lại trước khi trượt chốt"],
+      "soundCues": ["Mưa đêm", "Sàn gỗ kẽo kẹt"],
+      "warnings": ["Chưa lộ mặt thực thể — chỉ cấp 1 ngoại vi"],
       "actionBeats": [
         {
-          "beatId": "AB01",
+          "beatId": "P1_AB01",
           "sceneId": "S01",
-          "durationSec": 6.0,
+          "durationSec": 14.0,
           "mood": "calm_omen",
           "light": "warmLamp",
-          "camera": { "stance": "seated", "posLandmark": "POV_SEAT", "lookLandmark": "FRONT_DOOR", "motion": "dolly" },
+          "camera": { "stance": "seated", "posLandmark": "POV_START", "lookLandmark": "MAIN_DOOR", "motion": "dolly" },
           "actors": [],
           "propChanges": [{ "id": "P01", "fromState": "closedBolted", "toState": "closedBolted" }],
-          "actionSummary": "Mở màn đêm mưa gió rít qua khe cửa gỗ cài chốt sắt",
+          "actionSummary": "Mô tả hành động 3D cụ thể...",
+          "subtext": "Nội tâm nhân vật đang nghĩ / cố tự trấn an điều gì...",
+          "sensoryDetails": { "sight": "Ánh đèn dầu rung", "sound": "Mưa gõ mái tôn + gió lùa", "atmosphere": "Ẩm lạnh mùi gỗ mục" },
+          "spokenBeat": {
+            "speaker": "NARRATOR",
+            "intent": "Thiết lập thời gian, lý do mắc kẹt và lời dặn cấm kỵ",
+            "keyPhrase": "Nếu nghe đủ ba tiếng gõ trên ván sàn...",
+            "mood": "calm_omen",
+            "wordBudget": 40
+          },
           "audioCue": "distant_thunder",
           "jumpscareStyle": null
         }
@@ -112,10 +204,14 @@ Toàn bộ dữ liệu cốt truyện + mặt bằng 2D + bảng blocking hành 
 }
 ```
 
-## Tóm tắt 18 Cổng Kiểm Định (`horror_story.py validate`)
+## Tóm Tắt 24 Cổng Kiểm Định (`horror_story.py validate`)
 
-1–14. Giữ nguyên 14 cổng cốt truyện nền (`premise-core`, `char-tier-caps`, `char-arcs`, `scene-cap`, `scene-reuse`, `prop-purpose`, `beat-major`, `beat-spacing`, `reveal-discipline`, `part-duration`, `prose-only`, `hook-suspense`, `referential-integrity`, `horror-cues`).
-15. **Khóa ngoại hình nhân vật (`char-appearance-brief`):** Mọi nhân vật/thực thể phải có `appearanceBrief` chi tiết (`>= 12` ký tự) và `roleType` hợp lệ.
-16. **Mặt bằng 2D & Tọa độ Điểm neo (`scene-spatial-floorplan`):** Mỗi bối cảnh chính phải khai báo `dimensions` `[w, d, h]` + `>= 3` `landmarks` nằm trong giới hạn vật lý của phòng, và mọi cửa nối `connectsTo: "S02:LANDMARK"` đều phải tồn tại.
-17. **Liên tục hành động & Trạng thái đạo cụ (`action-blocking-continuity`):** Kiểm định tuần tự `actionBeats[]` — **chặn lỗi nhân vật dịch chuyển tức thời (`TELEPORT`)** trong cùng phòng và **chặn lỗi nhảy ngược/nhảy cóc trạng thái đạo cụ (`PROP_STATE_DRIFT`)**!
-18. **Giới hạn Jumpscare & Đồng bộ Audio (`horror-pacing-jumpscare-cap`):** Khóa tối đa **`<= 2` Jumpscare/phần** đúng 4 phong cách v7.1 (`cinema_stab | entity_shriek | metal_dread | vhs_psx_glitch`), cấm đặt Jumpscare lạnh ở beat mở đầu Phần 1.
+- **Cổng 1–14 (Cốt truyện nền):** `premise-core`, `char-tier-caps`, `char-arcs`, `scene-cap`, `scene-reuse`, `prop-purpose`, `beat-major`, `beat-spacing`, `reveal-discipline`, `part-duration` *(45–90s/chương)*, `prose-only`, `hook-suspense`, `referential-integrity`, `horror-cues`.
+- **Cổng 15–18 (Không gian 2D & Blocking 3D — v2.0+):** `char-appearance-brief`, `scene-spatial-floorplan`, `action-blocking-continuity`, `horror-pacing-jumpscare-cap`.
+- **Cổng 19–24 (Chiều sâu Biên kịch & Phim dài — v3.0 / `--strict-story`):**
+  19. **`format-duration-budget`:** Tổng thời lượng khớp đúng khung `short` (`150–300s`), `series` (`480–900s`) hoặc `micro` (`45–90s`), và tổng `actionBeats.durationSec` từng chương khớp `target_sec` trong `±20%`.
+  20. **`world-lore-and-entity-rules`:** Khóa đủ `worldLore` (`era`, `settingDetail`, `backstory`, `weatherProgression >= 2`) và `entityProfile` (`origin`, `>= 2` quy tắc đủ `rule/trigger/consequence`, `>= 3` dấu hiệu 5 giác quan, `>= 3` cấp độ lộ diện leo thang).
+  21. **`character-depth-and-stakes`:** Mọi nhân vật `lead` (người) bắt buộc có `goal`, `trappedReason` (`>= 10` ký tự), `flaw`, `voiceProfile`; truyện `>= 2` nhân vật phải có `relationships[]` hợp lệ.
+  22. **`clue-twist-economy`:** Đủ manh mối (`short >= 2`, `series >= 4` có `>= 1 red_herring`), gieo trước khi lật (`plantedInPart <= payoffInPart`, ít nhất 1 manh mối gieo trước chương cuối), có `recontextualization` rõ ràng.
+  23. **`multi-act-tension-curve`:** `acts[]` phủ kín liên tục `1..parts` có `turningPoint`; mọi chương có `pacingType`, `tensionStart/Peak/End` (`1..10`), `newInfoRevealed`, và **phải có khoảng thở (`min <= 5`) xen kẽ đỉnh cao trào (`max >= 8`)**.
+  24. **`cross-part-continuity-and-dialogue-briefs`:** Kiểm định liên tục vị trí nhân vật & trạng thái đạo cụ **xuyên ranh giới chương**, yêu cầu mọi `actionBeat` có `subtext` + `sensoryDetails` + `spokenBeat` (`wordBudget` khớp thời lượng chương), và khóa trần Jumpscare toàn phim chống nhờn (`short <= 4`, `series <= max(5, round(phút × 0.65))` kèm `>= 1` chương thở `0` Jumpscare).

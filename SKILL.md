@@ -1,6 +1,6 @@
 ---
 name: horror-3d-short
-description: Use when creating a standalone 55-75s horror story video (vertical 9:16 or horizontal 16:9), a haunted folklore/urban-legend/historical mystery short, or one Part of a multi-part horror series in Horror Engine v5.0 (PSX Low-Poly VHS/CRT default 1A+2A+3A or semiReal/painterly/comic, story-driven CharacterBlueprints, 5-pillar Maximum Dread kit, non-repeating LocationBlueprints, expressive multi-speaker & 1-file So-VITS-SVC VC-Pack voice, TRUE -48 dB Dead Silence, and automated SceneManifest Script-to-Frame lock).
+description: Use when creating a horror story video — standalone 150-300s (2.5-5 min) short (9:16 default), 8-15 min (480-900s) multi-part series (16:9 default), or quick 45-90s micro test — in Horror Engine v5.1/v9.0 (PSX Low-Poly VHS/CRT default 1A+2A+3A, story-driven CharacterBlueprints, 5-pillar Maximum Dread kit, non-repeating LocationBlueprints, 24-gate Horror Story Architect v3.0 with Tension Curve & 2D SVG Floorplans, stage.ts anatomical solver, VieNeu-TTS 48kHz single-voice lock, Openverse CC0 multi-style Jumpscare mix, and TRUE -48 dB Dead Silence).
 ---
 
 # Horror 3D Story Video v5.0 (`PSX Low-Poly VHS/CRT & Maximum Dread POV`, Three.js + Remotion)
@@ -12,8 +12,8 @@ description: Use when creating a standalone 55-75s horror story video (vertical 
 
 ## Companion Skills (Activate as Needed)
 
-- **Story planning, 2-round outline approval, entity rules, `appearanceBrief`s & 14 quality gates (before `SCRIPT.md`):** Activate `horror-story`.
-- **Multi-part 8–10 min series (split into ~1 min Parts with constant context budget):** Activate `horror-series-pipeline`.
+- **Story planning v3.0 (`150–300s` Shorts & `8–15 min` Series — 3-round approval, World Lore, Entity 4-Stage Rules, Character Psychology/Trapped Stakes, Clues/Twist Economy, Tension Curve SVG, 2D Floorplans & 24 quality gates):** Activate `horror-story`.
+- **Seamless multi-chapter production (`150–300s` Shorts via 3–5 Chapters & `8–15 min` Series via 8–15 Chapters with constant context budget):** Activate `horror-series-pipeline`.
 - **Expressive multi-speaker `SCRIPT.md`, 1-file So-VITS-SVC VC-Pack (`-na`), `align_manifest.py`, shot-scale & `story.ts` timing:** Activate `horror-script-storyboard`.
 - **Non-repeating 3D worlds (`LocationBlueprint`), story-driven `CharacterBlueprint`s, PSX VHS/CRT & 5 Maximum Dread pillars, POV rigs & practical lights:** Activate `horror-world-lookdev`.
 - **Expressive voice DSP, TRUE `-48 dB` Dead Silence & procedural horror score/SFX mix:** Activate `horror-audio-sfx`.

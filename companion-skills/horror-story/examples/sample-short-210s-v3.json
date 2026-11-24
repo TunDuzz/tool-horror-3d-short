@@ -1,0 +1,580 @@
+{
+  "schemaVersion": "3.0",
+  "title": "Trạm Phà Đêm Cuối — 00:45",
+  "lang": "vi",
+  "params": {
+    "format": "short",
+    "mode": "short",
+    "parts": 4,
+    "secondsPerPart": 54,
+    "targetTotalSec": 216,
+    "wordsPerSecond": 2.9,
+    "aspect": "9:16",
+    "seamlessStitch": true,
+    "genre": "folklore",
+    "adaptMode": "original",
+    "thresholds": {
+      "maxLeads": 5,
+      "maxSupport": 10,
+      "maxFunctional": 10,
+      "maxProps": 10,
+      "maxBeatGap": 1,
+      "maxPrimaryScenes": 5,
+      "maxJumpscaresTotal": 4
+    }
+  },
+  "narrativeStyle": {
+    "pov": "first_person_survivor",
+    "narratorVoice": "Giọng nam kể chuyện đêm khuya trầm ấm, giàu nhịp thở và chân thực khi hoảng loạn (Thiện Minh)",
+    "dialogueDensity": "balanced_dialogue",
+    "toneKeywords": ["dân gian miền Tây", "cô lập giữa sông bão", "tâm lý âm ỉ", "PSX VHS chân thực"],
+    "forbiddenCliches": [
+      "Tỉnh dậy hóa ra là mơ",
+      "Nhân vật tự bước vào bóng tối không có động cơ",
+      "Lộ nguyên mặt quái ngay 5 giây đầu"
+    ]
+  },
+  "premise": {
+    "core": "Chàng trai trực ca đêm đầu tiên ở bến phà cũ ven sông phải giữ đúng ba quy tắc kỳ quái với sổ điểm danh, trước khi phát hiện chính tên mình đã nằm sẵn ở dòng thứ mười ba.",
+    "entityRule": "Tuyệt đối không hỏi tên khách áo mưa vàng ngồi ghế cuối, không đóng dấu lên vé ướt mùi bùn, và khi chuông bến reo lúc 01:00 phải khóa quầy quay lưng lại cửa kính.",
+    "twistCore": "Tờ giấy giao ca mà chú Tư đưa Nam ký ở Chương 1 vốn chính là trang cuối sổ điểm danh chuyến phà đắm năm 1992 — chú Tư dùng Nam thế mạng dòng 13 để thoát khỏi bến."
+  },
+  "worldLore": {
+    "era": "Miền Tây Nam Bộ, tháng 10 mùa nước nổi năm 1999",
+    "settingDetail": "Trạm bán vé gỗ mục và nhà chờ bê tông rêu phong nằm trơ trọi sát bến phà cũ ven sông Hậu, cách thị trấn hơn bảy cây số đường đất ngập nước.",
+    "weatherProgression": [
+      "23:45 — Mưa rả rích, sương sông dâng trắng bến",
+      "00:25 — Gió lớn quất cửa chớp, đèn huỳnh quang nhấp nháy",
+      "00:45 — Mưa tạnh đột ngột, mặt sông tĩnh lặng bất thường",
+      "01:00 — Cúp điện toàn bến, chuông phà cũ tự đổ hồi dài"
+    ],
+    "backstory": "Đêm 14/10/1992, chuyến phà cuối bị xoáy nước nhấn chìm cùng 12 hành khách và người giữ bến không tìm thấy xác. Từ đó mỗi mùa nước nổi, bến phà vẫn thiếu đúng 1 chữ ký thứ 13 để khép sổ.",
+    "tabooLore": "Người ven sông dặn hễ ngửi mùi bùn phù sa nồng giữa nhà chờ lúc nửa đêm mà chuông bến reo thì không được nhìn ra mặt nước hay đáp lời ai gọi tên."
+  },
+  "entityProfile": {
+    "name": "Khách Thứ Mười Ba",
+    "origin": "Oan hồn tập thể của chuyến phà đắm năm 1992 mang hình hài hành khách mặc áo mưa vàng tìm người ký thế chỗ dòng 13.",
+    "rules": [
+      {
+        "rule": "Không bao giờ đếm quá 12 ghế chờ và tuyệt đối không hỏi tên người mặc áo mưa vàng.",
+        "trigger": "Nhân vật gọi hỏi hoặc soi đèn thẳng vào mũ áo mưa vàng ngoài nhà chờ.",
+        "consequence": "Thực thể lập tức dịch chuyển áp sát cửa kính quầy vé sau mỗi nhịp chớp đèn.",
+        "loophole": "Thực thể không cần đứng yên trên ghế; chỉ cần đèn nháy tắt 0.3 giây nó đã đổi vị trí."
+      },
+      {
+        "rule": "Chỉ đóng dấu lên vé khô; vé ướt mùi bùn sông phải đốt ngay trong lò than.",
+        "trigger": "Đưa tay chạm hoặc đóng dấu mực đỏ lên tấm vé ướt đẫm phù sa.",
+        "consequence": "Mực dấu in ngược tên người trực ca vào dòng thứ 13 trong sổ điểm danh.",
+        "loophole": "Cơn gió lùa lúc 00:45 làm lò than tắt ngấm, buộc nhân vật phải tự tìm bật lửa."
+      },
+      {
+        "rule": "Khi chuông bến reo lúc 01:00, khóa chặt cửa quầy và quay lưng lại cửa kính.",
+        "trigger": "Nghe chuông bến reo nhưng ngoái đầu nhìn qua kính hoặc nhấc máy điện thoại bàn.",
+        "consequence": "Khóa cửa quầy bị mở ngược từ bên trong nhà chờ.",
+        "loophole": "Thực thể giả giọng mẹ Nam gọi vào điện thoại bàn để đánh thẳng vào điểm yếu tâm lý."
+      }
+    ],
+    "sensoryTells": [
+      "Mùi bùn phù sa tanh nồng bốc lên từ khe ván sàn",
+      "Tiếng nước rỏ lộp độp đều nhịp như bước chân ướt trên nền xi măng",
+      "Đèn huỳnh quang rít cao tần và khung hình VHS xé vệt xanh lạnh"
+    ],
+    "escalationStages": [
+      "Cấp 1 (P1): Mùi bùn trên góc trang sổ trực và chiếc áo mưa vàng rỏ nước ngoài hàng ghế trống",
+      "Cấp 2 (P2): Bóng người áo mưa vàng dịch gần sau mỗi lần đèn nháy, trượt tấm vé ướt qua khe kính",
+      "Cấp 3 (P3): Giả giọng mẹ Nam qua điện thoại bàn sau khoảng thở giả an toàn, chuông bến tự reo",
+      "Cấp 4 (P4): Cúp điện hoàn toàn sau Dead Silence, hiện nguyên hình sát cửa kính và bên trong quầy"
+    ]
+  },
+  "characters": [
+    {
+      "id": "C01",
+      "name": "Nam",
+      "age": 24,
+      "tier": "lead",
+      "roleType": "human",
+      "role": "Nhân viên trực bến đêm (POV)",
+      "heightMeters": 1.73,
+      "trait": "Trầm tĩnh, cẩn thận nhưng nặng gánh cơm áo và rất lo cho mẹ",
+      "goal": "Trực trọn đêm đầu tiên an toàn để nhận tiền ứng phẫu thuật mắt cho mẹ vào sáng mai",
+      "trappedReason": "Chuyến phà cuối đã ngừng chạy giữa đêm nước xoáy, đường đất ngập sâu không thể về và nếu bỏ ca sẽ mất trắng tiền cọc phẫu thuật cho mẹ.",
+      "flaw": "Mặc cảm từng để mẹ chờ một mình trong bệnh viện nên chỉ cần nghe giọng mẹ hoảng hốt qua điện thoại là mất bình tĩnh ngay lập tức.",
+      "secret": "Đã vội vàng ký tên lên tờ giấy giao ca ướt mép của chú Tư mà chưa kịp đọc ngày tháng in mờ trên đầu trang.",
+      "voiceProfile": "Nam 24 tuổi, giọng miền Nam trầm ấm nhẹ nhàng (Thiện Minh), ban đầu điềm đạm chắc nhịp, về cuối nghẹn hơi và ngắt câu ngắn gấp gáp.",
+      "wardrobe": "Áo sơ mi xanh cũ khoác ngoài áo gió tối màu ướt vai",
+      "carriedItems": ["Đèn pin vỏ sắt", "Bật lửa gas", "Tờ biên nhận giao ca"],
+      "appearanceBrief": "Thanh niên 24 tuổi mặc áo gió tối màu ướt mưa, tay cầm đèn pin cũ và cuốn sổ trực bìa nâu.",
+      "movementRules": "Di chuyển hợp lý giữa quầy vé S01 và nhà chờ S02 thông qua đúng cửa gỗ BOOTH_DOOR.",
+      "arc": "Tin tưởng quy tắc trực ca đơn thuần -> chủ động kiểm tra thông minh -> nhẹ nhõm giả tạo -> bàng hoàng nhận ra cái bẫy thế mạng.",
+      "relationships": [
+        { "targetId": "C02", "relation": "Người giao ca tiền nhiệm", "tension": "Nam biết ơn chú Tư nhường việc nhưng dần nghi ngờ thái độ vội vã bất thường của chú." },
+        { "targetId": "C03", "relation": "Thực thể đòi đủ 13 chữ ký", "tension": "Bị ép phạm luật thông qua nỗi sợ mất mẹ." }
+      ],
+      "from": ["Sáng tác mới"]
+    },
+    {
+      "id": "C02",
+      "name": "Chú Tư",
+      "age": 56,
+      "tier": "support",
+      "roleType": "human",
+      "role": "Người gác bến cũ giao ca",
+      "heightMeters": 1.66,
+      "trait": "Cười gượng trấn an nhưng ánh mắt lấm lét, tay run khi trao chìa khóa",
+      "goal": "Giao sổ ký nhận thành công cho Nam trước 00:30 để rút tên mình khỏi lời nguyền bến phà",
+      "trappedReason": "Đứng trực bến suốt 7 năm không tìm được người chịu thay ca đêm mùa bão.",
+      "flaw": "Ích kỷ vì quá kiệt quệ tinh thần, chấp nhận lừa chàng trai trẻ thế chỗ mình.",
+      "voiceProfile": "Giọng đàn ông trung niên khàn đục, nói nhanh như muốn chạy trốn (fx=room).",
+      "wardrobe": "Áo bà ba xám bạc màu, dép tổ ong dính bùn",
+      "carriedItems": ["Chùm chìa khóa đồng", "Túi vải cũ"],
+      "appearanceBrief": "Ông lão gầy khắc khổ 56 tuổi mặc áo bà ba xám ướt vai, mắt trũng sâu, tay cầm chùm chìa khóa đồng.",
+      "movementRules": "Rời quầy qua BOOTH_DOOR ra ngoài bến trước 00:10.",
+      "arc": "Giả vờ tốt bụng bàn giao việc -> lộ vẻ hoảng loạn bỏ chạy -> phơi bày vai trò người gài bẫy.",
+      "relationships": [
+        { "targetId": "C01", "relation": "Người thế mạng được chọn", "tension": "Giấu nhẹm ngày tháng 1992 trên tờ giấy giao ca." }
+      ],
+      "from": ["Sáng tác mới"]
+    },
+    {
+      "id": "C03",
+      "name": "Khách Thứ Mười Ba",
+      "age": 0,
+      "tier": "lead",
+      "roleType": "entity",
+      "role": "Thực thể bến phà đắm",
+      "heightMeters": 1.88,
+      "trait": "Im lặng, chỉ tiến lên mỗi lần ánh sáng chập chờn và nhại giọng người thân",
+      "goal": "Buộc người trực bến nhìn thẳng mặt và hoàn tất chữ ký thứ 13",
+      "flaw": "Bị trói buộc bởi 3 quy tắc của bến phà cho đến khi nạn nhân tự phá luật",
+      "voiceProfile": "Giọng thì thầm vọng nước, có thể biến âm giả giọng mẹ Nam qua loa điện thoại (fx=ghost/phone).",
+      "appearanceBrief": "Thực thể cao gầy 1.88m khoác áo mưa nhựa vàng sờn rách ướt đẫm bùn đen, vành mũ kéo sụp che nửa khuôn mặt trắng bệch phù nước, ngón tay dài đen sẫm rỏ nước liên tục.",
+      "movementRules": "Chỉ dịch chuyển từ PIER_MIST -> BENCH_ROW -> GLASS_WINDOW -> BOOTH_DOOR qua các nhịp chớp đèn hoặc blackout.",
+      "arc": "Dấu hiệu nước bùn mơ hồ -> bóng áo mưa ngoài ghế chờ -> giả giọng đánh sập tâm lý -> hiện thân thu hồi chữ ký.",
+      "from": ["Sáng tác mới"]
+    }
+  ],
+  "scenes": [
+    {
+      "id": "S01",
+      "name": "Quầy trực vé bến phà cũ",
+      "primary": true,
+      "archetype": "woodenTicketBooth",
+      "dimensions": [5.0, 5.4, 3.2],
+      "ceilingType": "flatConcrete",
+      "atmosphere": "Chật hẹp ẩm thấp, mùi gỗ mục và than nguội, ô kính bán vé nhìn thẳng ra nhà chờ mờ sương",
+      "practicalLights": ["warmLamp", "fluorescent", "handheldFlashlight"],
+      "landmarks": [
+        { "id": "TICKET_DESK", "kind": "stance", "pos": [0.0, 0.0, 0.8], "note": "Ghế gỗ sau bàn trực đặt sổ điểm danh và con dấu" },
+        { "id": "GLASS_WINDOW", "kind": "window", "pos": [0.0, 1.35, -2.55], "note": "Ô kính bán vé có khe trượt nhìn thẳng ra nhà chờ S02" },
+        { "id": "WALL_PHONE", "kind": "prop", "pos": [-2.35, 1.4, 0.2], "note": "Điện thoại bàn quay số gắn trên vách gỗ trái" },
+        { "id": "COAL_STOVE", "kind": "prop", "pos": [1.85, 0.0, 0.4], "note": "Bếp than tổ ong nhỏ bên phải bàn trực" },
+        { "id": "BOOTH_DOOR", "kind": "portal", "pos": [2.42, 0.0, -1.2], "connectsTo": "S02:WAITING_ENTRY", "note": "Cửa gỗ chốt trong nối từ quầy ra nhà chờ S02" }
+      ]
+    },
+    {
+      "id": "S02",
+      "name": "Nhà chờ phà ven sông Hậu",
+      "primary": true,
+      "archetype": "foggyRiverWaitingHall",
+      "dimensions": [6.4, 8.0, 3.6],
+      "ceilingType": "aFrameThatch",
+      "atmosphere": "Hành lang bê tông rêu ẩm, hai hàng ghế gỗ dài, bóng đèn tuýp xanh rít và sương sông đặc quánh ngoài cổng bến",
+      "practicalLights": ["fluorescent", "handheldFlashlight"],
+      "landmarks": [
+        { "id": "WAITING_ENTRY", "kind": "portal", "pos": [-3.05, 0.0, 1.8], "connectsTo": "S01:BOOTH_DOOR", "note": "Cửa bước từ quầy vé S01 ra nhà chờ" },
+        { "id": "YELLOW_COAT_HOOK", "kind": "prop", "pos": [-1.8, 1.45, 0.5], "note": "Móc sắt treo chiếc áo mưa vàng cũ trên cột bê tông" },
+        { "id": "BENCH_ROW", "kind": "zone", "pos": [0.4, 0.0, -0.6], "note": "Hàng ghế gỗ 12 chỗ nhìn về phía cửa bến" },
+        { "id": "BOOTH_GLASS_OUT", "kind": "entity", "pos": [-2.6, 0.0, -0.4], "note": "Mặt ngoài ô kính quầy vé" },
+        { "id": "PIER_MIST", "kind": "entity", "pos": [0.6, 0.0, -3.8], "note": "Cổng sắt bến phà chìm trong sương sông dày đặc" }
+      ]
+    }
+  ],
+  "acts": [
+    {
+      "act": 1,
+      "name": "Hồi 1: Ca trực đầu tiên & Ba quy tắc sổ bến",
+      "partRange": [1, 1],
+      "goal": "Khóa lý do mắc kẹt vì mẹ, giới thiệu chú Tư giao ca vội vã và gieo manh mối sổ trực cùng tờ ký nhận.",
+      "turningPoint": "Chú Tư biến mất trong mưa để lại dòng cảnh báo viết dở và góc sổ rỏ nước bùn đen.",
+      "dominantEmotion": "calm_omen -> curious"
+    },
+    {
+      "act": 2,
+      "name": "Hồi 2: Vị khách ngoài sương & Khoảng thở giả an toàn",
+      "partRange": [2, 3],
+      "goal": "Đẩy dị biến cấp 2 ngoài nhà chờ, đánh lạc hướng bằng áo mưa của chú Tư để tạo 15 giây thở phào giả trước khi cuộc gọi giả giọng mẹ đánh sập phòng tuyến.",
+      "turningPoint": "Nam vừa thở phào tưởng chỉ là chiếc áo mưa chú Tư bỏ quên thì điện thoại bàn réo vang giọng mẹ gọi từ ngoài bến phà.",
+      "dominantEmotion": "dread -> false_relief -> fear"
+    },
+    {
+      "act": 3,
+      "name": "Hồi 3: Chuông bến 01:00 & Chữ ký dòng thứ mười ba",
+      "partRange": [4, 4],
+      "goal": "Cúp điện toàn bến, TRUE Dead Silence, cao trào hiện nguyên hình cấp 4 và lật ngược ý nghĩa tờ biên nhận giao ca ký ở Chương 1.",
+      "turningPoint": "Khi ánh đèn pin soi lên tờ giấy giao ca trong túi áo, ngày in trên đầu trang hiện rõ 14/10/1992 cùng chữ ký của chính Nam ở dòng 13.",
+      "dominantEmotion": "panic -> cold_twist"
+    }
+  ],
+  "clues": [
+    {
+      "id": "CL01",
+      "kind": "physical_clue",
+      "plantedInPart": 1,
+      "plantedDetail": "Cuốn sổ trực trên bàn có sẵn 12 cái tên mờ nhòe nước sông, dòng số 13 để trống và mép giấy nồng mùi bùn phù sa.",
+      "payoffInPart": 4,
+      "recontextualization": "12 cái tên kia là danh sách nạn nhân vụ đắm phà 1992 — bến phà đêm chỉ mở sổ khi tìm đủ người thứ 13 thế mạng."
+    },
+    {
+      "id": "CL02",
+      "kind": "red_herring",
+      "plantedInPart": 2,
+      "plantedDetail": "Một chiếc áo mưa vàng cũ treo trên móc cột bê tông giữa nhà chờ đung đưa trong gió giống hệt bóng người đang ngồi.",
+      "payoffInPart": 3,
+      "recontextualization": "Nam tưởng bóng vàng ban nãy chỉ là chiếc áo mưa chú Tư bỏ quên nên nhẹ nhõm quay vào quầy — nhưng ngay lúc đó chiếc áo mưa trên móc đã biến mất."
+    },
+    {
+      "id": "CL03",
+      "kind": "truth_piece",
+      "plantedInPart": 1,
+      "plantedDetail": "Chú Tư giục Nam ký vội tên vào tờ biên nhận giao ca ẩm nước trước khi chạy biến ra ngoài đường đất.",
+      "payoffInPart": 4,
+      "recontextualization": "Tờ biên nhận đó không phải giấy nhận lương — nó là trang rách số 13 của cuốn sổ năm 1992, và chú Tư vừa sang tên lời nguyền sang Nam."
+    }
+  ],
+  "beats": [
+    { "id": "B01", "part": 1, "type": "hook", "weight": "minor", "setup": "Lời dặn 3 quy tắc của chú Tư và chữ ký vội trên tờ giao ca", "payoff": "Khóa luật sinh tồn và gài sẵn bẫy chữ ký dòng 13" },
+    { "id": "B02", "part": 2, "type": "scare", "weight": "major", "setup": "Đèn tuýp nhấp nháy ngoài nhà chờ, bóng áo mưa vàng dịch sát ô kính", "payoff": "Tấm vé ướt đẫm bùn trượt qua khe kính đòi đóng dấu" },
+    { "id": "B03", "part": 3, "type": "dread", "weight": "major", "setup": "Nam ra kiểm tra thấy chiếc áo mưa treo trên móc nên thở phào nhẹ nhõm", "payoff": "Điện thoại bàn réo vang giọng mẹ gọi từ giữa sương sông dù máy đã đứt dây" },
+    { "id": "B04", "part": 4, "type": "twist", "weight": "major", "setup": "Cúp điện 01:00, chuông bến reo và thực thể hiện nguyên hình sau Dead Silence", "payoff": "Lật tờ giấy giao ca thấy ngày 14/10/1992 và tên Nam in mực đỏ ở dòng 13" }
+  ],
+  "props": [
+    {
+      "id": "P01",
+      "name": "Sổ điểm danh & Con dấu đỏ",
+      "sceneId": "S01",
+      "landmarkId": "TICKET_DESK",
+      "initialState": "closedDry",
+      "states": ["closedDry", "openWetLine13", "stampedBloodRed"],
+      "function": "Vật chứng khóa luật 12 hành khách và xác nhận tên Nam bị đóng dấu dòng 13 ở cú twist.",
+      "beatIds": ["B01", "B04"]
+    },
+    {
+      "id": "P02",
+      "name": "Cửa gỗ quầy vé có chốt trong",
+      "sceneId": "S01",
+      "landmarkId": "BOOTH_DOOR",
+      "initialState": "ajar",
+      "states": ["ajar", "lockedInside", "rattling", "forcedOpen"],
+      "function": "Ngăn cách vùng an toàn S01 với nhà chờ S02; bị phá vỡ khi Nam ngoái đầu phạm luật 3.",
+      "beatIds": ["B02", "B03", "B04"]
+    },
+    {
+      "id": "P03",
+      "name": "Điện thoại bàn cũ trên vách",
+      "sceneId": "S01",
+      "landmarkId": "WALL_PHONE",
+      "initialState": "silent",
+      "states": ["silent", "ringingCutCord", "deadStatic"],
+      "function": "Công cụ thực thể giả giọng mẹ Nam đánh sập phòng tuyến tâm lý dù dây đã đứt.",
+      "beatIds": ["B03", "B04"]
+    }
+  ],
+  "parts": [
+    {
+      "part": 1,
+      "act": 1,
+      "title": "Tờ giấy giao ca ẩm nước",
+      "target_sec": 54,
+      "light": "warmLamp",
+      "pacingType": "setup",
+      "tensionStart": 2,
+      "tensionPeak": 5,
+      "tensionEnd": 4,
+      "newInfoRevealed": "Nam kẹt lại trực bến phà đêm bão để lấy tiền mổ mắt cho mẹ, ký vội tờ giao ca ẩm nước của chú Tư và phát hiện 12 cái tên nhòe nước trong sổ.",
+      "cliffhangerType": "question",
+      "transitionOut": "cut",
+      "synopsis": "Mưa mùa nước nổi đổ xuống bến phà cũ ven sông Hậu lúc gần nửa đêm. Nam nhận ca trực đầu tiên để có tiền lo viện phí cho mẹ trong khi đường về đã ngập sâu. Chú Tư bàn giao vội vàng chùm chìa khóa, giục Nam ký vào tờ biên nhận ẩm nước rồi căn dặn ba quy tắc kỳ lạ trước khi bỏ chạy vào màn mưa. Một mình trong quầy gỗ, Nam lật cuốn sổ điểm danh chỉ thấy mười hai cái tên nhòe bùn và dòng mười ba bỏ trống.",
+      "hook": "Tiền công ca trực đêm nay đủ đóng viện phí cho mẹ, nhưng chú Tư vừa đưa chìa khóa đã vội chạy khỏi bến như trốn ma.",
+      "suspense": "Ngoài ô kính bán vé, ngọn đèn tuýp nhà chờ đột ngột chớp tắt hai nhịp để lộ một vệt nước bùn chảy dài về phía quầy.",
+      "sceneIds": ["S01"],
+      "characterIds": ["C01", "C02"],
+      "propIds": ["P01", "P02"],
+      "soundCues": ["Mưa gõ mái tôn", "Tiếng bút ký trên giấy ẩm", "Đèn huỳnh quang rít nhẹ"],
+      "warnings": ["0 Jumpscare trong P1 — giữ nhịp đời thường chân thực, gieo CL01 & CL03 tự nhiên"],
+      "actionBeats": [
+        {
+          "beatId": "P1_AB01",
+          "sceneId": "S01",
+          "durationSec": 18.0,
+          "mood": "calm_omen",
+          "light": "warmLamp",
+          "camera": { "stance": "standing", "posLandmark": "TICKET_DESK", "lookLandmark": "BOOTH_DOOR", "motion": "handheld" },
+          "actors": [{ "id": "C02", "visible": true, "fromLandmark": "TICKET_DESK", "toLandmark": "BOOTH_DOOR", "pose": "walk" }],
+          "propChanges": [
+            { "id": "P01", "fromState": "closedDry", "toState": "closedDry" },
+            { "id": "P02", "fromState": "ajar", "toState": "ajar" }
+          ],
+          "actionSummary": "Chú Tư run tay dúi chùm chìa khóa và tờ giao ca ẩm nước cho Nam ký rồi vội lùi ra cửa gỗ BOOTH_DOOR giữa đêm mưa bão.",
+          "subtext": "Nam thấy thái độ chú Tư kỳ lạ nhưng tự nhủ người già sợ bão nên cố ký nhanh để giữ công việc.",
+          "sensoryDetails": { "sight": "Ánh đèn vàng hắt lên bàn tay run dính bùn của chú Tư", "sound": "Mưa rào mái tôn và tiếng chìa khóa va lách cách", "atmosphere": "Ẩm lạnh, chật chội mùi gỗ mục" },
+          "spokenBeat": { "speaker": "NARRATOR", "intent": "Thiết lập năm 1999, lý do mắc kẹt vì tiền mổ mắt của mẹ và cảnh chú Tư vội vã bàn giao", "keyPhrase": "chỉ cần trực hết đêm nay", "mood": "calm_omen", "wordBudget": 52 },
+          "audioCue": "rain_on_roof",
+          "jumpscareStyle": null
+        },
+        {
+          "beatId": "P1_AB02",
+          "sceneId": "S01",
+          "durationSec": 18.0,
+          "mood": "curious",
+          "light": "warmLamp",
+          "camera": { "stance": "standing", "posLandmark": "TICKET_DESK", "lookLandmark": "BOOTH_DOOR", "motion": "dolly" },
+          "actors": [{ "id": "C02", "visible": false, "fromLandmark": "BOOTH_DOOR", "toLandmark": "BOOTH_DOOR", "pose": "standIdle" }],
+          "propChanges": [{ "id": "P02", "fromState": "ajar", "toState": "lockedInside", "triggerWord": "chốt" }],
+          "actionSummary": "Chú Tư dặn nhanh ba quy tắc sống còn rồi lao biến vào màn mưa; Nam cài chốt gỗ cửa quầy BOOTH_DOOR.",
+          "subtext": "Nam bán tín bán nghi trước lời dặn mê tín nhưng vẫn cẩn thận cài chốt trong.",
+          "sensoryDetails": { "sight": "Bóng chú Tư khuất sau màn mưa trắng xóa", "sound": "Tiếng chốt gỗ sập chắc nịch", "atmosphere": "Khoảng không bỗng tĩnh nặng hẳn khi chỉ còn một mình" },
+          "spokenBeat": { "speaker": "C02", "intent": "Truyền đạt ngắn gọn 3 quy tắc cấm kỵ với giọng khàn gấp gáp", "keyPhrase": "đừng hỏi tên áo mưa vàng", "mood": "tense", "wordBudget": 52 },
+          "audioCue": "door_bolt_latch",
+          "jumpscareStyle": null
+        },
+        {
+          "beatId": "P1_AB03",
+          "sceneId": "S01",
+          "durationSec": 18.0,
+          "mood": "dread",
+          "light": "warmLamp",
+          "camera": { "stance": "seated", "posLandmark": "TICKET_DESK", "lookLandmark": "GLASS_WINDOW", "motion": "dolly" },
+          "actors": [],
+          "propChanges": [{ "id": "P01", "fromState": "closedDry", "toState": "openWetLine13", "triggerWord": "mười" }],
+          "actionSummary": "Nam mở cuốn sổ trực thấy 12 cái tên nhòe nước sông và dòng 13 bỏ trống ướt mùi bùn; đèn nhà chờ ngoài ô kính chớp lạnh.",
+          "subtext": "Cảm giác bất an đầu tiên trỗi dậy khi mùi bùn tanh xộc thẳng lên mũi ngay trong quầy đóng kín.",
+          "sensoryDetails": { "sight": "Mực xanh trên 12 dòng tên loang vệt nước đen", "sound": "Đèn huỳnh quang ngoài sảnh rít lên", "atmosphere": "Mùi bùn phù sa tanh nồng lạ thường" },
+          "spokenBeat": { "speaker": "NARRATOR", "intent": "Gieo CL01 về 12 dòng tên nhòe nước và dòng 13 bỏ trống", "keyPhrase": "dòng thứ mười ba còn bỏ trống", "mood": "curious", "wordBudget": 50 },
+          "audioCue": "fluorescent_buzz",
+          "jumpscareStyle": null
+        }
+      ]
+    },
+    {
+      "part": 2,
+      "act": 2,
+      "title": "Tấm vé ướt dưới khe kính",
+      "target_sec": 54,
+      "light": "fluorescent",
+      "pacingType": "investigation",
+      "tensionStart": 4,
+      "tensionPeak": 7,
+      "tensionEnd": 6,
+      "newInfoRevealed": "Bóng áo mưa vàng xuất hiện ngoài ghế chờ, tiến sát cửa kính sau mỗi nhịp đèn nháy và đẩy vào tấm vé ướt đẫm bùn sông.",
+      "cliffhangerType": "sensory_shock",
+      "transitionOut": "cut",
+      "synopsis": "Lúc 00:25, tiếng nước rỏ lộp độp vang lên từ phía nhà chờ vốn không còn chuyến phà nào. Qua ô kính mờ hơi nước, Nam thấy một dáng người khoác áo mưa vàng ngồi bất động ở hàng ghế cuối. Mỗi lần đèn tuýp trên trần chớp tắt, bóng người ấy lại dịch gần hơn một dãy ghế dù không hề nghe tiếng bước chân. Cuối cùng một bàn tay đen bùn thình lình đẩy tấm vé ướt sũng qua khe bán vé trước khi biến mất vào sương.",
+      "hook": "Tiếng nước rỏ lộp độp vang lên đều đặn giữa nhà chờ không còn chuyến phà nào.",
+      "suspense": "Nam mở lò than để đốt tấm vé ướt theo đúng lời dặn nhưng lớp than hồng đã tắt ngấm từ bao giờ.",
+      "sceneIds": ["S01", "S02"],
+      "characterIds": ["C01", "C03"],
+      "propIds": ["P01", "P02"],
+      "soundCues": ["Nước rỏ lộp độp", "Đèn tuýp chớp tắt", "Tiếng giấy ướt miết trên kính"],
+      "warnings": ["Chỉ lộ bóng và bàn tay áo mưa vàng (Cấp 2), chưa lộ mặt rõ"],
+      "actionBeats": [
+        {
+          "beatId": "P2_AB01",
+          "sceneId": "S02",
+          "durationSec": 18.0,
+          "mood": "tense",
+          "light": "fluorescent",
+          "camera": { "stance": "standing", "posLandmark": "BOOTH_GLASS_OUT", "lookLandmark": "PIER_MIST", "motion": "dolly" },
+          "actors": [{ "id": "C03", "visible": true, "fromLandmark": "PIER_MIST", "toLandmark": "BENCH_ROW", "pose": "loomingStill" }],
+          "propChanges": [],
+          "actionSummary": "Qua ánh đèn tuýp xanh chập chờn của nhà chờ S02, dáng cao gầy mặc áo mưa vàng xuất hiện từ cổng sương PIER_MIST rồi ngồi bất động trên dãy ghế BENCH_ROW.",
+          "subtext": "Nam tự trấn an có thể là khách lỡ đò trú mưa, nhưng vẫn giữ chặt quy tắc không cất tiếng hỏi.",
+          "sensoryDetails": { "sight": "Áo mưa vàng rách nhỏ từng giọt nước đen xuống nền xi măng", "sound": "Tiếng nước rỏ lộp độp đều như nhịp đồng hồ", "atmosphere": "Ánh đèn tuýp xanh lạnh kéo dài bóng đen trên sàn" },
+          "spokenBeat": { "speaker": "NARRATOR", "intent": "Mô tả vị khách áo mưa vàng xuất hiện bất thường giữa sương sông", "keyPhrase": "ngồi bất động ở hàng ghế cuối", "mood": "tense", "wordBudget": 52 },
+          "audioCue": "water_drip_echo",
+          "jumpscareStyle": null
+        },
+        {
+          "beatId": "P2_AB02",
+          "sceneId": "S02",
+          "durationSec": 18.0,
+          "mood": "whisper",
+          "light": "fluorescent",
+          "camera": { "stance": "standing", "posLandmark": "BOOTH_GLASS_OUT", "lookLandmark": "BENCH_ROW", "motion": "dollyZoom" },
+          "actors": [{ "id": "C03", "visible": true, "fromLandmark": "BENCH_ROW", "toLandmark": "BOOTH_GLASS_OUT", "pose": "stalkLoom" }],
+          "propChanges": [],
+          "actionSummary": "Sau hai nhịp đèn tuýp nhấp nháy, bóng áo mưa vàng không bước đi mà áp sát ngay mặt ngoài ô kính BOOTH_GLASS_OUT; tay dài đen bùn đập mạnh đẩy tấm vé ướt qua khe!",
+          "subtext": "Tim Nam đập thình thịch khi nhận ra nó dịch chuyển trong khoảng chớp đèn và cố ép anh đóng dấu.",
+          "sensoryDetails": { "sight": "Bàn tay ngón dài dính bùn đen áp bẹp lên mặt kính mờ", "sound": "Tiếng móng tay cào kính và tiếng rít kim loại lạnh gáy", "atmosphere": "Mùi bùn tanh xộc thẳng qua khe trượt vé" },
+          "spokenBeat": { "speaker": "NARRATOR", "intent": "Đẩy căng thẳng hồi thì thầm rồi bùng cú giật nhẹ cấp 2 khi tấm vé ướt trượt vào", "keyPhrase": "tấm vé ướt sũng mùi bùn", "mood": "whisper", "wordBudget": 48 },
+          "audioCue": null,
+          "jumpscareStyle": "metal_dread"
+        },
+        {
+          "beatId": "P2_AB03",
+          "sceneId": "S01",
+          "durationSec": 18.0,
+          "mood": "dread",
+          "light": "warmLamp",
+          "camera": { "stance": "crouched", "posLandmark": "TICKET_DESK", "lookLandmark": "COAL_STOVE", "motion": "handheld" },
+          "actors": [{ "id": "C03", "visible": false, "fromLandmark": "GLASS_WINDOW", "toLandmark": "GLASS_WINDOW", "pose": "loomingStill" }],
+          "propChanges": [],
+          "actionSummary": "Nam lùi nhanh về phía lò than COAL_STOVE bên phải bàn trực để đốt tấm vé ướt, nhưng bếp than đã tắt lạnh ngắt chỉ còn tro xám.",
+          "subtext": "Kế hoạch tuân thủ quy tắc số 2 bị chặn đứng, Nam buộc phải bật lửa đốt tay rồi quyết định kiểm tra lại nhà chờ.",
+          "sensoryDetails": { "sight": "Tàn than trắng lạnh và vệt bùn nhỏ xuống mặt bàn gỗ", "sound": "Tiếng bật lửa gas đánh xẹt nhiều lần mới cháy", "atmosphere": "Gió sông lùa lạnh buốt sau gáy" },
+          "spokenBeat": { "speaker": "NARRATOR", "intent": "Xử lý thông minh bằng bật lửa nhưng phát hiện gió lùa làm lò than tắt bất thường", "keyPhrase": "lò than đã tắt lạnh ngắt", "mood": "dread", "wordBudget": 52 },
+          "audioCue": "paper_talisman_rustle",
+          "jumpscareStyle": null
+        }
+      ]
+    },
+    {
+      "part": 3,
+      "act": 2,
+      "title": "Nhịp thở phào và cuộc gọi đứt dây",
+      "target_sec": 54,
+      "light": "flashlight",
+      "pacingType": "false_relief",
+      "tensionStart": 5,
+      "tensionPeak": 8,
+      "tensionEnd": 7,
+      "newInfoRevealed": "Nam tưởng bóng vàng chỉ là chiếc áo mưa chú Tư bỏ quên (False Relief), nhưng khi quay lại quầy thì điện thoại bàn đứt dây tự đổ chuông phát giọng mẹ cầu cứu.",
+      "cliffhangerType": "rule_broken",
+      "transitionOut": "cut",
+      "synopsis": "Mưa bỗng tạnh hẳn lúc 00:45. Lấy hết can đảm, Nam cầm đèn pin mở chốt cửa quầy bước ra nhà chờ kiểm tra và bật cười nhẹ nhõm khi thấy trên móc cột chỉ treo chiếc áo mưa vàng rách chú Tư bỏ quên. Nhưng vừa khóa cửa quay lại bàn trực, chiếc điện thoại bàn cũ đột ngột đổ chuông dồn dập. Nhấc ống nghe lên, Nam chết lặng khi nghe tiếng mẹ gọi yếu ớt từ ngoài bến phà dù sợi dây điện thoại đã bị cắt đứt từ lâu.",
+      "hook": "Cơn mưa bão bỗng tạnh bặt, tôi mở chốt bước ra nhà chờ và thấy thứ đang treo trên cột bê tông.",
+      "suspense": "Tôi cúi xuống nhìn sợi dây điện thoại đã đứt lìa trên sàn đúng lúc cánh cửa gỗ sau lưng bắt đầu rung bần bật.",
+      "sceneIds": ["S01", "S02"],
+      "characterIds": ["C01", "C03"],
+      "propIds": ["P02", "P03"],
+      "soundCues": ["Bước chân trên nền xi măng ướt", "Chuông điện thoại cổ réo gắt", "Giọng giả mẹ nhiễu sóng"],
+      "warnings": ["0 Jumpscare trong P3 — tập trung tạo khoảng thở False Relief thật tự nhiên rồi đánh sập bằng nỗi sợ tâm lý!"],
+      "actionBeats": [
+        {
+          "beatId": "P3_AB01",
+          "sceneId": "S02",
+          "durationSec": 18.0,
+          "mood": "calm_omen",
+          "light": "flashlight",
+          "camera": { "stance": "standing", "posLandmark": "WAITING_ENTRY", "lookLandmark": "YELLOW_COAT_HOOK", "motion": "handheld" },
+          "actors": [],
+          "propChanges": [{ "id": "P02", "fromState": "lockedInside", "toState": "ajar", "triggerWord": "mở" }],
+          "actionSummary": "Nam mở cửa bước qua WAITING_ENTRY soi đèn pin vào cột bê tông YELLOW_COAT_HOOK, thở phào bật cười khi thấy chỉ là chiếc áo mưa vàng cũ chú Tư treo quên.",
+          "subtext": "Khoảng thở giả an toàn: Nam nghĩ do mình thiếu ngủ và nghe chú Tư dọa nên sinh ảo giác.",
+          "sensoryDetails": { "sight": "Chiếc áo mưa vàng rũ xuống trên móc sắt đung đưa nhẹ theo gió", "sound": "Mưa tạnh, chỉ còn tiếng sóng vỗ bờ sông êm ả", "atmosphere": "Nhẹ nhõm giả tạo sau 2 phút căng thẳng" },
+          "spokenBeat": { "speaker": "NARRATOR", "intent": "Tạo nhịp thở False Relief tự nhiên qua manh mối đánh lạc hướng CL02", "keyPhrase": "chỉ là chiếc áo mưa cũ trên móc", "mood": "calm_omen", "wordBudget": 52 },
+          "audioCue": "wood_footsteps_ov",
+          "jumpscareStyle": null
+        },
+        {
+          "beatId": "P3_AB02",
+          "sceneId": "S01",
+          "durationSec": 18.0,
+          "mood": "fear",
+          "light": "warmLamp",
+          "camera": { "stance": "standing", "posLandmark": "TICKET_DESK", "lookLandmark": "WALL_PHONE", "motion": "whipPan" },
+          "actors": [],
+          "propChanges": [
+            { "id": "P02", "fromState": "ajar", "toState": "lockedInside" },
+            { "id": "P03", "fromState": "silent", "toState": "ringingCutCord", "triggerWord": "chuông" }
+          ],
+          "actionSummary": "Nam vừa quay vào khóa chốt cửa quầy thì điện thoại bàn WALL_PHONE réo chói tai; Nam nhấc máy nghe giọng mẹ thều thào gọi tên mình từ ngoài bến.",
+          "subtext": "Nỗi lo mất mẹ đánh thẳng vào điểm yếu tâm lý khiến Nam quên mất mọi cảnh giác.",
+          "sensoryDetails": { "sight": "Bàn tay Nam siết chặt ống nghe nhựa đen rung lên", "sound": "Chuông sắt réo chói tai rồi tiếng giọng mẹ rè rè lẫn tiếng nước vỗ", "atmosphere": "Lạnh sống lưng đột ngột cắt đứt cảm giác an toàn" },
+          "spokenBeat": { "speaker": "C03", "intent": "Giả giọng mẹ Nam gọi yếu ớt qua loa điện thoại để dụ Nam ngoái nhìn ra cửa kính", "keyPhrase": "Nam ơi, mẹ đứng ngoài bến lạnh quá", "mood": "ghost_entity", "wordBudget": 48 },
+          "audioCue": "emf_glitch_buzz",
+          "jumpscareStyle": null
+        },
+        {
+          "beatId": "P3_AB03",
+          "sceneId": "S01",
+          "durationSec": 18.0,
+          "mood": "dread",
+          "light": "coldMoon",
+          "camera": { "stance": "crouched", "posLandmark": "TICKET_DESK", "lookLandmark": "WALL_PHONE", "motion": "dollyZoom" },
+          "actors": [],
+          "propChanges": [{ "id": "P02", "fromState": "lockedInside", "toState": "rattling", "triggerWord": "rung" }],
+          "actionSummary": "Camera hạ xuống lộ đầu dây điện thoại WALL_PHONE đã đứt lìa nằm chơ vơ trên sàn gỗ, đúng lúc chuông bến phà 01:00 tự đổ và cửa gỗ BOOTH_DOOR rung bần bật.",
+          "subtext": "Nam bàng hoàng nhận ra thứ ngoài kia biết rõ tên mẹ mình và chiếc áo mưa trên móc đã không còn ở đó nữa.",
+          "sensoryDetails": { "sight": "Đầu dây đồng đứt rời nằm trên vũng nước nhỏ", "sound": "Tiếng chuông sắt bến phà vọng dài và cửa gỗ rung dữ dội", "atmosphere": "Không khí đặc quánh, đèn quầy nhấp nháy sắp tắt" },
+          "spokenBeat": { "speaker": "NARRATOR", "intent": "Lật mặt cuộc gọi giả giọng mẹ và đẩy căng thẳng vào cửa ngõ cao trào 01:00", "keyPhrase": "sợi dây điện thoại đã đứt lìa từ lâu", "mood": "fear", "wordBudget": 52 },
+          "audioCue": "gong_omen",
+          "jumpscareStyle": null
+        }
+      ]
+    },
+    {
+      "part": 4,
+      "act": 3,
+      "title": "Dòng thứ mười ba",
+      "target_sec": 54,
+      "light": "coldMoon",
+      "pacingType": "twist_reveal",
+      "tensionStart": 7,
+      "tensionPeak": 10,
+      "tensionEnd": 9,
+      "newInfoRevealed": "Thực thể hiện nguyên hình sau Dead Silence phá bung cửa quầy; Nam soi tờ giấy giao ca nhận ra ngày 14/10/1992 và chữ ký của chính mình đã đóng dấu đỏ ở dòng 13.",
+      "cliffhangerType": "final_twist",
+      "transitionOut": "fade:0.5",
+      "synopsis": "Đúng 01:00, toàn bộ bến phà phụt tắt chìm vào bóng tối và sự im lặng tuyệt đối. Bị nỗi hoảng loạn thúc ép, Nam vô thức ngoái đầu nhìn ra ô kính, lập tức cánh cửa quầy bật tung và bóng áo mưa vàng lao sầm tới sát ống kính. Khi ánh đèn pin rơi xuống mặt bàn chiếu rọi cuốn sổ mở tung cùng tờ giấy giao ca trong tay Nam, dòng chữ 14/10/1992 hiện rõ cùng con dấu mực đỏ đóng ngay trên chữ ký của chính anh ở dòng thứ mười ba.",
+      "hook": "Đúng một giờ sáng, toàn bộ bến phà phụt tắt — chỉ còn tiếng nước rỏ ngay sau lưng tôi.",
+      "suspense": "Con dấu đỏ tự in đè lên tên tôi ở dòng thứ mười ba, và ngoài sông tiếng máy phà cũ bắt đầu nổ rền gọi khách lên tàu.",
+      "sceneIds": ["S01"],
+      "characterIds": ["C01", "C03"],
+      "propIds": ["P01", "P02", "P03"],
+      "soundCues": ["Công tắc điện phụt tắt", "TRUE Dead Silence 0.75s", "Jumpscare VHS xé băng", "Cello kéo trầm chốt twist"],
+      "warnings": ["Đặt TRUE Dead Silence 0.75s ngay trước cú lộ diện cấp 4, chốt bằng Twist lạnh gáy chứ không gào vô nghĩa"],
+      "actionBeats": [
+        {
+          "beatId": "P4_AB01",
+          "sceneId": "S01",
+          "durationSec": 18.0,
+          "mood": "whisper",
+          "light": "coldMoon",
+          "camera": { "stance": "standing", "posLandmark": "TICKET_DESK", "lookLandmark": "GLASS_WINDOW", "motion": "hold" },
+          "actors": [{ "id": "C03", "visible": false, "fromLandmark": "BOOTH_DOOR", "toLandmark": "BOOTH_DOOR", "pose": "doorwayPeek" }],
+          "propChanges": [{ "id": "P03", "fromState": "ringingCutCord", "toState": "deadStatic" }],
+          "actionSummary": "Toàn bộ điện bến phà phụt tắt, ống nghe rơ xuống chỉ còn tiếng rè tĩnh; Nam cố quay lưng lại cửa kính nhưng tiếng nước rỏ nay vang lên ngay bên trong quầy.",
+          "subtext": "Nỗi tuyệt vọng tột cùng khi Nam biết mình đã không còn đứng một mình trong căn phòng 5 mét vuông.",
+          "sensoryDetails": { "sight": "Ánh trăng bạc lọt qua kính soi làn hơi thở trắng đục", "sound": "Tiếng công tắc phụt tắt rồi im bặt hoàn toàn", "atmosphere": "Nén thở tới cực đại trước chân không âm thanh" },
+          "spokenBeat": { "speaker": "NARRATOR", "intent": "Nén căng thẳng vào khoảnh khắc cúp điện và dẫn thẳng vào Dead Silence", "keyPhrase": "tiếng nước rỏ ngay sau gáy tôi", "mood": "whisper", "wordBudget": 46 },
+          "audioCue": "flashlight_click",
+          "jumpscareStyle": null
+        },
+        {
+          "beatId": "P4_AB02",
+          "sceneId": "S01",
+          "durationSec": 18.0,
+          "mood": "panic",
+          "light": "coldMoon",
+          "deadSilenceBeforeSec": 0.75,
+          "camera": { "stance": "standing", "posLandmark": "TICKET_DESK", "lookLandmark": "BOOTH_DOOR", "motion": "whipPan" },
+          "actors": [{ "id": "C03", "visible": true, "fromLandmark": "BOOTH_DOOR", "toLandmark": "TICKET_DESK", "pose": "lungeCloseUp", "alignPart": "head" }],
+          "propChanges": [{ "id": "P02", "fromState": "rattling", "toState": "forcedOpen", "triggerWord": "tung" }],
+          "actionSummary": "Sau 0.75s chân không tuyệt đối, Nam ngoái đầu — cửa gỗ BOOTH_DOOR đập bật tung và Khách Thứ Mười Ba dưới vành mũ áo mưa vàng lao thẳng cận mặt trong làn xé băng VHS!",
+          "subtext": "Khoảnh khắc vỡ òa kinh hoàng cấp 4 khi luật số 3 bị phá hoàn toàn.",
+          "sensoryDetails": { "sight": "Khuôn mặt tái bệch phù nước dưới vành mũ vàng xé nhiễu VHS kín khung hình", "sound": "Cú nổ VHS Glitch + cửa gỗ đập tung", "atmosphere": "Đèn pin rơi lăn trên sàn gỗ chao đảo" },
+          "spokenBeat": { "speaker": "NARRATOR", "intent": "Bùng nổ cao trào ngắn gọn gấp gáp khi cửa bật tung", "keyPhrase": "cánh cửa quầy bật tung ra", "mood": "panic", "wordBudget": 40 },
+          "audioCue": null,
+          "jumpscareStyle": "vhs_psx_glitch"
+        },
+        {
+          "beatId": "P4_AB03",
+          "sceneId": "S01",
+          "durationSec": 18.0,
+          "mood": "cold_twist",
+          "light": "flashlight",
+          "cutType": "blackout",
+          "camera": { "stance": "crouched", "posLandmark": "TICKET_DESK", "lookLandmark": "TICKET_DESK", "motion": "dolly" },
+          "actors": [{ "id": "C03", "visible": false, "fromLandmark": "TICKET_DESK", "toLandmark": "TICKET_DESK", "pose": "loomingStill" }],
+          "propChanges": [{ "id": "P01", "fromState": "openWetLine13", "toState": "stampedBloodRed", "triggerWord": "mười" }],
+          "actionSummary": "Chùm sáng đèn pin nằm trên sàn rọi thẳng vào cuốn sổ điểm danh mở tung: tờ giấy giao ca Nam ký ở Chương 1 khớp khít trang rách ngày 14/10/1992 với dấu đỏ in đè lên tên anh ở dòng 13.",
+          "subtext": "Sự thật lạnh buốt: chú Tư không hề quên áo mưa hay dọa ma — chú đã tìm được người thế mạng để rời khỏi bến.",
+          "sensoryDetails": { "sight": "Con dấu đỏ thẫm ướt nước in tên Nam ngay dưới 12 cái tên năm 1992", "sound": "Dây Cello trầm kéo dài hòa tiếng máy phà cũ ngoài sông", "atmosphere": "Lặng lẽ, rợn gáy và ám ảnh kéo dài sau khi cắt đen" },
+          "spokenBeat": { "speaker": "NARRATOR", "intent": "Xâu chuỗi CL01 + CL03 chậm rãi lạnh gáy chốt cú twist thế mạng", "keyPhrase": "chữ ký của tôi đã nằm sẵn ở dòng thứ mười ba", "mood": "cold_twist", "wordBudget": 56 },
+          "audioCue": "cello_dread_sting",
+          "jumpscareStyle": null
+        }
+      ]
+    }
+  ]
+}

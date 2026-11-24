@@ -1,11 +1,11 @@
 ---
 name: horror-series-pipeline
-description: Use when producing a long 5-12 minute multi-part horror video or series split into ~1-minute standalone parts (p01..p10) with constant context budget, named 3D ANCHORS, story-driven LocationBlueprints & CharacterBlueprints, CONTINUITY.json handoff, and dual Shorts + full-episode output.
+description: Use when producing a seamless 150-300s (2.5-5 min) standalone horror short (3-5 chapters, 9:16 default) or an 8-15 minute (480-900s) multi-part horror series (8-15 chapters, 16:9 default) split into 45-90s renderable chapters (p01..pNN) with constant context budget, shared 3D locations & ANCHORS, story-driven CharacterBlueprints, CONTINUITY.json handoff, and zero-drift stitch_parts.py assembly.
 ---
 
-# Horror Series Pipeline v5.0 (8–10 Min via 1-Min Parts)
+# Horror Multi-Chapter Pipeline v9.0 (`150–300s` Seamless Shorts & `8–15 Min` Series)
 
-Solving context window overflow, background repetition & 3D coordinate hallucination on long Three.js + Remotion horror episodes: **build the shared Engine v5.0 3D locations (`LocationBlueprint`) and story-driven cast (`CharacterBlueprint`) ONCE, lock every spot behind named `ANCHORS`, author and render each ~1-minute Part in an isolated ~350–500 line budget with full shot-scale variety, and hand off state strictly through `CONTINUITY.json`.**
+Solving context window overflow, background repetition & 3D coordinate hallucination on both **2.5–5 min standalone shorts (`3–5` chapters, stitched seamlessly with zero recap)** and **8–15 min feature episodes (`8–15` chapters)**: **build the shared Engine v5.1 3D locations (`LocationBlueprint`) and story-driven cast (`CharacterBlueprint`) ONCE, lock every spot behind named `ANCHORS` from `horror-story` v3.0 (`export-blueprint --all-parts`), author and render each `45–90s` Chapter in an isolated ~350–500 line budget, and hand off state strictly through `CONTINUITY.json`.**
 
 ## 3-Tier Directory Architecture (`shorts-project/src/<episode>/`)
 

@@ -22,6 +22,17 @@ VALID_WEIGHTS = {"major", "minor"}
 VALID_ROLE_TYPES = {"human", "entity", "silhouette", "lurker"}
 VALID_JUMPSCARE_STYLES = {"cinema_stab", "entity_shriek", "metal_dread", "vhs_psx_glitch"}
 VALID_LANDMARK_KINDS = {"stance", "prop", "portal", "window", "entity", "lurker", "camera", "zone"}
+VALID_FORMATS = {"micro", "short", "series"}
+FORMAT_DURATION_BOUNDS = {"micro": (45, 90), "short": (150, 300), "series": (480, 900)}
+VALID_POVS = {"first_person_survivor", "third_person_close", "found_footage_tape", "oral_folklore"}
+VALID_CLUE_KINDS = {"foreshadow", "physical_clue", "red_herring", "truth_piece"}
+VALID_PACING_TYPES = {"setup", "slow_burn", "investigation", "false_relief", "escalation", "twist_reveal", "climax_chase", "aftermath"}
+VALID_CLIFFHANGERS = {"question", "sensory_shock", "rule_broken", "betrayal", "arrival", "final_twist", "none"}
+VALID_ENGINE_POSES = {
+    "standIdle", "sitCrossLegged", "sitChair", "walk", "creep", "peerForward", "recoil",
+    "holdPhone", "holdLantern", "point", "lunge", "loomingStill", "peekAroundDoor",
+    "turnHead", "stalkLoom", "jawUnlatch", "crawler", "doorwayPeek", "backbendCrab", "lungeCloseUp",
+}
 DIALOGUE_QUOTE_RE = re.compile(r'["“”«»「」『』]')
 CHAPTER_RE = re.compile(r"^\s*(?:chương|hồi|phần|tập|chapter)\s+[0-9ivxlcdm]+", re.IGNORECASE | re.MULTILINE)
 
@@ -45,23 +56,56 @@ def write_text(path, content):
         fp.write(content)
 
 
+def resolve_format(params):
+    fmt = str(params.get("format") or "").strip().lower()
+    if fmt in VALID_FORMATS:
+        return fmt
+    mode = str(params.get("mode") or "standalone").strip().lower()
+    parts_n = int(params.get("parts") or 1)
+    if mode in VALID_FORMATS:
+        return mode
+    if parts_n == 1:
+        return "micro"
+    if parts_n <= 5:
+        return "short"
+    return "series"
+
+
 def default_thresholds(params):
     parts_n = int(params.get("parts") or 1)
-    mode = params.get("mode", "standalone")
-    if mode == "standalone" or parts_n == 1:
-        auto_scenes = 3
-        auto_gap = 1
+    fmt = resolve_format(params)
+    sec_per_part = float(params.get("secondsPerPart") or (55 if fmt == "short" else 60))
+    total_sec = float(params.get("targetTotalSec") or (parts_n * sec_per_part))
+    if fmt == "micro":
+        base = {
+            "maxLeads": 5,
+            "maxSupport": 10,
+            "maxFunctional": 10,
+            "maxProps": 8,
+            "maxBeatGap": 1,
+            "maxPrimaryScenes": 3,
+            "maxJumpscaresTotal": 2,
+        }
+    elif fmt == "short":
+        base = {
+            "maxLeads": 5,
+            "maxSupport": 10,
+            "maxFunctional": 10,
+            "maxProps": 10,
+            "maxBeatGap": 1,
+            "maxPrimaryScenes": 5,
+            "maxJumpscaresTotal": 4,
+        }
     else:
-        auto_scenes = max(3, min(12, 4 + math.ceil(parts_n / 10)))
-        auto_gap = 2
-    base = {
-        "maxLeads": 5,
-        "maxSupport": 10,
-        "maxFunctional": 10,
-        "maxProps": 8,
-        "maxBeatGap": auto_gap,
-        "maxPrimaryScenes": auto_scenes,
-    }
+        base = {
+            "maxLeads": 6,
+            "maxSupport": 12,
+            "maxFunctional": 12,
+            "maxProps": 16,
+            "maxBeatGap": 2,
+            "maxPrimaryScenes": max(5, min(12, 4 + math.ceil(parts_n / 3))),
+            "maxJumpscaresTotal": max(5, int(round((total_sec / 60.0) * 0.65))),
+        }
     custom = params.get("thresholds") or {}
     if isinstance(custom, dict):
         for k, v in custom.items():
@@ -101,21 +145,110 @@ def cmd_chunk(args):
 
 
 def cmd_seed(args):
-    n_parts = max(1, args.parts)
-    mode = "standalone" if n_parts == 1 and args.mode == "auto" else ("series" if n_parts > 1 and args.mode == "auto" else args.mode)
-    sec = 70 if mode == "standalone" else 60
+    req_fmt = str(getattr(args, "format", "auto") or "auto").lower()
+    req_mode = str(getattr(args, "mode", "auto") or "auto").lower()
+    req_parts = getattr(args, "parts", None)
+    req_total = getattr(args, "total_sec", None)
+
+    if req_fmt != "auto":
+        fmt = req_fmt
+    elif req_mode in VALID_FORMATS:
+        fmt = req_mode
+    elif req_mode == "standalone":
+        fmt = "micro" if req_parts == 1 else "short"
+    elif req_parts is not None:
+        fmt = "micro" if req_parts == 1 else ("short" if req_parts <= 5 else "series")
+    else:
+        fmt = "short"
+
+    if fmt == "micro":
+        n_parts = max(1, req_parts or 1)
+        total_sec = int(req_total or 60)
+        sec = max(45, min(90, int(round(total_sec / n_parts))))
+        mode = "standalone"
+        default_aspect = "9:16"
+    elif fmt == "short":
+        total_sec = int(req_total or (req_parts * 55 if req_parts else 210))
+        total_sec = max(150, min(300, total_sec))
+        n_parts = max(3, min(5, req_parts or max(3, min(5, round(total_sec / 55)))))
+        sec = max(45, min(90, int(round(total_sec / n_parts))))
+        total_sec = sec * n_parts
+        mode = "short"
+        default_aspect = "9:16"
+    else:
+        total_sec = int(req_total or (req_parts * 60 if req_parts else 600))
+        total_sec = max(480, min(900, total_sec))
+        n_parts = max(8, min(15, req_parts or max(8, min(15, round(total_sec / 60)))))
+        sec = max(45, min(90, int(round(total_sec / n_parts))))
+        total_sec = sec * n_parts
+        mode = "series"
+        default_aspect = "16:9"
+
+    aspect = getattr(args, "aspect", None) or default_aspect
+    pov = getattr(args, "pov", None) or "first_person_survivor"
+
+    # Build clean multi-act skeleton covering 1..n_parts contiguously
+    if n_parts == 1:
+        acts_seed = [
+            {"act": 1, "name": "Hồi 1: Mở màn, Leo thang & Cú lật", "partRange": [1, 1], "goal": "", "turningPoint": "", "dominantEmotion": "calm_omen -> panic -> cold_twist"}
+        ]
+    elif n_parts <= 5:
+        mid_a = max(1, n_parts // 3)
+        mid_b = max(mid_a + 1, n_parts - 1)
+        acts_seed = [
+            {"act": 1, "name": "Hồi 1: Đời thường, Lý do mắc kẹt & Cài luật", "partRange": [1, mid_a], "goal": "", "turningPoint": "", "dominantEmotion": "calm_omen -> curious"},
+            {"act": 2, "name": "Hồi 2: Dị biến leo thang, Khoảng thở giả & Bước ngoặt", "partRange": [mid_a + 1, mid_b], "goal": "", "turningPoint": "", "dominantEmotion": "dread -> false_relief -> fear"},
+            {"act": 3, "name": "Hồi 3: Phá vỡ vòng vây, Cao trào & Cú lật ám ảnh", "partRange": [mid_b + 1, n_parts], "goal": "", "turningPoint": "", "dominantEmotion": "panic -> cold_twist"},
+        ]
+    else:
+        a1 = max(2, round(n_parts * 0.2))
+        a2 = max(a1 + 2, round(n_parts * 0.45))
+        a3 = max(a2 + 2, round(n_parts * 0.72))
+        a4 = max(a3 + 1, n_parts - 1)
+        acts_seed = [
+            {"act": 1, "name": "Hồi 1: Đời thường & Cài đặt cấm kỵ", "partRange": [1, a1], "goal": "", "turningPoint": "", "dominantEmotion": "calm_omen -> eerie"},
+            {"act": 2, "name": "Hồi 2: Điều tra & Dị biến cấp 1–2", "partRange": [a1 + 1, a2], "goal": "", "turningPoint": "", "dominantEmotion": "curious -> dread"},
+            {"act": 3, "name": "Hồi 3: Nhịp thở giả & Bước ngoặt Giữa phim", "partRange": [a2 + 1, a3], "goal": "", "turningPoint": "", "dominantEmotion": "false_relief -> betrayal"},
+            {"act": 4, "name": "Hồi 4: Mất kiểm soát & Cao trào đỉnh điểm", "partRange": [a3 + 1, a4], "goal": "", "turningPoint": "", "dominantEmotion": "fear -> panic"},
+            {"act": 5, "name": "Hồi 5: Giải mã sự thật & Dư âm rợn gáy", "partRange": [a4 + 1, n_parts], "goal": "", "turningPoint": "", "dominantEmotion": "dread -> cold_twist"},
+        ]
+
+    def act_of_part(pno):
+        for a in acts_seed:
+            if a["partRange"][0] <= pno <= a["partRange"][1]:
+                return a["act"]
+        return acts_seed[-1]["act"]
+
+    pacing_seq_short = ["setup", "investigation", "false_relief", "escalation", "twist_reveal"]
+    tension_curve = [
+        (3, 5, 4), (4, 7, 6), (5, 4, 6), (6, 9, 8), (8, 10, 9),
+    ]
+
+    seed_params = {
+        "format": fmt,
+        "mode": mode,
+        "parts": n_parts,
+        "secondsPerPart": sec,
+        "targetTotalSec": total_sec,
+        "wordsPerSecond": 2.9,
+        "aspect": aspect,
+        "seamlessStitch": n_parts > 1,
+        "genre": args.genre,
+        "adaptMode": args.adapt_mode,
+    }
+    seed_params["thresholds"] = default_thresholds(seed_params)
+
     doc = {
-        "schemaVersion": "2.0",
+        "schemaVersion": "3.0",
         "title": args.title,
         "lang": "vi",
-        "params": {
-            "mode": mode,
-            "parts": n_parts,
-            "secondsPerPart": sec,
-            "wordsPerSecond": 2.9,
-            "genre": args.genre,
-            "adaptMode": args.adapt_mode,
-            "thresholds": default_thresholds({"parts": n_parts, "mode": mode}),
+        "params": seed_params,
+        "narrativeStyle": {
+            "pov": pov,
+            "narratorVoice": "Giọng nam kể chuyện đêm khuya trầm ấm nhưng biết run rẩy, nghẹn hơi khi nỗi sợ ập tới (Thiện Minh)",
+            "dialogueDensity": "balanced_dialogue",
+            "toneKeywords": ["tâm lý âm ỉ", "ngột ngạt", "dân gian thực tế", "PSX VHS chân thực"],
+            "forbiddenCliches": ["Tỉnh dậy hóa ra chỉ là giấc mơ", "Bỗng nhiên có bàn tay vỗ vai vô lý", "Nhân vật ngốc nghếch cố tình đi vào chỗ chết không lý do"],
         },
         "premise": {
             "core": "",
@@ -125,18 +258,49 @@ def cmd_seed(args):
             "cut": [],
             "risks": [],
         },
+        "worldLore": {
+            "era": "",
+            "settingDetail": "",
+            "weatherProgression": ["Mưa rả rích đầu đêm", "Gió giật mạnh & mất điện"],
+            "backstory": "",
+            "tabooLore": "",
+        },
+        "entityProfile": {
+            "name": "",
+            "origin": "",
+            "rules": [
+                {"rule": "", "trigger": "", "consequence": "", "loophole": ""},
+                {"rule": "", "trigger": "", "consequence": "", "loophole": ""},
+            ],
+            "sensoryTells": ["Âm thanh đặc trưng", "Mùi/nhiệt độ lạ", "Biến dạng ánh sáng / nhiễu VHS"],
+            "escalationStages": [
+                "Cấp 1: Dấu hiệu ngoại vi & vật thể sai lệch vị trí",
+                "Cấp 2: Bóng rình góc khuất & tiếng giả giọng",
+                "Cấp 3: Xâm nhập vùng an toàn & phá vỡ quy tắc bảo vệ",
+                "Cấp 4: Hiện nguyên hình toàn thân & đối đầu trực diện",
+            ],
+        },
         "characters": [
             {
                 "id": "C01",
                 "name": "",
+                "age": 24,
                 "tier": "lead",
                 "roleType": "human",
-                "role": "Nhân vật chính",
+                "role": "Nhân vật chính (POV)",
                 "heightMeters": 1.72,
                 "trait": "",
+                "goal": "",
+                "trappedReason": "",
+                "flaw": "",
+                "secret": "",
+                "voiceProfile": "Trầm ổn, dè dặt, giọng Việt tự nhiên; khi hoảng thở gấp, câu ngắn ngắt nhịp",
+                "wardrobe": "",
+                "carriedItems": ["Điện thoại pin yếu", "Đèn pin cầm tay"],
                 "appearanceBrief": "",
-                "movementRules": "Ngồi/đứng/chạy có lộ trình thực tế qua cửa nối giữa các phòng",
+                "movementRules": "Di chuyển có lộ trình vật lý qua đúng cửa nối giữa các phòng",
                 "arc": "",
+                "relationships": [{"targetId": "C02", "relation": "Mục tiêu bị săn đuổi", "tension": ""}],
                 "from": ["Sáng tác mới" if args.adapt_mode == "original" else "Nguồn gốc"],
             },
             {
@@ -147,8 +311,11 @@ def cmd_seed(args):
                 "role": "Thực thể kinh dị / Phản diện",
                 "heightMeters": 1.85,
                 "trait": "",
+                "goal": "",
+                "flaw": "",
+                "voiceProfile": "Thì thầm méo tiếng / giả giọng người thân (fx=ghost)",
                 "appearanceBrief": "",
-                "movementRules": "Ẩn sau khe cửa / góc tối trước Dead Silence, chỉ lộ diện toàn thân ở cao trào",
+                "movementRules": "Tuân thủ 4 cấp lộ diện, chỉ hiện thân đầy đủ ở cao trào",
                 "arc": "",
                 "from": ["Sáng tác mới" if args.adapt_mode == "original" else "Nguồn gốc"],
             },
@@ -170,31 +337,45 @@ def cmd_seed(args):
                 ],
             }
         ],
+        "acts": acts_seed,
+        "clues": [
+            {
+                "id": "CL01",
+                "kind": "physical_clue",
+                "plantedInPart": 1,
+                "plantedDetail": "",
+                "payoffInPart": n_parts,
+                "recontextualization": "",
+            },
+            {
+                "id": "CL02",
+                "kind": "red_herring",
+                "plantedInPart": 1 if n_parts == 1 else 2,
+                "plantedDetail": "",
+                "payoffInPart": n_parts,
+                "recontextualization": "",
+            },
+        ],
         "beats": [
-            {
-                "id": "B01",
-                "part": 1,
-                "type": "hook",
-                "weight": "minor",
-                "setup": "",
-                "payoff": "",
-            },
-            {
-                "id": "B02",
-                "part": n_parts,
-                "type": "twist",
-                "weight": "major",
-                "setup": "",
-                "payoff": "",
-            },
+            {"id": "B01", "part": 1, "type": "hook", "weight": "minor", "setup": "", "payoff": ""},
+            {"id": "B02", "part": max(1, n_parts // 2), "type": "dread", "weight": "major", "setup": "", "payoff": ""},
+            {"id": "B03", "part": n_parts, "type": "twist", "weight": "major", "setup": "", "payoff": ""},
         ],
         "props": [],
         "parts": [
             {
                 "part": i,
-                "title": f"Phần {i}",
+                "act": act_of_part(i),
+                "title": f"Chương {i}",
                 "target_sec": sec,
                 "light": "warmLamp" if i == 1 else "coldMoon",
+                "pacingType": pacing_seq_short[min(i - 1, len(pacing_seq_short) - 1)] if n_parts <= 5 else ("setup" if i <= 2 else ("false_relief" if i == max(3, n_parts // 2) else ("climax_chase" if i == n_parts - 1 else ("aftermath" if i == n_parts else "escalation")))),
+                "tensionStart": tension_curve[min(i - 1, len(tension_curve) - 1)][0],
+                "tensionPeak": tension_curve[min(i - 1, len(tension_curve) - 1)][1],
+                "tensionEnd": tension_curve[min(i - 1, len(tension_curve) - 1)][2],
+                "newInfoRevealed": "",
+                "cliffhangerType": "final_twist" if i == n_parts else "sensory_shock",
+                "transitionOut": "fade:0.5" if i == n_parts else "cut",
                 "synopsis": "",
                 "hook": "",
                 "suspense": "",
@@ -211,14 +392,15 @@ def cmd_seed(args):
     out_txt = json.dumps(doc, ensure_ascii=False, indent=2) + "\n"
     if args.out:
         write_text(args.out, out_txt)
-        print(f"Seeded story.json -> {args.out}")
+        print(f"Seeded story.json ({fmt}, {n_parts} parts, {total_sec}s, {aspect}) -> {args.out}")
     else:
         print(out_txt, end="")
 
 
-def evaluate_gates(doc, stage="full", strict_spatial=False):
+def evaluate_gates(doc, stage="full", strict_spatial=False, strict_story=False):
     params = doc.get("params") or {}
     th = default_thresholds(params)
+    fmt = resolve_format(params)
     n_parts = int(params.get("parts") or 1)
     adapt_mode = str(params.get("adaptMode") or "original")
 
@@ -228,12 +410,30 @@ def evaluate_gates(doc, stage="full", strict_spatial=False):
     beats = doc.get("beats") or []
     props = doc.get("props") or []
     parts = doc.get("parts") or []
+    acts = doc.get("acts") or []
+    clues = doc.get("clues") or []
+    world_lore = doc.get("worldLore") or {}
+    entity_prof = doc.get("entityProfile") or {}
+
+    sv = str(doc.get("schemaVersion", "")).strip()
+    narrative_mode = (
+        bool(strict_story)
+        or sv.startswith("3")
+        or bool(world_lore)
+        or bool(entity_prof)
+        or bool(clues)
+        or bool(acts)
+    )
     spatial_mode = (
         bool(strict_spatial)
-        or str(doc.get("schemaVersion", "")).strip().startswith("2")
+        or narrative_mode
+        or sv.startswith("2")
         or any(bool(s.get("landmarks")) for s in scenes)
         or any(bool(p.get("actionBeats")) for p in parts)
     )
+    # Normalize 3-round stages: lore -> beats+lore, structure -> full minus actionBeats
+    eff_stage = "beats" if stage == "lore" else ("full" if stage == "structure" else stage)
+    require_action_beats = stage == "full"
 
     gates = []
 
@@ -306,7 +506,7 @@ def evaluate_gates(doc, stage="full", strict_spatial=False):
     )
 
     # 5. scene-reuse (full stage with multi-part)
-    if stage == "full" and n_parts >= 2:
+    if eff_stage == "full" and n_parts >= 2:
         scene_usage = {s.get("id"): 0 for s in scenes}
         for p in parts:
             for sid in set(p.get("sceneIds") or []):
@@ -326,7 +526,7 @@ def evaluate_gates(doc, stage="full", strict_spatial=False):
     # Beats & Props preparation
     beat_ids = {b.get("id") for b in beats if b.get("id")}
     # 6. prop-purpose (checked when beats finalized or full; props optional on skeleton)
-    if stage in ("beats", "full") and props:
+    if eff_stage in ("beats", "full") and props:
         prop_errs = []
         if len(props) > th["maxProps"]:
             prop_errs.append(f"Số đạo cụ {len(props)} > {th['maxProps']}")
@@ -353,7 +553,7 @@ def evaluate_gates(doc, stage="full", strict_spatial=False):
         )
 
     # 7. beat-major
-    if stage in ("beats", "full"):
+    if eff_stage in ("beats", "full"):
         majors = [b for b in beats if b.get("weight", "minor") == "major"]
         bad_beats = [b.get("id") for b in beats if b.get("weight", "minor") not in VALID_WEIGHTS or not str(b.get("setup", "")).strip()]
         major_parts = sorted([int(b.get("part", 1)) for b in majors])
@@ -410,7 +610,7 @@ def evaluate_gates(doc, stage="full", strict_spatial=False):
             add_gate(gid, gtitle, True, "Kiểm ở stage beats/full", applies=False)
 
     # Full stage checks (10..14)
-    if stage == "full":
+    if eff_stage == "full":
         # 10. part-duration
         p_errs = []
         if len(parts) != n_parts:
@@ -419,15 +619,15 @@ def evaluate_gates(doc, stage="full", strict_spatial=False):
             if p.get("part") != idx:
                 p_errs.append(f"Phần thứ {idx} có số part={p.get('part')!r}")
             dur = p.get("target_sec")
-            if not isinstance(dur, (int, float)) or not (45 <= dur <= 75):
-                p_errs.append(f"P{idx} target_sec={dur} ngoài [45,75]")
+            if not isinstance(dur, (int, float)) or not (45 <= dur <= 90):
+                p_errs.append(f"P{idx} target_sec={dur} ngoài [45,90]")
             if p.get("light") not in VALID_LIGHTS:
                 p_errs.append(f"P{idx} light={p.get('light')!r} không hợp lệ")
         add_gate(
             "part-duration",
-            "10. Cấu trúc phần & Thời lượng (45–75s)",
+            "10. Cấu trúc phần & Thời lượng chương (45–90s)",
             not p_errs,
-            f"Đủ {n_parts} phần đúng thời lượng & ánh sáng hợp lệ" if not p_errs else "; ".join(p_errs[:4]),
+            f"Đủ {n_parts} chương đúng thời lượng & ánh sáng hợp lệ" if not p_errs else "; ".join(p_errs[:4]),
         )
 
         # 11. prose-only
@@ -595,7 +795,7 @@ def evaluate_gates(doc, stage="full", strict_spatial=False):
         )
 
         # 17 & 18: Action Blocking Continuity + Jumpscare Pacing Cap (checked at stage=full)
-        if stage == "full":
+        if require_action_beats:
             blk_errs = []
             js_errs = []
             char_ids_set = {c.get("id") for c in chars if c.get("id")}
@@ -647,7 +847,7 @@ def evaluate_gates(doc, stage="full", strict_spatial=False):
                             and prev[1]
                             and frm != prev[1]
                             and not act.get("allowTeleport")
-                            and cut_type not in ("blackout", "timeSkip", "flashCut")
+                            and cut_type not in ("blackout", "timeSkip", "flashCut", "locationJump")
                         ):
                             blk_errs.append(
                                 f"TELEPORT ở {ab_id}: {aid} vừa ở '{prev[1]}' bỗng nhảy sang '{frm}' trong cùng {ab_sid}!"
@@ -668,7 +868,8 @@ def evaluate_gates(doc, stage="full", strict_spatial=False):
                             if st_to and st_to not in valid_states:
                                 blk_errs.append(f"{ab_id} prop {pr_id} toState='{st_to}' ngoài states={valid_states}")
                         cur_st = prop_state.get(pr_id)
-                        if cur_st and st_from and st_from != cur_st:
+                        # Only check local-part drift here for v2; v3 Gate 24 verifies cross-part continuous prop state!
+                        if not narrative_mode and cur_st and st_from and st_from != cur_st:
                             blk_errs.append(
                                 f"PROP_STATE_DRIFT ở {ab_id}: {pr_id} đang ở '{cur_st}' nhưng khai báo fromState='{st_from}'!"
                             )
@@ -693,21 +894,291 @@ def evaluate_gates(doc, stage="full", strict_spatial=False):
             )
             add_gate(
                 "horror-pacing-jumpscare-cap",
-                "18. Giới hạn Jumpscare & Đồng bộ Audio (`<=2`/phần)",
+                "18. Giới hạn Jumpscare & Đồng bộ Audio (`<=2`/chương)",
                 not js_errs,
                 "Phân bổ Jumpscare hợp lý, đúng 4 phong cách v7.1" if not js_errs else "; ".join(js_errs[:4]),
             )
         else:
             add_gate("action-blocking-continuity", "17. Liên tục hành động (`actionBeats`)", True, "Kiểm ở stage full", applies=False)
-            add_gate("horror-pacing-jumpscare-cap", "18. Giới hạn Jumpscare (`<=2`/phần)", True, "Kiểm ở stage full", applies=False)
+            add_gate("horror-pacing-jumpscare-cap", "18. Giới hạn Jumpscare (`<=2`/chương)", True, "Kiểm ở stage full", applies=False)
     else:
         for gid, gtitle in [
             ("char-appearance-brief", "15. Khóa ngoại hình nhân vật"),
             ("scene-spatial-floorplan", "16. Mặt bằng 2D & Điểm neo"),
             ("action-blocking-continuity", "17. Liên tục hành động (`actionBeats`)"),
-            ("horror-pacing-jumpscare-cap", "18. Giới hạn Jumpscare (`<=2`/phần)"),
+            ("horror-pacing-jumpscare-cap", "18. Giới hạn Jumpscare (`<=2`/chương)"),
         ]:
-            add_gate(gid, gtitle, True, "Bỏ qua (schema v1 cũ — nâng cấp schemaVersion:'2.0' hoặc dùng --strict-spatial để bật)", applies=False)
+            add_gate(gid, gtitle, True, "Bỏ qua (schema v1 cũ — nâng cấp schemaVersion:'2.0'/'3.0' hoặc dùng --strict-spatial để bật)", applies=False)
+
+    # Narrative Studio v3.0 Deep Storytelling & Long-Form Gates (19..24 — active for schemaVersion 3.0+ / --strict-story)
+    if narrative_mode:
+        # 19. format-duration-budget
+        dur_errs = []
+        lo_d, hi_d = FORMAT_DURATION_BOUNDS.get(fmt, (150, 300))
+        if eff_stage == "full":
+            tot_sec = sum(float(p.get("target_sec") or 0) for p in parts)
+            if not (lo_d <= tot_sec <= hi_d):
+                dur_errs.append(f"Tổng thời lượng {tot_sec:.0f}s ngoài khung '{fmt}' [{lo_d}s..{hi_d}s]")
+            if require_action_beats:
+                for p in parts:
+                    pid = p.get("part")
+                    tsec = float(p.get("target_sec") or 0)
+                    ab_sum = sum(float(ab.get("durationSec") or 0) for ab in (p.get("actionBeats") or []))
+                    if tsec > 0 and ab_sum > 0 and not (tsec * 0.80 <= ab_sum <= tsec * 1.20):
+                        dur_errs.append(f"P{pid} tổng actionBeats={ab_sum:.1f}s lệch >20% so với target_sec={tsec:.0f}s")
+            add_gate(
+                "format-duration-budget",
+                f"19. Ngân sách Thời lượng chuẩn `{fmt}` ({lo_d}–{hi_d}s)",
+                not dur_errs,
+                f"Tổng {tot_sec:.0f}s ({len(parts)} chương) khớp chuẩn '{fmt}' và khớp từng actionBeat (±20%)"
+                if not dur_errs
+                else "; ".join(dur_errs[:4]),
+            )
+        else:
+            t_target = float(params.get("targetTotalSec") or (n_parts * float(params.get("secondsPerPart") or 60)))
+            if not (lo_d <= t_target <= hi_d):
+                dur_errs.append(f"targetTotalSec={t_target:.0f}s ngoài khung '{fmt}' [{lo_d}s..{hi_d}s]")
+            add_gate(
+                "format-duration-budget",
+                f"19. Ngân sách Thời lượng chuẩn `{fmt}` ({lo_d}–{hi_d}s)",
+                not dur_errs,
+                f"Dự kiến {t_target:.0f}s ({n_parts} chương) đạt chuẩn '{fmt}'" if not dur_errs else "; ".join(dur_errs[:4]),
+            )
+
+        # 20. world-lore-and-entity-rules
+        wl_errs = []
+        if not str(world_lore.get("era", "")).strip():
+            wl_errs.append("worldLore thiếu era (thời đại/năm)")
+        if not str(world_lore.get("settingDetail", "")).strip():
+            wl_errs.append("worldLore thiếu settingDetail (địa lý/không gian sống)")
+        if not str(world_lore.get("backstory", "")).strip():
+            wl_errs.append("worldLore thiếu backstory (bi kịch gốc)")
+        wp = world_lore.get("weatherProgression") or []
+        if not isinstance(wp, list) or len([x for x in wp if str(x).strip()]) < 2:
+            wl_errs.append("worldLore.weatherProgression cần >= 2 mốc diễn biến thời tiết")
+        if not str(entity_prof.get("origin", "")).strip():
+            wl_errs.append("entityProfile thiếu origin (nguồn gốc thực thể)")
+        ep_rules = entity_prof.get("rules") or []
+        valid_rules = [
+            r for r in ep_rules
+            if isinstance(r, dict) and str(r.get("rule", "")).strip() and str(r.get("trigger", "")).strip() and str(r.get("consequence", "")).strip()
+        ]
+        if len(valid_rules) < 2:
+            wl_errs.append("entityProfile.rules cần >= 2 quy tắc đầy đủ (rule, trigger, consequence)")
+        tells = [x for x in (entity_prof.get("sensoryTells") or []) if str(x).strip()]
+        if len(tells) < 3:
+            wl_errs.append(f"entityProfile.sensoryTells cần >= 3 dấu hiệu giác quan (hiện {len(tells)})")
+        stages_e = [x for x in (entity_prof.get("escalationStages") or []) if str(x).strip()]
+        if len(stages_e) < 3:
+            wl_errs.append(f"entityProfile.escalationStages cần >= 3 cấp độ lộ diện leo thang (hiện {len(stages_e)})")
+        add_gate(
+            "world-lore-and-entity-rules",
+            "20. Thế giới quan (`worldLore`) & Hệ quy tắc Thực thể 4 cấp",
+            not wl_errs,
+            f"Đủ bối cảnh/bi kịch gốc, {len(valid_rules)} quy tắc có kẽ hở, {len(tells)} dấu hiệu giác quan & {len(stages_e)} cấp lộ diện"
+            if not wl_errs
+            else "; ".join(wl_errs[:4]),
+        )
+
+        # 21. character-depth-and-stakes
+        cd_errs = []
+        all_cids = {c.get("id") for c in chars if c.get("id")}
+        rel_count = 0
+        for c in chars:
+            cid = c.get("id") or "?"
+            rt = str(c.get("roleType") or "human").lower()
+            if c.get("tier") == "lead" and rt == "human":
+                if not str(c.get("goal", "")).strip():
+                    cd_errs.append(f"{cid} thiếu goal (mục tiêu trước biến cố)")
+                if len(str(c.get("trappedReason", "")).strip()) < 10:
+                    cd_errs.append(f"{cid} thiếu trappedReason (>=10 ký tự — lý do không thể bỏ chạy ngay!)")
+                if not str(c.get("flaw", "")).strip():
+                    cd_errs.append(f"{cid} thiếu flaw (điểm yếu tâm lý/lỗi lầm)")
+                if not str(c.get("voiceProfile", "")).strip():
+                    cd_errs.append(f"{cid} thiếu voiceProfile (tông giọng/khẩu ngữ)")
+            for rel in c.get("relationships") or []:
+                if isinstance(rel, dict) and rel.get("targetId") in all_cids and str(rel.get("relation", "")).strip():
+                    rel_count += 1
+                elif isinstance(rel, dict) and rel.get("targetId") and rel.get("targetId") not in all_cids:
+                    cd_errs.append(f"{cid} relationship trỏ tới targetId lạ '{rel.get('targetId')}'")
+        if len(chars) >= 2 and rel_count < 1:
+            cd_errs.append("Truyện có >= 2 nhân vật cần khai báo relationships[] giữa các nhân vật")
+        add_gate(
+            "character-depth-and-stakes",
+            "21. Tâm lý Nhân vật, Lý do mắc kẹt & Mạng quan hệ",
+            not cd_errs,
+            f"Đủ goal, trappedReason, flaw, voiceProfile & {rel_count} tuyến quan hệ"
+            if not cd_errs
+            else "; ".join(cd_errs[:4]),
+        )
+
+        # 22. clue-twist-economy
+        cl_errs = []
+        min_clues = 4 if fmt == "series" else (2 if fmt == "short" else 1)
+        if len(clues) < min_clues:
+            cl_errs.append(f"Định dạng '{fmt}' cần >= {min_clues} manh mối trong clues[] (hiện có {len(clues)})")
+        red_herrings = 0
+        early_planted = 0
+        for cl in clues:
+            clid = cl.get("id") or "?"
+            kind = str(cl.get("kind", "")).strip()
+            if kind not in VALID_CLUE_KINDS:
+                cl_errs.append(f"{clid} kind={kind!r} không hợp lệ")
+            if kind == "red_herring":
+                red_herrings += 1
+            p_in = int(cl.get("plantedInPart") or 0)
+            p_out = int(cl.get("payoffInPart") or 0)
+            if not (1 <= p_in <= n_parts) or not (1 <= p_out <= n_parts):
+                cl_errs.append(f"{clid} plantedInPart={p_in}/payoffInPart={p_out} ngoài [1..{n_parts}]")
+            elif p_in > p_out:
+                cl_errs.append(f"PLOT_HOLE ở {clid}: gieo ở P{p_in} sau khi lật kèo ở P{p_out}!")
+            if p_in < n_parts:
+                early_planted += 1
+            if not str(cl.get("plantedDetail", "")).strip() or not str(cl.get("recontextualization", "")).strip():
+                cl_errs.append(f"{clid} thiếu plantedDetail hoặc recontextualization")
+        if n_parts >= 2 and clues and early_planted < 1:
+            cl_errs.append("Phải có >= 1 manh mối gieo sớm trước chương kết để cú twist không bị gượng ép")
+        if fmt == "series" and red_herrings < 1:
+            cl_errs.append("Series 8–15 phút cần >= 1 red_herring (đánh lạc hướng) để giữ hồi hộp")
+        add_gate(
+            "clue-twist-economy",
+            "22. Kinh tế Manh mối, Đánh lạc hướng & Lật kèo (`clues`)",
+            not cl_errs,
+            f"{len(clues)} manh mối (gồm {red_herrings} red herring) gieo sớm & khép kín logic 100%"
+            if not cl_errs
+            else "; ".join(cl_errs[:4]),
+        )
+
+        # 23. multi-act-tension-curve
+        if eff_stage == "full" and n_parts >= 2:
+            tc_errs = []
+            covered = set()
+            for a in acts:
+                pr = a.get("partRange")
+                if not (isinstance(pr, list) and len(pr) == 2 and all(isinstance(x, int) for x in pr) and 1 <= pr[0] <= pr[1] <= n_parts):
+                    tc_errs.append(f"Act {a.get('act')} partRange={pr!r} không hợp lệ")
+                else:
+                    for x in range(pr[0], pr[1] + 1):
+                        if x in covered:
+                            tc_errs.append(f"Chương P{x} bị chồng chéo giữa 2 Hồi")
+                        covered.add(x)
+                if not str(a.get("turningPoint", "")).strip():
+                    tc_errs.append(f"Act {a.get('act')} thiếu turningPoint (bước ngoặt đổi chiều)")
+            expected_set = set(range(1, n_parts + 1))
+            if covered != expected_set:
+                tc_errs.append(f"acts[] chưa phủ đủ các chương {sorted(expected_set - covered)}")
+            t_vals = []
+            for p in parts:
+                pid = p.get("part")
+                pt = str(p.get("pacingType", "")).strip()
+                if pt not in VALID_PACING_TYPES:
+                    tc_errs.append(f"P{pid} pacingType={pt!r} không hợp lệ")
+                if not str(p.get("newInfoRevealed", "")).strip():
+                    tc_errs.append(f"P{pid} thiếu newInfoRevealed (cấm chương câu giờ rỗng ruột)")
+                for tk in ("tensionStart", "tensionPeak", "tensionEnd"):
+                    tv = p.get(tk)
+                    if not isinstance(tv, (int, float)) or not (1 <= tv <= 10):
+                        tc_errs.append(f"P{pid}.{tk}={tv!r} ngoài [1..10]")
+                    else:
+                        t_vals.append(float(tv))
+            if t_vals:
+                if min(t_vals) > 5:
+                    tc_errs.append(f"Đường căng thẳng quá phẳng/ngợp (min={min(t_vals):.0f} > 5 — cần nhịp lắng/thở giả an toàn <=5!)")
+                if max(t_vals) < 8:
+                    tc_errs.append(f"Thiếu đỉnh cao trào (max={max(t_vals):.0f} < 8)")
+            add_gate(
+                "multi-act-tension-curve",
+                "23. Cấu trúc Đa Hồi & Đường cong Căng thẳng (Có nhịp thở)",
+                not tc_errs,
+                f"{len(acts)} Hồi phủ kín {n_parts} chương, biên độ căng thẳng {int(min(t_vals)) if t_vals else 0}→{int(max(t_vals)) if t_vals else 0}/10"
+                if not tc_errs
+                else "; ".join(tc_errs[:4]),
+            )
+        else:
+            add_gate("multi-act-tension-curve", "23. Cấu trúc Đa Hồi & Đường cong Căng thẳng", True, "Kiểm ở stage structure/full (>=2 chương)", applies=False)
+
+        # 24. cross-part-continuity-and-dialogue-briefs
+        if require_action_beats:
+            x_errs = []
+            prop_map_x = {pr.get("id"): pr for pr in props if pr.get("id")}
+            global_prop_state = {
+                pr_id: (pr.get("initialState") or ((pr.get("states") or [None])[0]))
+                for pr_id, pr in prop_map_x.items()
+            }
+            global_actor_last = {}
+            total_js = 0
+            zero_js_parts = 0
+            wps_cfg = float(params.get("wordsPerSecond") or 2.9)
+            for p in parts:
+                pid = p.get("part")
+                abeats = p.get("actionBeats") or []
+                part_js = 0
+                part_wb = 0
+                for idx_ab, ab in enumerate(abeats):
+                    ab_id = ab.get("beatId") or f"P{pid}_AB{idx_ab+1}"
+                    ab_sid = ab.get("sceneId")
+                    cut_type = str(ab.get("cutType", "")).strip()
+                    # Cross-part actor continuity
+                    for act in ab.get("actors") or []:
+                        aid = act.get("id")
+                        vis = bool(act.get("visible", True))
+                        frm = act.get("fromLandmark") or act.get("landmark")
+                        to = act.get("toLandmark") or frm
+                        prev = global_actor_last.get(aid)
+                        if (
+                            vis and prev is not None and prev[2] and prev[0] == ab_sid
+                            and frm and prev[1] and frm != prev[1]
+                            and not act.get("allowTeleport")
+                            and cut_type not in ("blackout", "timeSkip", "flashCut", "locationJump")
+                        ):
+                            x_errs.append(f"CROSS_PART_TELEPORT ở {ab_id}: {aid} đang ở '{prev[1]}' (từ nhịp trước) nhảy sang '{frm}'!")
+                        global_actor_last[aid] = (ab_sid, to or frm, vis)
+                    # Cross-part prop state continuity
+                    for pc in ab.get("propChanges") or []:
+                        pr_id = pc.get("id")
+                        st_from = pc.get("fromState")
+                        st_to = pc.get("toState")
+                        cur_st = global_prop_state.get(pr_id)
+                        if cur_st and st_from and st_from != cur_st and cut_type not in ("timeSkip", "flashCut"):
+                            x_errs.append(f"CROSS_PART_PROP_DRIFT ở {ab_id}: {pr_id} đang ở '{cur_st}' nhưng khai báo fromState='{st_from}'!")
+                        if st_to:
+                            global_prop_state[pr_id] = st_to
+                    # Narrative craft on each actionBeat: subtext + sensoryDetails + spokenBeat
+                    if not str(ab.get("subtext", "")).strip():
+                        x_errs.append(f"{ab_id} thiếu subtext (nội tâm/cảm xúc ngầm)")
+                    sens = ab.get("sensoryDetails")
+                    if not (isinstance(sens, dict) and (str(sens.get("sight", "")).strip() or str(sens.get("sound", "")).strip())):
+                        x_errs.append(f"{ab_id} thiếu sensoryDetails (sight/sound)")
+                    sb = ab.get("spokenBeat")
+                    if isinstance(sb, dict):
+                        wb = int(sb.get("wordBudget") or 0)
+                        part_wb += wb
+                        if wb > 0 and not str(sb.get("intent", "")).strip():
+                            x_errs.append(f"{ab_id} spokenBeat có lời nhưng thiếu intent")
+                    elif not ab.get("deadSilenceBeforeSec"):
+                        x_errs.append(f"{ab_id} thiếu spokenBeat (định hướng thoại & wordBudget)")
+                    if ab.get("jumpscareStyle"):
+                        part_js += 1
+                        total_js += 1
+                if part_js == 0:
+                    zero_js_parts += 1
+                exp_words = float(p.get("target_sec") or 60) * wps_cfg
+                if part_wb > 0 and not (exp_words * 0.55 <= part_wb <= exp_words * 1.45):
+                    x_errs.append(f"P{pid} tổng wordBudget={part_wb} lệch nhiều so với chuẩn ~{int(exp_words)} từ")
+            if total_js > th["maxJumpscaresTotal"]:
+                x_errs.append(f"Tổng toàn phim có {total_js} Jumpscare > trần {th['maxJumpscaresTotal']} cho '{fmt}' (gây nhờn!)")
+            if fmt == "series" and zero_js_parts < 1:
+                x_errs.append("Series 8–15 phút bắt buộc có >= 1 chương thở tâm lý (0 Jumpscare)")
+            add_gate(
+                "cross-part-continuity-and-dialogue-briefs",
+                "24. Liên tục Xuyên Chương, Subtext/Cảm giác & Trần Jumpscare Toàn Phim",
+                not x_errs,
+                f"0 lỗi xuyên chương, đủ subtext/sensory/spokenBeat, tổng {total_js}/{th['maxJumpscaresTotal']} Jumpscare"
+                if not x_errs
+                else "; ".join(x_errs[:4]),
+            )
+        else:
+            add_gate("cross-part-continuity-and-dialogue-briefs", "24. Liên tục Xuyên Chương & Định hướng Thoại", True, "Kiểm ở stage full", applies=False)
 
     failed = [g for g in gates if g["applies"] and not g["ok"]]
     return gates, failed
@@ -715,7 +1186,12 @@ def evaluate_gates(doc, stage="full", strict_spatial=False):
 
 def cmd_validate(args):
     doc = read_json(args.story)
-    gates, failed = evaluate_gates(doc, stage=args.stage, strict_spatial=getattr(args, "strict_spatial", False))
+    gates, failed = evaluate_gates(
+        doc,
+        stage=args.stage,
+        strict_spatial=getattr(args, "strict_spatial", False),
+        strict_story=getattr(args, "strict_story", False),
+    )
     for g in gates:
         mark = "PASS" if (g["ok"] or not g["applies"]) else "FAIL"
         tag = f"[{mark}]" if g["applies"] else "[SKIP]"
@@ -728,7 +1204,12 @@ def cmd_validate(args):
 
 def cmd_checkup(args):
     doc = read_json(args.story)
-    gates, failed = evaluate_gates(doc, stage="full", strict_spatial=getattr(args, "strict_spatial", False))
+    gates, failed = evaluate_gates(
+        doc,
+        stage="full",
+        strict_spatial=getattr(args, "strict_spatial", False),
+        strict_story=getattr(args, "strict_story", False),
+    )
     for g in gates:
         mark = "✓" if (g["ok"] or not g["applies"]) else "✗"
         print(f" {mark} {g['title']} — {g['detail']}")
@@ -817,32 +1298,175 @@ def _render_scene_floorplan_svg(scene, all_action_beats):
     return "".join(parts_svg)
 
 
+def _render_tension_curve_svg(doc):
+    """Render a wide SVG Tension & Pacing Curve (1..10) across all Acts/Parts with Clue, Jumpscare & Twist markers."""
+    parts = doc.get("parts") or []
+    acts = doc.get("acts") or []
+    clues = doc.get("clues") or []
+    beats = doc.get("beats") or []
+    if len(parts) < 2 or not any(p.get("tensionPeak") is not None for p in parts):
+        return ""
+    W, H = 760.0, 235.0
+    pad_l, pad_r, pad_t, pad_b = 44.0, 24.0, 28.0, 42.0
+    n = len(parts)
+    plot_w = W - pad_l - pad_r
+    plot_h = H - pad_t - pad_b
+    col_w = plot_w / max(1, n)
+
+    def py(val):
+        v = max(1.0, min(10.0, float(val)))
+        return pad_t + plot_h * (1.0 - (v - 1.0) / 9.0)
+
+    svg = [
+        f"<svg viewBox='0 0 {int(W)} {int(H)}' class='tc-svg' xmlns='http://www.w3.org/2000/svg'>",
+        f"<rect x='0' y='0' width='{int(W)}' height='{int(H)}' rx='10' fill='#0a0c12'/>",
+    ]
+    # Subtle Act bands
+    act_cols = ["#141b29", "#1a1726", "#221620", "#241318", "#161926"]
+    for idx_a, a in enumerate(acts):
+        pr = a.get("partRange") or []
+        if len(pr) == 2:
+            x0 = pad_l + (pr[0] - 1) * col_w
+            xw = (pr[1] - pr[0] + 1) * col_w
+            c = act_cols[idx_a % len(act_cols)]
+            svg.append(f"<rect x='{x0:.1f}' y='{pad_t:.1f}' width='{xw:.1f}' height='{plot_h:.1f}' fill='{c}' opacity='0.75'/>")
+            lbl = html.escape(str(a.get("name", f"Hồi {a.get('act', idx_a+1)}"))[:28])
+            svg.append(f"<text x='{x0 + xw / 2:.1f}' y='{pad_t - 9:.1f}' fill='#d69e4e' font-size='10' text-anchor='middle'>{lbl}</text>")
+
+    # Horizontal gridlines (tension 2, 5, 8, 10)
+    for lvl in (2, 5, 8, 10):
+        gy = py(lvl)
+        dash = "3 3" if lvl != 5 else "6 3"
+        stroke = "#334155" if lvl != 5 else "#475569"
+        svg.append(f"<line x1='{pad_l:.1f}' y1='{gy:.1f}' x2='{W - pad_r:.1f}' y2='{gy:.1f}' stroke='{stroke}' stroke-width='1' stroke-dasharray='{dash}'/>")
+        svg.append(f"<text x='{pad_l - 8:.1f}' y='{gy + 3.5:.1f}' fill='#94a3b8' font-size='10' text-anchor='end'>{lvl}</text>")
+
+    # Build polyline points across Start -> Peak -> End of each part
+    pts = []
+    part_centers = {}
+    for idx_p, p in enumerate(parts):
+        pno = int(p.get("part") or (idx_p + 1))
+        x_s = pad_l + idx_p * col_w + 6.0
+        x_m = pad_l + (idx_p + 0.5) * col_w
+        x_e = pad_l + (idx_p + 1) * col_w - 6.0
+        t_s = float(p.get("tensionStart") or 4)
+        t_p = float(p.get("tensionPeak") or max(t_s, 6))
+        t_e = float(p.get("tensionEnd") or t_p)
+        pts.extend([(x_s, py(t_s)), (x_m, py(t_p)), (x_e, py(t_e))])
+        part_centers[pno] = (x_m, py(t_p), p)
+        # X-axis label
+        pt_lbl = html.escape(str(p.get("pacingType", ""))[:12])
+        svg.append(f"<text x='{x_m:.1f}' y='{H - 22:.1f}' fill='#e2e8f0' font-size='10.5' font-weight='600' text-anchor='middle'>P{pno} ({int(p.get('target_sec') or 60)}s)</text>")
+        if pt_lbl:
+            svg.append(f"<text x='{x_m:.1f}' y='{H - 9:.1f}' fill='#94a3b8' font-size='9' text-anchor='middle'>{pt_lbl}</text>")
+
+    poly_str = " ".join(f"{x:.1f},{y:.1f}" for x, y in pts)
+    area_str = f"{pts[0][0]:.1f},{pad_t + plot_h:.1f} {poly_str} {pts[-1][0]:.1f},{pad_t + plot_h:.1f}"
+    svg.append(f"<polygon points='{area_str}' fill='#c8433c' opacity='0.14'/>")
+    svg.append(f"<polyline points='{poly_str}' fill='none' stroke='#f87171' stroke-width='2.6' stroke-linejoin='round'/>")
+
+    # Plot Clue diamonds (gold), Major Beats (purple), Jumpscare markers (red)
+    for cl in clues:
+        p_in = int(cl.get("plantedInPart") or 0)
+        if p_in in part_centers:
+            cx, cy, _ = part_centers[p_in]
+            cy_m = min(pad_t + plot_h - 8, cy + 14)
+            svg.append(f"<polygon points='{cx:.1f},{cy_m-5:.1f} {cx+5:.1f},{cy_m:.1f} {cx:.1f},{cy_m+5:.1f} {cx-5:.1f},{cy_m:.1f}' fill='#fbbf24' stroke='#0a0c12' stroke-width='1'/>")
+    for b in beats:
+        if b.get("weight") == "major":
+            bp = int(b.get("part") or 0)
+            if bp in part_centers:
+                cx, cy, _ = part_centers[bp]
+                svg.append(f"<circle cx='{cx:.1f}' cy='{cy:.1f}' r='5.5' fill='#a78bfa' stroke='#0a0c12' stroke-width='1.5'/>")
+    for pno, (cx, cy, p) in part_centers.items():
+        js_n = sum(1 for ab in (p.get("actionBeats") or []) if ab.get("jumpscareStyle"))
+        if js_n > 0:
+            svg.append(f"<polygon points='{cx:.1f},{cy-14:.1f} {cx+6:.1f},{cy-4:.1f} {cx-6:.1f},{cy-4:.1f}' fill='#ef4444' stroke='#fff' stroke-width='0.9'/>")
+
+    # Compact legend top-right
+    svg.append(
+        f"<text x='{W - pad_r:.1f}' y='14' fill='#94a3b8' font-size='9.5' text-anchor='end'>"
+        "▲ Jumpscare · ● Major Beat · ◆ Gieo Manh mối</text>"
+    )
+    svg.append("</svg>")
+    return "".join(svg)
+
+
 def render_markdown(doc):
     params = doc.get("params") or {}
     premise = doc.get("premise") or {}
+    world_lore = doc.get("worldLore") or {}
+    entity_prof = doc.get("entityProfile") or {}
+    nar_style = doc.get("narrativeStyle") or {}
+    acts = doc.get("acts") or []
+    clues = doc.get("clues") or []
     chars = doc.get("characters") or []
     scenes = doc.get("scenes") or []
     beats = doc.get("beats") or []
     props = doc.get("props") or []
     parts = doc.get("parts") or []
     wps = float(params.get("wordsPerSecond") or 2.9)
+    total_sec = sum(float(p.get("target_sec") or 0) for p in parts)
 
     lines = [
         f"# STORY BIBLE: {doc.get('title', 'Chưa đặt tên')}",
         "",
-        f"- **Quy mô:** `{params.get('mode', 'standalone')}` · **{len(parts)} phần** · Thể loại: `{params.get('genre', '-')}` · Nguồn: `{params.get('adaptMode', '-')}`",
+        f"- **Định dạng & Quy mô:** `{resolve_format(params)}` (`{params.get('aspect', '9:16')}`) · **{len(parts)} chương** (`{int(total_sec)}s` ≈ `{total_sec/60.0:.1f} phút` · ~`{round(total_sec*wps)} từ`) · Thể loại: `{params.get('genre', '-')}` · Nguồn: `{params.get('adaptMode', '-')}`",
         f"- **Cốt lõi:** {premise.get('core', '')}",
         f"- **Luật thực thể / Cấm kỵ:** {premise.get('entityRule', '')}",
         f"- **Cú lật / Trọng tâm kết:** {premise.get('twistCore', '')}",
+    ]
+    if nar_style:
+        lines.append(f"- **Góc nhìn & Giọng kể:** `{nar_style.get('pov', '-')}` · {nar_style.get('narratorVoice', '')}")
+    if world_lore:
+        lines += [
+            "",
+            "## 0. Thế Giới Quan (`worldLore`) & Hồ Sơ Thực Thể 4 Cấp (`entityProfile`)",
+            f"- **Thời đại & Không gian:** {world_lore.get('era', '')} — {world_lore.get('settingDetail', '')}",
+            f"- **Diễn biến thời tiết:** {' → '.join(world_lore.get('weatherProgression') or [])}",
+            f"- **Bi kịch gốc:** {world_lore.get('backstory', '')}",
+            f"- **Kiêng kỵ dân gian:** {world_lore.get('tabooLore', '')}",
+        ]
+    if entity_prof:
+        lines += [
+            f"- **Thực thể:** **{entity_prof.get('name', '-')}** — {entity_prof.get('origin', '')}",
+            f"- **Dấu hiệu 5 giác quan:** {' · '.join(entity_prof.get('sensoryTells') or [])}",
+            "- **4 Cấp lộ diện leo thang:** " + " → ".join(entity_prof.get("escalationStages") or []),
+        ]
+        if entity_prof.get("rules"):
+            lines += ["", "| Quy tắc | Kích hoạt | Hậu quả | Lỗ hổng / Cái bẫy |", "|---|---|---|---|"]
+            for r in entity_prof["rules"]:
+                lines.append(f"| {r.get('rule', '')} | {r.get('trigger', '')} | {r.get('consequence', '')} | {r.get('loophole', '')} |")
+
+    lines += [
         "",
-        "## 1. Nhân vật (Hồ sơ Ngoại hình cho `castBlueprints`)",
-        "| ID | Tên | Cấp | Vai trò | Ngoại hình theo cốt truyện (`appearanceBrief`) | Cung phát triển (`arc`) |",
-        "|---|---|---|---|---|---|",
+        "## 1. Nhân vật (Tâm lý, Lý do mắc kẹt & Ngoại hình cho `castBlueprints`)",
+        "| ID | Tên | Cấp | Vai trò | Mục tiêu / Lý do mắc kẹt / Điểm yếu | Ngoại hình (`appearanceBrief`) | Cung phát triển (`arc`) |",
+        "|---|---|---|---|---|---|---|",
     ]
     for c in chars:
+        psych = " · ".join(
+            x for x in [
+                f"**Mục tiêu:** {c['goal']}" if c.get("goal") else "",
+                f"**Mắc kẹt:** {c['trappedReason']}" if c.get("trappedReason") else "",
+                f"**Điểm yếu:** {c['flaw']}" if c.get("flaw") else "",
+                f"**Giọng:** {c['voiceProfile']}" if c.get("voiceProfile") else "",
+            ] if x
+        ) or c.get("trait", "-")
         lines.append(
-            f"| `{c.get('id')}` | {c.get('name')} | `{c.get('tier')}` | {c.get('role')} | {c.get('appearanceBrief', c.get('trait', '-'))} | {c.get('arc', '-')} |"
+            f"| `{c.get('id')}` | {c.get('name')} | `{c.get('tier')}` | {c.get('role')} | {psych} | {c.get('appearanceBrief', c.get('trait', '-'))} | {c.get('arc', '-')} |"
         )
+
+    if acts:
+        lines += ["", "## 1B. Cấu trúc Đa Hồi (`acts`)"]
+        for a in acts:
+            pr = a.get("partRange") or [1, 1]
+            lines.append(f"- **Hồi {a.get('act')}: {a.get('name')}** (`P{pr[0]}–P{pr[1]}` · *{a.get('dominantEmotion', '')}*): {a.get('goal', '')} — **Bước ngoặt:** {a.get('turningPoint', '')}")
+
+    if clues:
+        lines += ["", "## 1C. Kinh tế Manh mối, Đánh lạc hướng & Lật kèo (`clues`)", "| ID | Loại | Gieo tại | Chi tiết gieo | Lật tại | Ý nghĩa thật khi lật kèo |", "|---|---|---|---|---|---|"]
+        for cl in clues:
+            lines.append(f"| `{cl.get('id')}` | `{cl.get('kind')}` | `P{cl.get('plantedInPart')}` | {cl.get('plantedDetail', '')} | `P{cl.get('payoffInPart')}` | {cl.get('recontextualization', '')} |")
 
     lines += [
         "",
@@ -869,21 +1493,26 @@ def render_markdown(doc):
     for b in beats:
         lines.append(f"- **`{b.get('id')}` [P{b.get('part')} · {b.get('weight', 'minor').upper()} · {b.get('type')}]**: *Gieo:* {b.get('setup')} -> *Gặt:* {b.get('payoff')}")
 
-    lines += ["", "## 4. Tóm tắt & Bảng Blocking Hành Động từng phần"]
+    lines += ["", "## 4. Tóm tắt & Bảng Blocking Hành Động + Định hướng Thoại từng Chương"]
     for p in parts:
         dur = float(p.get("target_sec") or 60)
         wb = round(dur * wps)
+        t_str = f" · Căng thẳng `{p.get('tensionStart')}→{p.get('tensionPeak')}→{p.get('tensionEnd')}/10` (`{p.get('pacingType', '-')}`)" if p.get("tensionPeak") is not None else ""
         lines += [
-            f"### Phần {p.get('part')}: {p.get('title', '')} (`{int(dur)}s` · ~`{wb} từ` · `{p.get('light')}`)",
+            f"### Chương {p.get('part')}: {p.get('title', '')} (`{int(dur)}s` · ~`{wb} từ` · `{p.get('light')}`{t_str})",
             f"- **Hook mở:** {p.get('hook', '')}",
             f"- **Diễn biến:** {p.get('synopsis', '')}",
+        ]
+        if p.get("newInfoRevealed"):
+            lines.append(f"- **Thông tin mới hé lộ:** {p['newInfoRevealed']}")
+        lines += [
             f"- **Treo cuối (Suspense):** {p.get('suspense', '')}",
             f"- **Nhân vật / Bối cảnh / Đạo cụ:** `{','.join(p.get('characterIds') or [])}` / `{','.join(p.get('sceneIds') or [])}` / `{','.join(p.get('propIds') or [])}`",
         ]
         if p.get("actionBeats"):
             lines += [
                 "",
-                "| Beat | Phòng | Camera (`pos -> look`) | Nhân vật & Di chuyển | Biến đổi Đạo cụ | Audio / Jumpscare |",
+                "| Beat | Phòng · Nhịp | Camera (`pos -> look`) | Nhân vật & Di chuyển | Đạo cụ (State) | Subtext · Cảm giác · Định hướng Thoại |",
                 "|---|---|---|---|---|---|",
             ]
             for ab in p["actionBeats"]:
@@ -897,8 +1526,12 @@ def render_markdown(doc):
                     f"`{pc.get('id')}`: `{pc.get('fromState', '-')}`->`{pc.get('toState', '-')}`"
                     for pc in (ab.get("propChanges") or [])
                 ) or "—"
-                aud_s = f"`{ab.get('audioCue') or '-'}`" + (f" · **JS:{ab.get('jumpscareStyle')}**" if ab.get("jumpscareStyle") else "")
-                lines.append(f"| `{ab.get('beatId')}` | `{ab.get('sceneId')}` | {cam_s} | {acts_s} | {props_s} | {aud_s} |")
+                sb = ab.get("spokenBeat") or {}
+                sb_s = f"Thoại `{sb.get('speaker', 'NARRATOR')}` (~{sb.get('wordBudget', 0)} từ): {sb.get('intent', '')}" if sb else ""
+                sub_s = f"Nội tâm: {ab.get('subtext', '')}" if ab.get("subtext") else ""
+                aud_s = f"SFX: `{ab.get('audioCue') or '-'}`" + (f" · **JS:{ab.get('jumpscareStyle')}**" if ab.get("jumpscareStyle") else "")
+                detail_col = " · ".join(x for x in [ab.get("actionSummary", ""), sub_s, sb_s, aud_s] if x)
+                lines.append(f"| `{ab.get('beatId')}` ({ab.get('durationSec', '-')}s) | `{ab.get('sceneId')}` · `{ab.get('mood', '')}` | {cam_s} | {acts_s} | {props_s} | {detail_col} |")
         lines.append("")
     return "\n".join(lines)
 
@@ -936,10 +1569,26 @@ def render_html(doc):
     char_rows = []
     for c in chars:
         tier = esc(c.get("tier"))
+        psych_bits = []
+        if c.get("goal"):
+            psych_bits.append(f"<strong>Mục tiêu:</strong> {esc(c['goal'])}")
+        if c.get("trappedReason"):
+            psych_bits.append(f"<strong>Lý do mắc kẹt:</strong> {esc(c['trappedReason'])}")
+        if c.get("flaw"):
+            psych_bits.append(f"<strong>Điểm yếu:</strong> {esc(c['flaw'])}")
+        if c.get("voiceProfile"):
+            psych_bits.append(f"<strong>Giọng:</strong> {esc(c['voiceProfile'])}")
+        if c.get("appearanceBrief"):
+            psych_bits.append(f"<strong>Ngoại hình:</strong> {esc(c['appearanceBrief'])}")
+        if c.get("relationships"):
+            rels = ", ".join(f"→<code>{esc(r.get('targetId'))}</code> ({esc(r.get('relation'))})" for r in c["relationships"] if isinstance(r, dict))
+            if rels:
+                psych_bits.append(f"<strong>Quan hệ:</strong> {rels}")
+        psych_html = "<br/>".join(psych_bits) if psych_bits else esc(c.get("trait"))
         char_rows.append(
             f"<tr><td><code>{esc(c.get('id'))}</code></td><td><strong>{esc(c.get('name'))}</strong></td>"
             f"<td><span class='pill tier-{tier}'>{tier}</span></td><td>{esc(c.get('role'))}</td>"
-            f"<td>{esc(c.get('trait'))}</td><td>{esc(c.get('arc') or '—')}</td></tr>"
+            f"<td>{psych_html}</td><td>{esc(c.get('arc') or '—')}</td></tr>"
         )
 
     part_cards = []
@@ -966,21 +1615,42 @@ def render_html(doc):
                     for pc in (ab.get("propChanges") or [])
                 ) or "—"
                 js_tag = f" <span class='pill red'>JS: {esc(ab.get('jumpscareStyle'))}</span>" if ab.get("jumpscareStyle") else ""
+                extra_bits = []
+                if ab.get("subtext"):
+                    extra_bits.append(f"<em>Nội tâm:</em> {esc(ab['subtext'])}")
+                sens = ab.get("sensoryDetails")
+                if isinstance(sens, dict):
+                    s_parts = [f"{k}: {esc(v)}" for k, v in sens.items() if str(v).strip()]
+                    if s_parts:
+                        extra_bits.append(f"<em>Cảm giác:</em> {' · '.join(s_parts)}")
+                sb = ab.get("spokenBeat")
+                if isinstance(sb, dict):
+                    extra_bits.append(
+                        f"<em>Thoại ({esc(sb.get('speaker', 'NARRATOR'))}, ~{int(sb.get('wordBudget') or 0)} từ):</em> {esc(sb.get('intent', ''))}"
+                        + (f" — <code>{esc(sb['keyPhrase'])}</code>" if sb.get("keyPhrase") else "")
+                    )
+                extra_html = f"<div class='g-det'>{'<br/>'.join(extra_bits)}</div>" if extra_bits else ""
                 ab_rows.append(
-                    f"<tr><td><code>{esc(ab.get('beatId'))}</code><div class='g-det'>{esc(ab.get('sceneId'))} · {esc(ab.get('mood', ''))}</div></td>"
+                    f"<tr><td><code>{esc(ab.get('beatId'))}</code> ({esc(ab.get('durationSec', '-'))}s)<div class='g-det'>{esc(ab.get('sceneId'))} · {esc(ab.get('mood', ''))}</div></td>"
                     f"<td>{cam_s}</td><td>{acts_s}</td><td>{pr_s}</td>"
-                    f"<td>{esc(ab.get('actionSummary', ''))}<div class='g-det'>SFX: <code>{esc(ab.get('audioCue') or '-')}</code>{js_tag}</div></td></tr>"
+                    f"<td>{esc(ab.get('actionSummary', ''))}{extra_html}<div class='g-det'>SFX: <code>{esc(ab.get('audioCue') or '-')}</code>{js_tag}</div></td></tr>"
                 )
             ab_html = (
-                "<div style='margin-top:12px'><strong style='color:var(--gold);font-size:12px;text-transform:uppercase'>Bảng Blocking Hành Động (Action Beats)</strong>"
-                "<table style='margin-top:6px'><thead><tr><th>Beat</th><th>Camera (Neo → Nhìn)</th><th>Nhân vật & Di chuyển</th><th>Đạo cụ (State Machine)</th><th>Diễn biến & Audio</th></tr></thead>"
+                "<div style='margin-top:12px'><strong style='color:var(--gold);font-size:12px;text-transform:uppercase'>Bảng Blocking Hành Động & Định Hướng Thoại (Action Beats)</strong>"
+                "<table style='margin-top:6px'><thead><tr><th>Beat</th><th>Camera (Neo → Nhìn)</th><th>Nhân vật & Di chuyển</th><th>Đạo cụ (State Machine)</th><th>Diễn biến, Nội tâm, Cảm giác & Thoại</th></tr></thead>"
                 f"<tbody>{''.join(ab_rows)}</tbody></table></div>"
             )
+        t_pill = (
+            f"<span class='pill dim'>Căng thẳng {esc(p.get('tensionStart'))}→{esc(p.get('tensionPeak'))}→{esc(p.get('tensionEnd'))}/10</span>"
+            f"<span class='pill dim'>{esc(p.get('pacingType'))}</span>"
+            if p.get("tensionPeak") is not None else ""
+        )
+        new_info_html = f"<p class='kv'><strong>Thông tin mới hé lộ:</strong> {esc(p['newInfoRevealed'])}</p>" if p.get("newInfoRevealed") else ""
         part_cards.append(
-            f"<div class='card part-card'><div class='part-top'><h3>Phần {esc(p.get('part'))}: {esc(p.get('title'))}</h3>"
-            f"<div class='meta'><span class='pill'>{int(dur)}s (~{wb} từ)</span><span class='pill light-{esc(p.get('light'))}'>{esc(p.get('light'))}</span></div></div>"
+            f"<div class='card part-card'><div class='part-top'><h3>Chương {esc(p.get('part'))}: {esc(p.get('title'))}</h3>"
+            f"<div class='meta'><span class='pill'>{int(dur)}s (~{wb} từ)</span>{t_pill}<span class='pill light-{esc(p.get('light'))}'>{esc(p.get('light'))}</span></div></div>"
             f"<p class='kv'><strong>Hook mở:</strong> {esc(p.get('hook'))}</p>"
-            f"<p class='syn'>{esc(p.get('synopsis'))}</p>"
+            f"<p class='syn'>{esc(p.get('synopsis'))}</p>{new_info_html}"
             f"<p class='kv'><strong>Treo cuối:</strong> {esc(p.get('suspense'))}</p>"
             f"<div class='tags'><span><strong>Nhân vật:</strong> {esc(cs)}</span> · <span><strong>Bối cảnh:</strong> {esc(ss)}</span> · <span><strong>Đạo cụ:</strong> {esc(ps)}</span></div>"
             f"{cues_html}{ab_html}</div>"
@@ -1034,6 +1704,74 @@ def render_html(doc):
     raw_json = html.escape(json.dumps(doc, ensure_ascii=False, indent=2))
     status_badge = f"ĐẠT {len(gates) - len(failed)}/{len(gates)} CỔNG" if not failed else f"LỖI {len(failed)} CỔNG"
 
+    # Build v3.0 Narrative Studio sections (World Lore, Entity 4-Stage Profile, Tension Curve SVG, Acts & Clues)
+    world_lore = doc.get("worldLore") or {}
+    entity_prof = doc.get("entityProfile") or {}
+    acts = doc.get("acts") or []
+    clues = doc.get("clues") or []
+    tension_svg = _render_tension_curve_svg(doc)
+
+    lore_section = ""
+    if world_lore or entity_prof:
+        wl_card = ""
+        if world_lore:
+            w_prog = " → ".join(esc(x) for x in (world_lore.get("weatherProgression") or []))
+            wl_card = (
+                "<div class='card'><h3>Thế giới quan & Bi kịch gốc</h3>"
+                f"<p class='kv'><strong>Thời đại:</strong> {esc(world_lore.get('era'))}</p>"
+                f"<p class='kv'><strong>Không gian:</strong> {esc(world_lore.get('settingDetail'))}</p>"
+                f"<p class='kv'><strong>Thời tiết:</strong> {w_prog}</p>"
+                f"<p class='kv'><strong>Bi kịch gốc:</strong> {esc(world_lore.get('backstory'))}</p>"
+                f"<p class='kv'><strong>Cấm kỵ dân gian:</strong> {esc(world_lore.get('tabooLore'))}</p></div>"
+            )
+        ep_card = ""
+        if entity_prof:
+            rule_items = "".join(
+                f"<li><strong>{esc(r.get('rule'))}</strong><div class='g-det'>Kích hoạt: {esc(r.get('trigger'))} · Hậu quả: {esc(r.get('consequence'))}"
+                + (f" · <em>Kẽ hở/Bẫy:</em> {esc(r['loophole'])}" if r.get("loophole") else "")
+                + "</div></li>"
+                for r in (entity_prof.get("rules") or []) if isinstance(r, dict)
+            )
+            tells_chips = "".join(f"<span class='chip'>{esc(x)}</span>" for x in (entity_prof.get("sensoryTells") or []))
+            stage_items = "".join(f"<li>{esc(x)}</li>" for x in (entity_prof.get("escalationStages") or []))
+            ep_card = (
+                f"<div class='card'><h3>Hồ sơ Thực thể: {esc(entity_prof.get('name') or 'Thực thể')}</h3>"
+                f"<p class='kv'><strong>Bản chất:</strong> {esc(entity_prof.get('origin'))}</p>"
+                f"<div class='chips'>{tells_chips}</div>"
+                f"<ul class='lm-list'>{rule_items}</ul>"
+                f"<div style='margin-top:8px'><strong style='font-size:12px;color:var(--gold)'>4 Cấp Lộ Diện Leo Thang:</strong><ol class='lm-list'>{stage_items}</ol></div></div>"
+            )
+        lore_section = f"<h2>Thế Giới Quan & Hệ Quy Tắc Thực Thể</h2><div class='grid2'>{wl_card}{ep_card}</div>"
+
+    tension_section = ""
+    if tension_svg or acts:
+        act_cards = "".join(
+            f"<div class='card'><strong>Hồi {esc(a.get('act'))}: {esc(a.get('name'))}</strong> "
+            f"<span class='pill dim'>P{esc((a.get('partRange') or [1,1])[0])}–P{esc((a.get('partRange') or [1,1])[-1])}</span>"
+            f"<p class='kv'>{esc(a.get('goal'))}</p>"
+            f"<div class='g-det'><strong>Bước ngoặt:</strong> {esc(a.get('turningPoint'))} · <em>{esc(a.get('dominantEmotion'))}</em></div></div>"
+            for a in acts
+        )
+        tension_section = (
+            "<h2>Cấu Trúc Đa Hồi & Đường Cong Căng Thẳng (Tension Curve)</h2>"
+            + (f"<div class='card' style='margin-bottom:12px'>{tension_svg}</div>" if tension_svg else "")
+            + (f"<div class='grid2'>{act_cards}</div>" if act_cards else "")
+        )
+
+    clues_section = ""
+    if clues:
+        cl_rows = "".join(
+            f"<tr><td><code>{esc(cl.get('id'))}</code></td><td><span class='pill {'red' if cl.get('kind')=='red_herring' else 'dim'}'>{esc(cl.get('kind'))}</span></td>"
+            f"<td><code>P{esc(cl.get('plantedInPart'))}</code></td><td>{esc(cl.get('plantedDetail'))}</td>"
+            f"<td><code>P{esc(cl.get('payoffInPart'))}</code></td><td>{esc(cl.get('recontextualization'))}</td></tr>"
+            for cl in clues
+        )
+        clues_section = (
+            "<h2>Kinh Tế Manh Mối, Đánh Lạc Hướng & Cú Lật (Clues & Payoff)</h2>"
+            "<table><thead><tr><th>ID</th><th>Loại</th><th>Gieo</th><th>Chi tiết gieo</th><th>Lật</th><th>Ý nghĩa thật khi lật kèo</th></tr></thead>"
+            f"<tbody>{cl_rows}</tbody></table>"
+        )
+
     return f"""<!doctype html>
 <html lang="vi">
 <head>
@@ -1044,11 +1782,11 @@ def render_html(doc):
   :root {{ --bg:#0b0c10; --panel:#13161d; --panel2:#191d27; --ink:#eceae4; --muted:#9aa3b2; --acc:#c8433c; --gold:#d69e4e; --ok:#38a169; --line:#262b38; }}
   * {{ box-sizing:border-box; }}
   body {{ margin:0; background:var(--bg); color:var(--ink); font:14px/1.6 system-ui,-apple-system,Segoe UI,Roboto,sans-serif; }}
-  .wrap {{ max-width:1120px; margin:0 auto; padding:28px 20px 64px; }}
+  .wrap {{ max-width:1160px; margin:0 auto; padding:28px 20px 64px; }}
   header {{ display:flex; flex-wrap:wrap; justify-content:space-between; align-items:flex-end; gap:14px; border-bottom:1px solid var(--line); padding-bottom:16px; margin-bottom:22px; }}
   h1 {{ margin:0; font-size:26px; letter-spacing:.2px; }}
   h2 {{ margin:28px 0 12px; font-size:17px; color:var(--gold); text-transform:uppercase; letter-spacing:.8px; }}
-  h3 {{ margin:0; font-size:16px; }}
+  h3 {{ margin:0 0 6px; font-size:16px; }}
   .kpis {{ display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:12px; margin-bottom:20px; }}
   .kpi {{ background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:12px 14px; }}
   .kpi .v {{ font-size:22px; font-weight:700; color:#fff; }}
@@ -1069,7 +1807,7 @@ def render_html(doc):
   th, td {{ text-align:left; padding:9px 12px; border-bottom:1px solid var(--line); vertical-align:top; font-size:13px; }}
   th {{ background:var(--panel2); color:var(--muted); font-weight:600; }}
   .part-card {{ margin-bottom:12px; }}
-  .part-top {{ display:flex; justify-content:space-between; align-items:center; gap:10px; margin-bottom:8px; }}
+  .part-top {{ display:flex; justify-content:space-between; align-items:center; gap:10px; margin-bottom:8px; flex-wrap:wrap; }}
   .syn {{ margin:8px 0; color:#e6e8ee; }}
   .kv {{ margin:4px 0; font-size:13px; color:#d2d7e2; }}
   .tags {{ margin-top:8px; font-size:12px; color:var(--muted); }}
@@ -1083,6 +1821,7 @@ def render_html(doc):
   .toolbar {{ display:flex; gap:10px; margin-top:18px; }}
   .fp-wrap {{ margin:10px 0; }}
   .fp-svg {{ width:100%; max-width:460px; height:auto; border:1px solid var(--line); border-radius:10px; display:block; }}
+  .tc-svg {{ width:100%; height:auto; border:1px solid var(--line); border-radius:10px; display:block; }}
   .lm-list {{ margin:8px 0 0; padding-left:18px; font-size:12px; color:#c8d0de; }}
   .lm-list li {{ margin:3px 0; }}
   button {{ cursor:pointer; background:var(--acc); color:#fff; border:none; border-radius:8px; padding:8px 14px; font-weight:600; }}
@@ -1094,18 +1833,18 @@ def render_html(doc):
 <div class="wrap">
   <header>
     <div>
-      <div class="pill">{esc(params.get('genre'))}</div><div class="pill dim">{esc(params.get('mode'))} · {esc(params.get('adaptMode'))}</div>
+      <div class="pill">{esc(params.get('genre'))}</div><div class="pill dim">{esc(resolve_format(params))} · {esc(params.get('aspect', '9:16'))} · {esc(params.get('adaptMode'))}</div>
       <h1>{esc(doc.get('title'))}</h1>
     </div>
     <div><span class="pill {'red' if failed else ''}">{status_badge}</span></div>
   </header>
 
   <div class="kpis">
-    <div class="kpi"><div class="v">{len(parts)}</div><div class="k">Số phần ({int(total_sec)}s · ~{total_words} từ)</div></div>
+    <div class="kpi"><div class="v">{len(parts)}</div><div class="k">Số chương ({int(total_sec)}s ≈ {total_sec/60.0:.1f}p · ~{total_words} từ)</div></div>
     <div class="kpi"><div class="v">{len(chars)}</div><div class="k">Nhân vật</div></div>
     <div class="kpi"><div class="v">{len(scenes)}</div><div class="k">Bối cảnh</div></div>
     <div class="kpi"><div class="v">{len(props)}</div><div class="k">Đạo cụ kể chuyện</div></div>
-    <div class="kpi"><div class="v">{len(beats)}</div><div class="k">Cao trào / Tiết lộ</div></div>
+    <div class="kpi"><div class="v">{len(clues) if clues else len(beats)}</div><div class="k">{'Manh mối & Twist' if clues else 'Cao trào / Tiết lộ'}</div></div>
   </div>
 
   <div class="premise">
@@ -1114,17 +1853,21 @@ def render_html(doc):
     <p class="kv"><strong>Trọng tâm cú lật (Twist):</strong> {esc(premise.get('twistCore'))}</p>
   </div>
 
+  {lore_section}
+  {tension_section}
+  {clues_section}
+
   <h2>Nhịp Cao trào & Tiết lộ (Beats)</h2>
   <div class="beats">{''.join(beat_cards)}</div>
 
-  <h2>Tuyến Nhân vật</h2>
-  <table><thead><tr><th>ID</th><th>Tên</th><th>Cấp</th><th>Vai trò</th><th>Đặc điểm</th><th>Cung biến đổi (Arc)</th></tr></thead>
+  <h2>Tuyến Nhân vật (Tâm lý, Lý do mắc kẹt & Ngoại hình)</h2>
+  <table><thead><tr><th>ID</th><th>Tên</th><th>Cấp</th><th>Vai trò</th><th>Tâm lý · Lý do mắc kẹt · Ngoại hình</th><th>Cung biến đổi (Arc)</th></tr></thead>
   <tbody>{''.join(char_rows)}</tbody></table>
 
-  <h2>Bối cảnh & Đạo cụ kể chuyện</h2>
+  <h2>Bối cảnh (Mặt bằng 2D SVG) & Đạo cụ kể chuyện</h2>
   <div class="grid2">{''.join(scene_cards)}{''.join(prop_cards)}</div>
 
-  <h2>Tóm tắt từng phần</h2>
+  <h2>Tóm tắt & Blocking Chi tiết từng Chương</h2>
   {''.join(part_cards)}
 
   <h2>Kiểm định Chất lượng Cốt truyện ({len(gates)} Cổng)</h2>
@@ -1160,19 +1903,22 @@ def cmd_render(args):
         print(out_txt)
 
 
-def cmd_export_outline(args):
-    doc = read_json(args.story)
+def build_outline_dict(doc, aspect=None, drone_hz=43.65):
+    params = doc.get("params") or {}
     parts = doc.get("parts") or []
     chars = doc.get("characters") or []
     scenes = doc.get("scenes") or []
-    outline = {
+    return {
         "title": doc.get("title", ""),
-        "aspect": args.aspect,
-        "audio_drone_hz": args.drone_hz,
+        "format": resolve_format(params),
+        "aspect": aspect or params.get("aspect") or ("16:9" if resolve_format(params) == "series" else "9:16"),
+        "seamlessStitch": bool(params.get("seamlessStitch", len(parts) > 1)),
+        "audio_drone_hz": drone_hz,
         "locations": [
             {
                 "id": s.get("id", f"S{idx:02d}"),
                 "name": s.get("name", ""),
+                "dimensions": s.get("dimensions"),
                 "atmosphere": s.get("atmosphere", ""),
                 "reusePlan": s.get("reusePlan", ""),
             }
@@ -1183,6 +1929,7 @@ def cmd_export_outline(args):
                 "id": c.get("id", f"C{idx:02d}"),
                 "name": c.get("name", ""),
                 "role": c.get("role", ""),
+                "voiceProfile": c.get("voiceProfile", ""),
                 "appearanceBrief": c.get("appearanceBrief") or c.get("trait", ""),
             }
             for idx, c in enumerate(chars, 1)
@@ -1190,15 +1937,22 @@ def cmd_export_outline(args):
         "parts": [
             {
                 "part": p["part"],
+                "act": p.get("act"),
                 "title": p.get("title", f"Part {p['part']}"),
                 "target_sec": p.get("target_sec", 60),
                 "light": p.get("light", "coldMoon"),
-                "transition_out": "cut" if i < len(parts) else "fade:0.5",
+                "pacingType": p.get("pacingType"),
+                "transition_out": p.get("transitionOut") or ("cut" if i < len(parts) else "fade:0.5"),
                 "cliffhanger": p.get("suspense", ""),
             }
             for i, p in enumerate(parts, 1)
         ],
     }
+
+
+def cmd_export_outline(args):
+    doc = read_json(args.story)
+    outline = build_outline_dict(doc, aspect=args.aspect, drone_hz=args.drone_hz)
     text = json.dumps(outline, ensure_ascii=False, indent=2) + "\n"
     if args.out:
         write_text(args.out, text)
@@ -1207,44 +1961,57 @@ def cmd_export_outline(args):
         print(text)
 
 
-def cmd_export_blueprint(args):
-    """Export 3 synchronized downstream starters (SCRIPT.skeleton.md, manifest.draft.json, cues.draft.json) from story.json."""
-    doc = read_json(args.story)
+def _export_single_part_blueprint(doc, part, out_dir, base_project_id, aspect, bed_sound, first_seen_locs=None, first_seen_chars=None):
     parts = doc.get("parts") or []
-    part_no = int(args.part or 1)
-    part = next((p for p in parts if int(p.get("part", 0)) == part_no), parts[0] if parts else {})
+    part_no = int(part.get("part", 1))
     chars = doc.get("characters") or []
     scenes = doc.get("scenes") or []
     props = doc.get("props") or []
     abeats = part.get("actionBeats") or []
-    project_id = args.project_id or re.sub(r"[^a-z0-9-]+", "-", str(doc.get("title", "horror-short")).lower()).strip("-") or "horror-short"
-    if len(parts) > 1:
-        project_id = f"{project_id}-p{part_no:02d}"
+    project_id = f"{base_project_id}-p{part_no:02d}" if len(parts) > 1 else base_project_id
 
-    # 1. SCRIPT.skeleton.md grouped into coherent Acts by mood/deadSilence
-    script_lines = [f"# {doc.get('title', project_id)} — Phần {part_no}", ""]
+    # 1. SCRIPT.skeleton.md grouped into coherent Acts by mood/deadSilence + rich literary cues
+    script_lines = [
+        f"# {doc.get('title', project_id)} — Chương {part_no}: {part.get('title', '')}",
+        f"<!-- Format: {resolve_format(doc.get('params') or {})} | Target: {int(part.get('target_sec') or 60)}s | Pacing: {part.get('pacingType', '-')} -->",
+        "",
+    ]
     if abeats:
-        cur_mood = None
+        cur_header = None
         for ab in abeats:
-            mood = ab.get("mood") or "calm_omen"
+            sb = ab.get("spokenBeat") or {}
+            mood = sb.get("mood") or ab.get("mood") or "calm_omen"
+            speaker = str(sb.get("speaker") or "NARRATOR").strip()
             if ab.get("deadSilenceBeforeSec"):
                 script_lines.append(f"[DEAD SILENCE {float(ab['deadSilenceBeforeSec']):.2f}s]")
-                cur_mood = None
+                cur_header = None
             elif ab.get("pauseBeforeSec"):
                 script_lines.append(f"[PAUSE {float(ab['pauseBeforeSec']):.2f}s]")
-            if mood != cur_mood:
-                script_lines.append(f"[NARRATOR | mood={mood}]")
-                cur_mood = mood
-            script_lines.append(f"<!-- @{ab.get('beatId')} ({ab.get('sceneId')}): {ab.get('actionSummary', '')} -->")
-            script_lines.append(ab.get("spokenHint") or f"[VIẾT LỜI THOẠI CHO {ab.get('beatId')}: {ab.get('actionSummary', '')}]")
+            hdr = f"[NARRATOR | mood={mood}]" if speaker.upper() == "NARRATOR" else f"[SPEAKER: {speaker} | mood={mood}]"
+            if hdr != cur_header:
+                script_lines.append(hdr)
+                cur_header = hdr
+            meta_bits = [f"@{ab.get('beatId')} ({ab.get('sceneId')}, {ab.get('durationSec', '-')}s)"]
+            if ab.get("subtext"):
+                meta_bits.append(f"Nội tâm: {ab['subtext']}")
+            if isinstance(ab.get("sensoryDetails"), dict):
+                sd = ", ".join(f"{k}={v}" for k, v in ab["sensoryDetails"].items() if str(v).strip())
+                if sd:
+                    meta_bits.append(f"Cảm giác: {sd}")
+            if sb.get("wordBudget"):
+                meta_bits.append(f"~{int(sb['wordBudget'])} từ")
+            script_lines.append(f"<!-- {' | '.join(meta_bits)} -->")
+            hint = sb.get("keyPhrase") or ab.get("spokenHint") or sb.get("intent") or ab.get("actionSummary", "")
+            script_lines.append(hint if ab.get("spokenHint") else f"[VIẾT LỜI THOẠI {ab.get('beatId')}: {hint}]")
     else:
         script_lines += ["[NARRATOR | mood=calm_omen]", part.get("synopsis", "")]
 
-    # 2. manifest.draft.json with locked locations[].anchors + castBlueprints[] + action-synced beats[]
+    # 2. manifest.draft.json with locked locations[].anchors + castBlueprints[] + sameLocationOf/sameCharacterOf continuity
     loc_blueprints = []
     for s in scenes:
         if part.get("sceneIds") and s.get("id") not in part["sceneIds"]:
             continue
+        sid = s.get("id")
         anchors = {
             str(lm["id"]): [float(v) for v in lm["pos"]]
             for lm in (s.get("landmarks") or [])
@@ -1255,11 +2022,17 @@ def cmd_export_blueprint(args):
             for lm in (s.get("landmarks") or [])
             if lm.get("id") and str(lm.get("kind", "")).lower() == "portal" and isinstance(lm.get("pos"), list) and len(lm["pos"]) == 3
         }
-        s_props = [pr.get("name", pr.get("id")) for pr in props if pr.get("sceneId") == s.get("id")]
+        s_props = [pr.get("name", pr.get("id")) for pr in props if pr.get("sceneId") == sid]
         while len(s_props) < 3:
             s_props.append(f"storyProp_{len(s_props)+1}")
+        revisit = {}
+        if first_seen_locs is not None:
+            if sid in first_seen_locs:
+                revisit["sameLocationOf"] = first_seen_locs[sid]
+            else:
+                first_seen_locs[sid] = f"{project_id}:{sid}"
         loc_blueprints.append({
-            "id": s.get("id"),
+            "id": sid,
             "archetype": s.get("archetype") or "customHorrorRoom",
             "dimensions": s.get("dimensions") or [6.0, 7.0, 3.6],
             "ceilingType": s.get("ceilingType") or "flatConcrete",
@@ -1269,15 +2042,23 @@ def cmd_export_blueprint(args):
             "signatureShadowBeat": s.get("atmosphere") or "Story-driven shadow motif",
             "anchors": anchors,
             **({"portals": portals} if portals else {}),
+            **revisit,
         })
 
     cast_blueprints = []
     for c in chars:
         if part.get("characterIds") and c.get("id") not in part["characterIds"]:
             continue
+        cid = c.get("id")
         role_t = c.get("roleType") or ("entity" if "thực thể" in str(c.get("role", "")).lower() or "ma" in str(c.get("role", "")).lower() else "human")
+        revisit_c = {}
+        if first_seen_chars is not None:
+            if cid in first_seen_chars:
+                revisit_c["sameCharacterOf"] = first_seen_chars[cid]
+            else:
+                first_seen_chars[cid] = f"{project_id}:{cid}"
         cast_blueprints.append({
-            "id": c.get("id"),
+            "id": cid,
             "role": role_t if role_t in VALID_ROLE_TYPES else "human",
             "storyDescription": c.get("appearanceBrief") or c.get("trait") or c.get("role", ""),
             "appearance": {
@@ -1286,6 +2067,7 @@ def cmd_export_blueprint(args):
                 "outlineMode": "off",
                 **({"entity": {"heightScale": 1.15, "breathing": False, "steppedFps": 8}} if role_t == "entity" else {}),
             },
+            **revisit_c,
         })
 
     fps = 30
@@ -1300,10 +2082,12 @@ def cmd_export_blueprint(args):
         for act in ab.get("actors") or []:
             frm = act.get("fromLandmark") or act.get("landmark") or ""
             to = act.get("toLandmark") or frm
+            raw_pose = str(act.get("pose") or "loomingStill")
+            safe_pose = raw_pose if raw_pose in VALID_ENGINE_POSES else ("walk" if "walk" in raw_pose.lower() or "pace" in raw_pose.lower() else ("standIdle" if "idle" in raw_pose.lower() else "loomingStill"))
             st_obj = {
                 "visible": bool(act.get("visible", True)),
                 "anchor": frm,
-                "pose": act.get("pose") or "loomingStill",
+                "pose": safe_pose,
             }
             if to and to != frm:
                 st_obj["moveFromAnchor"] = frm
@@ -1372,9 +2156,9 @@ def cmd_export_blueprint(args):
 
     manifest_draft = {
         "projectId": project_id,
-        "title": doc.get("title", project_id),
+        "title": f"{doc.get('title', project_id)} — Chương {part_no}" if len(parts) > 1 else doc.get("title", project_id),
         "totalFrames": cur_f if cur_f > 0 else int(round(float(part.get("target_sec") or 60) * fps)),
-        "aspect": args.aspect,
+        "aspect": aspect,
         "locations": loc_blueprints,
         "castBlueprints": cast_blueprints,
         "beats": m_beats,
@@ -1385,10 +2169,10 @@ def cmd_export_blueprint(args):
         "target_lufs": -15.0,
         "ceil_db": -1.2,
         "dead_silence_floor_db": -48.0,
-        "max_jumpscares": 2,
+        "max_jumpscares": 2 if len(parts) == 1 else max(1, sum(1 for ab in abeats if ab.get("jumpscareStyle"))),
         "beds": [
             {
-                "sound": args.bed_sound,
+                "sound": bed_sound,
                 "target_rms_dbfs": -33.0,
                 "hp_hz": 110,
                 "lp_hz": 3200,
@@ -1401,17 +2185,67 @@ def cmd_export_blueprint(args):
         "events": cues_events,
     }
 
-    os.makedirs(args.out, exist_ok=True)
-    p_script = os.path.join(args.out, "SCRIPT.skeleton.md")
-    p_man = os.path.join(args.out, "manifest.draft.json")
-    p_cues = os.path.join(args.out, "cues.draft.json")
+    os.makedirs(out_dir, exist_ok=True)
+    p_script = os.path.join(out_dir, "SCRIPT.skeleton.md")
+    p_man = os.path.join(out_dir, "manifest.draft.json")
+    p_cues = os.path.join(out_dir, "cues.draft.json")
     write_text(p_script, "\n".join(script_lines) + "\n")
     write_text(p_man, json.dumps(manifest_draft, ensure_ascii=False, indent=2) + "\n")
     write_text(p_cues, json.dumps(cues_draft, ensure_ascii=False, indent=2) + "\n")
+    return p_script, p_man, p_cues, len(loc_blueprints), len(cast_blueprints), len(m_beats), len(cues_events)
+
+
+def cmd_export_blueprint(args):
+    """Export synchronized downstream starters (SCRIPT.skeleton.md, manifest.draft.json, cues.draft.json) for 1 part or --all-parts."""
+    doc = read_json(args.story)
+    params = doc.get("params") or {}
+    parts = doc.get("parts") or []
+    base_project_id = args.project_id or re.sub(r"[^a-z0-9-]+", "-", str(doc.get("title", "horror-short")).lower()).strip("-") or "horror-short"
+    aspect = args.aspect or params.get("aspect") or ("16:9" if resolve_format(params) == "series" else "9:16")
+
+    if getattr(args, "all_parts", False) and len(parts) >= 1:
+        os.makedirs(args.out, exist_ok=True)
+        outline = build_outline_dict(doc, aspect=aspect, drone_hz=43.65)
+        write_text(os.path.join(args.out, "OUTLINE.json"), json.dumps(outline, ensure_ascii=False, indent=2) + "\n")
+        # Initial CONTINUITY.init.json seeded from worldLore + initial prop states + first landmarks
+        wl = doc.get("worldLore") or {}
+        first_scene = (doc.get("scenes") or [{}])[0]
+        first_lm = ((first_scene.get("landmarks") or [{}])[0]).get("id") or "POV_START"
+        cont_init = {
+            "completed_part": 0,
+            "world_state": {
+                "era": wl.get("era") or doc.get("title", "Horror World"),
+                "light": (parts[0].get("light") if parts else "warmLamp"),
+                "weather": ((wl.get("weatherProgression") or ["Đêm tối"])[0]),
+            },
+            "audio_bridge": {"drone_hz": 43.65, "bed_sound": args.bed_sound},
+            "characters": {
+                c["id"]: {"anchor": first_lm, "sceneId": first_scene.get("id", "S01"), "carriedItems": c.get("carriedItems") or []}
+                for c in (doc.get("characters") or []) if c.get("id")
+            },
+            "props": {
+                pr["id"]: pr.get("initialState") or ((pr.get("states") or ["default"])[0])
+                for pr in (doc.get("props") or []) if pr.get("id")
+            },
+        }
+        write_text(os.path.join(args.out, "CONTINUITY.init.json"), json.dumps(cont_init, ensure_ascii=False, indent=2) + "\n")
+        seen_locs, seen_chars = {}, {}
+        for p in parts:
+            pno = int(p.get("part", 1))
+            p_dir = os.path.join(args.out, f"p{pno:02d}")
+            _export_single_part_blueprint(doc, p, p_dir, base_project_id, aspect, args.bed_sound, seen_locs, seen_chars)
+        print(f"BLUEPRINT ALL-PARTS EXPORTED ({len(parts)} chapters) -> {args.out}")
+        return
+
+    part_no = int(args.part or 1)
+    part = next((p for p in parts if int(p.get("part", 0)) == part_no), parts[0] if parts else {})
+    p_script, p_man, p_cues, n_loc, n_cast, n_b, n_c = _export_single_part_blueprint(
+        doc, part, args.out, base_project_id, aspect, args.bed_sound
+    )
     print(f"BLUEPRINT EXPORTED -> {args.out}")
     print(f"  - {p_script}")
-    print(f"  - {p_man} ({len(loc_blueprints)} locations, {len(cast_blueprints)} castBlueprints, {len(m_beats)} beats)")
-    print(f"  - {p_cues} ({len(cues_events)} synchronized audio/jumpscare cues)")
+    print(f"  - {p_man} ({n_loc} locations, {n_cast} castBlueprints, {n_b} beats)")
+    print(f"  - {p_cues} ({n_c} synchronized audio/jumpscare cues)")
 
 
 def main():
@@ -1420,7 +2254,7 @@ def main():
     if hasattr(sys.stderr, "reconfigure"):
         sys.stderr.reconfigure(encoding="utf-8")
 
-    ap = argparse.ArgumentParser(description="Horror Story Architect CLI (2-round story planning & 14 quality gates)")
+    ap = argparse.ArgumentParser(description="Horror Story Architect v3.0 CLI (24 quality gates, 150-300s Shorts & 8-15m Series)")
     sub = ap.add_subparsers(dest="cmd", required=True)
 
     p_ch = sub.add_parser("chunk", help="Split long source novel/story .txt into volumes")
@@ -1429,24 +2263,30 @@ def main():
     p_ch.add_argument("--per-volume", type=int, default=15)
     p_ch.add_argument("--chunk-chars", type=int, default=18000)
 
-    p_sd = sub.add_parser("seed", help="Generate starter story.json skeleton")
+    p_sd = sub.add_parser("seed", help="Generate starter story.json v3.0 skeleton (short 150-300s, series 8-15m, micro 45-90s)")
     p_sd.add_argument("--title", required=True)
-    p_sd.add_argument("--parts", type=int, default=1)
-    p_sd.add_argument("--mode", choices=["auto", "standalone", "series"], default="auto")
+    p_sd.add_argument("--format", choices=["auto", "micro", "short", "series"], default="auto")
+    p_sd.add_argument("--parts", type=int, default=None)
+    p_sd.add_argument("--total-sec", type=int, default=None, help="Target total duration in seconds (short: 150-300, series: 480-900)")
+    p_sd.add_argument("--mode", choices=["auto", "standalone", "short", "series", "micro"], default="auto")
+    p_sd.add_argument("--aspect", choices=["9:16", "16:9"], default=None)
+    p_sd.add_argument("--pov", choices=sorted(VALID_POVS), default="first_person_survivor")
     p_sd.add_argument("--genre", default="folklore")
     p_sd.add_argument("--adapt-mode", choices=["original", "folklore", "adapt", "reimagine"], default="original")
     p_sd.add_argument("--out")
 
-    p_vl = sub.add_parser("validate", help="Run 18 deterministic story & spatial-blocking quality gates")
+    p_vl = sub.add_parser("validate", help="Run 24 deterministic story, tension, clue & spatial-blocking quality gates")
     p_vl.add_argument("story")
-    p_vl.add_argument("--stage", choices=["skeleton", "beats", "full"], default="full")
+    p_vl.add_argument("--stage", choices=["skeleton", "lore", "beats", "structure", "full"], default="full")
     p_vl.add_argument("--strict-spatial", action="store_true", help="Require v2.0 spatial floorplan landmarks & actionBeats even on v1 JSON")
+    p_vl.add_argument("--strict-story", action="store_true", help="Require v3.0 Narrative Studio gates (19..24) even on v1/v2 JSON")
 
-    p_ck = sub.add_parser("checkup", help="Compact pass/fail summary of all 18 gates")
+    p_ck = sub.add_parser("checkup", help="Compact pass/fail summary of all 24 gates")
     p_ck.add_argument("story")
     p_ck.add_argument("--strict-spatial", action="store_true")
+    p_ck.add_argument("--strict-story", action="store_true")
 
-    p_rn = sub.add_parser("render", help="Render Story Bible as HTML (with 2D SVG Floorplans) or Markdown")
+    p_rn = sub.add_parser("render", help="Render Story Bible as HTML (with Tension Curve SVG + 2D Floorplans) or Markdown")
     p_rn.add_argument("story")
     p_rn.add_argument("--html", action="store_true")
     p_rn.add_argument("--md", action="store_true")
@@ -1454,7 +2294,7 @@ def main():
 
     p_ex = sub.add_parser("export-outline", help="Export OUTLINE.json compatible with horror-series-pipeline")
     p_ex.add_argument("story")
-    p_ex.add_argument("--aspect", choices=["9:16", "16:9"], default="9:16")
+    p_ex.add_argument("--aspect", choices=["9:16", "16:9"], default=None)
     p_ex.add_argument("--drone-hz", type=float, default=43.65)
     p_ex.add_argument("--out")
 
@@ -1462,8 +2302,9 @@ def main():
     p_bp.add_argument("story")
     p_bp.add_argument("--out", required=True, help="Output directory for synchronized blueprint files")
     p_bp.add_argument("--part", type=int, default=1)
+    p_bp.add_argument("--all-parts", action="store_true", help="Export OUTLINE.json, CONTINUITY.init.json and p01..pNN folders for all chapters")
     p_bp.add_argument("--project-id", default=None)
-    p_bp.add_argument("--aspect", choices=["9:16", "16:9"], default="9:16")
+    p_bp.add_argument("--aspect", choices=["9:16", "16:9"], default=None)
     p_bp.add_argument("--bed-sound", default="room_tone_dark", help="Story-matched ambience bed slug")
 
     args = ap.parse_args()

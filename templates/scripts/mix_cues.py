@@ -253,12 +253,13 @@ def audit_cues(cfg: dict, resolved_events: list[dict], wdata: dict, dur: float) 
                 })
 
     js_events = [e for e in resolved_events if e.get("jumpscare") or e.get("is_jumpscare")]
-    max_js = int(cfg.get("max_jumpscares", 2))
+    default_max_js = 2 if dur <= 95.0 else max(2, int(round((dur / 60.0) * 0.8)))
+    max_js = int(cfg.get("max_jumpscares", default_max_js))
     if len(js_events) > max_js:
         warnings.append({
             "code": "JUMPSCARE_FATIGUE_WARN",
             "severity": "ERROR",
-            "detail": f"Found {len(js_events)} jumpscares (max recommended: {max_js} per 45-60s video). Too many jumpscares desensitize the viewer!",
+            "detail": f"Found {len(js_events)} jumpscares (max recommended: {max_js} for {dur:.0f}s audio). Too many jumpscares desensitize the viewer!",
         })
     return warnings
 
@@ -650,7 +651,7 @@ def render_cues_mix(cues_path: str, out_wav: str, library_dir: str | None = None
         f"- **Kịch bản cue:** [{os.path.basename(cues_abs)}](file://{cues_abs})",
         f"- **Bản quyền nguồn:** [credits.txt](file://{credits_path})",
         f"- **Loudness thực đo:** `I = {stats['I']:.2f} LUFS` · `TP = {stats['TP']:.2f} dBTP` · `LRA = {stats['LRA']:.2f} LU` · `clips = {clips}`",
-        f"- **Lớp nền (Beds):** `{len(cfg.get('beds') or [])}` *(quy chuẩn <= 1)* · **SFX điểm:** `{len(resolved_events)}` · **Jumpscare:** `{len(jumpscare_items)}` *(quy chuẩn <= {int(cfg.get('max_jumpscares', 2))})*",
+        f"- **Lớp nền (Beds):** `{len(cfg.get('beds') or [])}` *(quy chuẩn <= 1)* · **SFX điểm:** `{len(resolved_events)}` · **Jumpscare:** `{len(jumpscare_items)}` *(quy chuẩn <= {int(cfg.get('max_jumpscares', 2 if dur <= 95.0 else max(2, int(round((dur / 60.0) * 0.8)))))})*",
         "",
         "## Cổng Kiểm Định Chống Rối & Jumpscare (7 QA Gates)",
     ]

@@ -72,8 +72,8 @@ def main():
             if pid != idx + 1:
                 errors.append(f"OUTLINE.parts[{idx}].part expected {idx + 1}, got {pid!r} (must be contiguous 1..M)")
             dur = p.get("target_sec", p.get("duration_sec"))
-            if not isinstance(dur, (int, float)) or not (45 <= dur <= 75):
-                errors.append(f"Part {pid}: target_sec/duration_sec={dur!r} outside [45, 75]")
+            if not isinstance(dur, (int, float)) or not (45 <= dur <= 90):
+                errors.append(f"Part {pid}: target_sec/duration_sec={dur!r} outside [45, 90]")
             light = p.get("light")
             if light not in VALID_LIGHTS:
                 errors.append(f"Part {pid}: light={light!r} not in {sorted(VALID_LIGHTS)}")

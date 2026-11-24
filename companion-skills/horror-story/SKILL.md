@@ -1,99 +1,99 @@
 ---
 name: horror-story
-description: Use when brainstorming, adapting, or structuring a Vietnamese or English horror storyline (standalone 55-75s short or multi-part 5-12 min series) through a 2-round Skeleton-Approval workflow, entity rules, story-driven appearanceBriefs, character tiers, narrative props, 14 quality gates, and an interactive HTML Story Bible report before writing SCRIPT.md.
+description: Use when brainstorming, adapting, or structuring a Vietnamese or English horror storyline — standalone 150-300s (2.5-5 min) short, 8-15 min (480-900s) multi-part series, or quick 45-90s micro test — through a 3-round Writer's Room workflow (World Lore & Entity 4-Stage Rules, Character Psychology & Trapped Stakes, Clue/Red-Herring/Twist Economy, Multi-Act Tension Curve SVG, 2D SVG Floorplans, Action+Dialogue Blocking, 24 quality gates, and automated multi-chapter blueprint export).
 ---
 
-# Horror Story Architect (`horror-story` · Engine v8.0 Spatial & Action Blocking)
+# Horror Story Architect v3.0 (`horror-story` · Engine v9.0 Long-Form Narrative Studio)
 
-Chuyên thiết kế **cốt truyện kinh dị kèm mặt bằng 2D và bảng blocking hành động tuần tự** (`schemaVersion: "2.0"`) trước khi viết lời thoại (`SCRIPT.md`) hoặc dựng cảnh 3D — triệt tiêu hoàn toàn hiện tượng Agent 3D phải tự bịa vị trí cửa/giường/hành lang hay làm nhân vật dịch chuyển vô lý!
+Chuyên thiết kế **kịch bản cốt truyện kinh dị có chiều sâu văn học + đường cong căng thẳng + mặt bằng 2D + bảng blocking hành động & định hướng thoại** (`schemaVersion: "3.0"`) trước khi viết `SCRIPT.md` và dựng 3D.
 
-> *Phương pháp "khung xương 2 vòng", bảng đạo cụ gắn cao trào và hệ thống kiểm định cốt truyện bằng code được thiết kế có tham khảo từ mô hình `novel-outline` (`eternityspring/shuohao-skills`, Apache-2.0), nâng cấp chuyên sâu cho Horror Engine v8.0 với **18 Cổng Kiểm Định** + **Sơ đồ Mặt bằng 2D SVG** + **Auto-Export Blueprint**.*
+> **Bắt buộc đọc trước khi sáng tác:** [STORYTELLING_CRAFT.md](./references/STORYTELLING_CRAFT.md) (công thức nhịp vàng `150–300s` & `8–15 phút`, luật `trappedReason`, 4 cấp lộ diện, kinh tế manh mối/twist, 10 lối mòn cấm dùng) và [STORY_SCHEMA.md](./references/STORY_SCHEMA.md) (đặc tả 24 cổng kiểm định).
 
-**Ranh giới (Boundary):** Skill này khóa chặt **cốt truyện + mặt bằng điểm neo (`landmarks`) + trạng thái đạo cụ (`states`) + bảng hành động tuần tự (`actionBeats`)**. Không viết lời thoại trong ngoặc kép ở văn xuôi `synopsis`, không viết code Three.js trực tiếp.
-
----
-
-## Quy trình 2 vòng bắt buộc (`Skeleton First, Parts Second`)
-
-### Step 0 — Thu thập tham số (Hỏi gọn 1 lần)
-1. **Quy mô:** Phim ngắn độc lập (`standalone`, `1` phần `55–75s`) hay Series nhiều phần (`series`, `3–12` phần, mỗi phần `45–75s`).
-2. **Tiểu thể loại (`genre`):**
-   - `folklore`: Ma dân gian / Tâm linh vùng miền (Ma Da, Ông Kẹ, Ma Trành...)
-   - `rules`: Kinh dị quy tắc / Liminal / Không gian lạ ("Nghe 3 tiếng gõ đừng mở...")
-   - `historical`: Dị văn lịch sử / Truyền thuyết có thật
-   - `psychological`: Kinh dị tâm lý / Tội ác / Ký ức méo mó
-3. **Nguồn truyện (`adaptMode`):** `original` (sáng tác mới), `folklore` (dựng từ giai thoại), hoặc `adapt` / `reimagine` (chuyển thể từ truyện chữ dài).
-   - Nếu là truyện dài `.txt`, chia thành từng tập bằng lệnh:
-     ```bash
-     python3 scripts/horror_story.py chunk <truyen_dai.txt> <workdir> --per-volume 15
-     ```
+**Ranh giới (Boundary):** Skill này khóa chặt **thế giới quan, quy tắc thực thể, tâm lý nhân vật, manh mối/twist, cấu trúc đa hồi, mặt bằng điểm neo (`landmarks`), state machine đạo cụ, và bảng `actionBeats` kèm `subtext`/`sensoryDetails`/`spokenBeat`**. Không nhồi lời thoại trong ngoặc kép vào `synopsis`, không viết code Three.js trực tiếp.
 
 ---
 
-### Vòng 1 — Dựng Khung Xương 4 Mảng (`--stage beats`) ⛔ Chưa viết tóm tắt phần!
+## Quy Trình 3 Vòng Bắt Buộc (`Lore First → Tension Curve → Action & Dialogue Blueprint`)
 
-Chạy lệnh khởi tạo khung JSON (hoặc tự tạo theo [STORY_SCHEMA.md](./references/STORY_SCHEMA.md)):
+### Step 0 — Chốt Tham Số Định Dạng (Hỏi gọn 1 lần)
+1. **Định dạng & Thời lượng (`format`):**
+   - **`short` *(Mặc định phim ngắn độc lập)*:** **`150s–300s` (2.5–5 phút)** — viết thành **1 cốt truyện liền mạch 3–5 Hồi**, tự động chia **`3–5` Chương sản xuất** (`50–65s`/chương) dùng chung bối cảnh 3D `shared/` và ghép không lặp intro thành 1 video duy nhất (`9:16` mặc định, đổi `16:9` được).
+   - **`series` *(Tập dài / Series)*:** **`480s–900s` (8–15 phút)** — cấu trúc **4–5 Hồi**, chia **`8–15` Chương** (`55–65s`/chương, mặc định `16:9`, hỗ trợ cắt dọc `9:16`).
+   - **`micro` *(Test nhanh / Legacy)*:** `45s–90s` (`1` phần).
+2. **Tiểu thể loại (`genre`):** `folklore` (ma dân gian / tâm linh vùng miền), `rules` (kinh dị quy tắc / liminal), `historical` (dị văn lịch sử), `psychological` (tâm lý / tội ác / ký ức méo mó).
+3. **Góc nhìn (`pov`):** Mặc định **`first_person_survivor`** (Ngôi thứ nhất POV giàu nội tâm + chèn thoại nhân vật phụ), hỗ trợ `third_person_close`, `found_footage_tape`, `oral_folklore`.
+4. **Nguồn truyện (`adaptMode`):** `original`, `folklore`, hoặc `adapt` / `reimagine` (nếu chuyển thể truyện chữ dài `.txt`, chia tập trước bằng `horror_story.py chunk`).
+
+Khởi tạo khung `story.json` v3.0 bằng CLI:
 ```bash
-python3 scripts/horror_story.py seed --title "Tên truyện" --parts 1 --genre folklore --mode original --out story.json
+# Phim ngắn 3.5 phút (210s = 4 chương liền mạch, 9:16)
+python3 scripts/horror_story.py seed --title "Tên truyện" --format short --total-sec 210 --genre folklore --out story.json
+
+# Series 10 phút (600s = 10 chương, 16:9)
+python3 scripts/horror_story.py seed --title "Tên series" --format series --total-sec 600 --genre rules --out story.json
 ```
 
-Điền đúng **4 mảng khung xương** theo trình tự 5 bước tư duy:
+---
 
-1. **Cắt tuyến & Khóa Luật Thực Thể (`premise`):**
-   - Chốt `core` (1 câu tóm tắt xung đột trung tâm).
-   - Chốt `entityRule` (quy tắc sinh tồn / cách quái vật hoạt động — *ví dụ: "Nghe 3 tiếng gõ trong tủ gỗ ban đêm, tuyệt đối không mở ra"*).
-   - Chốt `twistCore` (cú lật tâm lý/sự thật cuối cùng).
-   - Nếu chuyển thể từ truyện dài (`adaptMode` là `adapt` hoặc `reimagine`), bắt buộc ghi rõ giữ cái gì (`keep` kèm dẫn chứng `evidence`) và cắt bỏ nhánh thừa nào (`cut` kèm lý do `why`) để giữ gọn `1 tuyến chính + tối đa 1 tuyến phụ`.
-2. **Gộp vai, Phân hạng Nhân vật & Mô tả Ngoại hình theo Cốt truyện (`characters`):**
-   - `lead` (`1–5` người): Nhân vật chính + thực thể phản diện chính (**bắt buộc** có `arc` biến đổi tâm lý từ đầu tới cuối).
-   - `support` (`<= 10` người): Người thân, nhân chứng quan trọng (**bắt buộc** có `arc`).
-   - `functional` (`<= 10` người): Vai chức năng không cần tên riêng (dùng nhãn như *"Ông lái đò"*, *"Bà hàng xóm"*; không cần `arc`).
-   - **BẮT BUỘC điền `appearanceBrief`** cho từng nhân vật/thực thể theo đúng mô tả trong cốt truyện (độ tuổi, trang phục, dáng vẻ, đặc điểm nhận diện hoặc dị dạng siêu nhiên — ví dụ: *"bà cụ mặc áo bà ba nâu, tóc búi bạc, da nhợt"* hay *"bóng đen cao lêu nghêu không mặt chỉ có hai đốm sáng lạnh"*, KHÔNG áp đặt cứng một mẫu quái vật kinh dị cơ thể cho mọi câu chuyện!). Trường này sẽ được chuyển thẳng thành `CharacterBlueprint.storyDescription` ở bước Look-Dev v5.0.
-   - Nhân vật quần chúng vô danh không đưa vào bảng.
-3. **Khóa Bối cảnh & Sơ đồ Mặt bằng 2D (`scenes` + `dimensions` + `landmarks[]`):**
-   - Giới hạn số bối cảnh chính (`primary: true`) để câu chuyện cô đặc, không dàn trải.
-   - **BẮT BUỘC với `schemaVersion: "2.0"` (Gate 16):** Mỗi bối cảnh chính khai báo rõ `dimensions: [width, depth, height]` (mét), `archetype`, `ceilingType`, `practicalLights`, và **`>= 3` điểm neo đặt tên (`landmarks[]`)** có tọa độ `[x, y, z]` nằm trong phòng (ví dụ `POV_SEAT`, `OIL_TABLE`, `FRONT_DOOR`, `SHUTTER_WIN`, `BEDROOM_DOOR` kèm `connectsTo: "S02:ENTRY_DOOR"` nếu có cửa thông sang phòng khác!).
-   - Bối cảnh chỉ xuất hiện 1 lần trong series nhiều phần phải có `reusePlan`.
-4. **Rải Nhịp Cao trào & Tiết lộ (`beats`):**
-   - Mỗi beat có `type` (`hook` / `omen` / `dread` / `scare` / `reveal` / `twist` / `escape` / `climax`), `weight` (`major` / `minor`), `part` (số thứ tự phần), `setup`, `payoff`.
-   - **Luật giấu mặt kinh dị (`Reveal Discipline`):** Không lộ mặt thực thể hoàn chỉnh ở phần/cảnh mở đầu — dùng dấu hiệu ngoại vi/lẩn khuất trước (`omen` / peripheral lurker), tăng dần tới `major` reveal sau khoảng lặng `[DEAD SILENCE]`.
-   - Ở series nhiều phần: khoảng cách giữa 2 beat không quá `maxBeatGap` (mặc định `2` phần), có ít nhất 1 `major`, và `major` đầu tiên không rơi vào phần cuối cùng.
+### Vòng 1 — Thế Giới Quan, Thực Thể, Tâm Lý Nhân Vật, Manh Mối & Mặt Bằng 2D (`--stage lore`) ⛔ Chưa viết `parts[]`!
 
-Kiểm định Vòng 1 & xuất báo cáo kèm **Sơ đồ Mặt bằng 2D (SVG)** cho người dùng duyệt:
+Hoàn thiện **6 nền móng chiều sâu** theo [STORYTELLING_CRAFT.md](./references/STORYTELLING_CRAFT.md):
+1. **`premise` & `worldLore`:** Khóa `core`, `entityRule`, `twistCore`, thời đại (`era`), không gian cô lập (`settingDetail`), tiến trình thời tiết (`weatherProgression`), **bi kịch gốc (`backstory`)**, và cấm kỵ dân gian (`tabooLore`).
+2. **`entityProfile` (4 Cấp Lộ Diện):** Bản chất (`origin`), `>= 2` quy tắc cụ thể (`rule`, `trigger`, `consequence`, `loophole`), `>= 3` dấu hiệu 5 giác quan (`sensoryTells`), và **4 cấp lộ diện leo thang** (`escalationStages`: Ngoại vi → Rình rập/Giả giọng → Xâm phạm bảo vệ → Hiện nguyên hình).
+3. **`characters[]` (Tâm lý thật & Ngoại hình `CharacterBlueprint`):**
+   - Mọi nhân vật `lead` (người) **BẮT BUỘC** có `goal` (mục tiêu trước biến cố), **`trappedReason`** *(lý do không thể bỏ chạy ngay!)*, `flaw` (điểm yếu tâm lý), `voiceProfile` (tông giọng/khẩu ngữ), `carriedItems[]` (đồ mang theo), `appearanceBrief` (chuyển thẳng thành `CharacterBlueprint`), và `relationships[]` (tuyến quan hệ & mâu thuẫn).
+4. **`scenes[]` (Mặt bằng 2D SVG):** Mỗi bối cảnh chính có `dimensions: [w, d, h]`, `archetype`, `practicalLights`, và `>= 3` `landmarks[]` nằm trong phòng kèm cửa nối `connectsTo: "S02:LANDMARK"`.
+5. **`clues[]` (Kinh tế Manh mối & Lật kèo):** `short >= 2` manh mối, `series >= 4` manh mối + `>= 1 red_herring`. Khóa `plantedInPart <= payoffInPart` (phải gieo sớm trước chương cuối!) và `recontextualization` (ý nghĩa thật rợn gáy khi lật kèo).
+6. **`acts[]` & `beats[]`:** Phân chia 3–5 Hồi phủ kín chương `1..N`, đặt `turningPoint` rõ ràng, giữ kỷ luật giấu mặt thực thể (`No early spoiler`).
+
+Kiểm định Vòng 1 & gửi báo cáo cho người dùng duyệt:
 ```bash
-python3 scripts/horror_story.py validate story.json --stage beats
+python3 scripts/horror_story.py validate story.json --stage lore
 python3 scripts/horror_story.py render story.json --html --out story-report.html
 ```
-⛔ **Dừng lại gửi tóm tắt khung xương + file `story-report.html` (kèm Sơ đồ Mặt bằng 2D SVG) cho người dùng chốt.** Khung & mặt bằng chưa chốt tuyệt đối không viết tiếp `parts`.
+⛔ **Dừng lại gửi tóm tắt Thế giới – Nhân vật – Manh mối – Mặt bằng 2D SVG (`story-report.html`) để người dùng chốt Vòng 1.**
 
 ---
 
-### Vòng 2 — Chốt Máy Trạng Thái Đạo Cụ & Bảng Blocking Hành Động (`--stage full`)
+### Vòng 2 — Phân Chương, Đạo Cụ State Machine & Đường Cong Căng Thẳng (`--stage structure`)
 
-Sau khi người dùng duyệt khung xương + mặt bằng 2D:
+Sau khi duyệt Vòng 1:
+7. **`props[]` (State Machine):** Chọn đồ vật gánh cốt truyện (`<= 10` cho `short`, `<= 16` cho `series`), khóa `sceneId`, `landmarkId`, `initialState`, danh sách trạng thái có thứ tự `states[]`, `function`, `beatIds`.
+8. **`parts[]` (Đường cong Răng cưa & Chống rỗng ruột):**
+   - Mỗi chương `45–90s` (tổng thời lượng khớp `150–300s` cho `short` hoặc `480–900s` cho `series`), khai báo `act`, `pacingType` (`setup | slow_burn | investigation | false_relief | escalation | twist_reveal | climax_chase | aftermath`), `tensionStart/Peak/End` (`1..10`), **`newInfoRevealed`** (thông tin mới bắt buộc mỗi chương!), `hook`, `synopsis` (văn xuôi sạch không ngoặc kép), `suspense`, `transitionOut`.
+   - Đảm bảo **biên độ cảm xúc thật**: phải có ít nhất 1 nhịp lắng/khoảng thở (`tension <= 5`) trước khi đẩy cao trào (`>= 8`).
 
-5. **Bảng Đạo cụ Kể chuyện (`props`, tối đa `8` món, kèm State Machine):**
-   - Chỉ chọn đồ vật **gánh trực tiếp cao trào/cú lật** theo phép thử: *"Món này biến mất hay hỏng thì cốt truyện có sập không?"*.
-   - Khai báo `sceneId`, `landmarkId`, `initialState`, danh sách trạng thái có thứ tự `states` (ví dụ `["closedBolted", "boltSliding", "doorJolt", "slammedOpen"]`), `function`, và `beatIds`.
-6. **Viết từng Phần (`parts[]`) + Bảng Blocking Hành Động Tuần Tự (`actionBeats[]`):**
-   - Mỗi phần `45–75s` (tốc độ đọc chuẩn `2.9 từ/giây` → khoảng `140–215 từ`), `synopsis` văn xuôi không chứa ngoặc kép đối thoại, `hook`, `suspense`, `light`, `sceneIds`, `characterIds`, `propIds`.
-   - **BẮT BUỘC `actionBeats[]` (Gate 17 & Gate 18):** Liệt kê tuần tự từng nhịp hành động: `beatId`, `sceneId`, `durationSec`, `mood`, `light`, `camera` (`stance`, `posLandmark`, `lookLandmark`, `motion`), `actors[]` (`id`, `visible`, `fromLandmark`, `toLandmark`, `pose`, `alignPart`), `propChanges[]` (`id`, `fromState`, `toState`), `actionSummary`, `audioCue`, `jumpscareStyle` (tối đa **`<= 2` cú Jumpscare/phần**). Validator sẽ **chặn tức thì** mọi lỗi teleport trong cùng phòng và lỗi nhảy ngược trạng thái đạo cụ!
+Kiểm định Vòng 2 & xuất **Biểu đồ SVG Tension Curve** để người dùng duyệt nhịp toàn phim:
+```bash
+python3 scripts/horror_story.py validate story.json --stage structure
+python3 scripts/horror_story.py render story.json --html --out story-report.html
+```
+⛔ **Gửi người dùng duyệt Biểu đồ Đường cong Căng thẳng & phân chương trước khi viết chi tiết từng beat.**
 
-Kiểm định toàn bộ **18 Cổng Chất Lượng** & xuất báo cáo cuối + **Auto-Scaffold Blueprint** cho bước sản xuất:
+---
+
+### Vòng 3 — Bảng Blocking Hành Động, Nội Tâm & Định Hướng Thoại (`--stage full`) → Xuất Blueprint Toàn Tập
+
+9. **Điền `actionBeats[]` cho từng chương (`Gate 17, 18, 19, 24`):**
+   - Mỗi beat có `beatId`, `sceneId`, `durationSec` *(tổng mỗi chương khớp `target_sec` trong `±20%`)*, `mood`, `light`, `camera`, `actors[]`, `propChanges[]`, `actionSummary`, **`subtext`** *(nội tâm nhân vật)*, **`sensoryDetails`** (`sight`, `sound`, `atmosphere`), **`spokenBeat`** (`speaker`, `intent`, `keyPhrase`, `mood`, `wordBudget`), `audioCue`, `jumpscareStyle`.
+   - Kiểm định tự động khóa **0 lỗi teleport xuyên chương**, **0 lỗi nhảy ngược đạo cụ xuyên chương**, đủ `wordBudget`, và **không vượt trần Jumpscare toàn phim**.
+
+Chạy đủ **24 Cổng Chất Lượng**, xuất Story Bible HTML/MD và khởi tạo đồng bộ toàn bộ thư mục các chương:
 ```bash
 python3 scripts/horror_story.py validate story.json --stage full
 python3 scripts/horror_story.py checkup story.json
 python3 scripts/horror_story.py render story.json --html --out story-report.html
 python3 scripts/horror_story.py render story.json --md --out STORY_BIBLE.md
-python3 scripts/horror_story.py export-blueprint story.json --out out/<project>/blueprint --part 1
+
+# Xuất 1 phát toàn bộ OUTLINE.json + CONTINUITY.init.json + p01..pNN/{SCRIPT.skeleton.md, manifest.draft.json, cues.draft.json}
+python3 scripts/horror_story.py export-blueprint story.json --out out/<project>/blueprint --all-parts
 ```
 
 ---
 
-## Bàn giao tự động sang sản xuất phim (`export-blueprint` / `export-outline`)
+## Bàn Giao Đồng Bộ Sang Sản Xuất (`export-blueprint --all-parts`)
 
-- **Phim ngắn 1 phút hoặc từng Tập (`export-blueprint`):** Tự sinh 3 file khởi tạo đã khóa sẵn 100% ID, tọa độ `locations[].anchors`, `castBlueprints[]` từ `appearanceBrief`, chuỗi hành động `beats[]` và `cues.draft.json`:
-  - `SCRIPT.skeleton.md` → điền lời thoại giàu cảm xúc rồi chạy `gen_horror_voice.py` (v6.3 Single-Voice Lock)
-  - `manifest.draft.json` → chạy `align_manifest.py` + `validate_manifest.py --script ... --words ... --cues ...`
-  - `cues.draft.json` → tinh chỉnh âm thanh Openverse `CC0` & chạy `mix_cues.py --strict` (v7.1)
-- **Nếu làm series nhiều tập:** Vẫn hỗ trợ `horror_story.py export-outline story.json --aspect 9:16 --out OUTLINE.json`.
+- **`OUTLINE.json` & `CONTINUITY.init.json`:** Dùng trực tiếp cho `horror-series-pipeline` (cả phim `short` 3–5 chương lẫn `series` 8–15 chương) và `stitch_parts.py` để ghép liền thành 1 file MP4 `2.5–5 phút` hoặc `8–15 phút` với `0.000s` lệch tiếng.
+- **`p01..pNN/SCRIPT.skeleton.md`:** Đã gom Hồi theo `mood`/`[DEAD SILENCE]`, nhúng sẵn `Nội tâm (subtext)`, `Cảm giác (sensoryDetails)` và `wordBudget` từng beat để viết lời thoại Việt tự nhiên cho `VieNeu-TTS` (`Thiện Minh`).
+- **`p01..pNN/manifest.draft.json`:** Đã khóa sẵn `locations[].anchors`, `castBlueprints[]` và tự động gắn `sameLocationOf`/`sameCharacterOf` cho `p02..pNN` để qua cổng chống trùng lặp.
+- **`p01..pNN/cues.draft.json`:** Đã khóa `max_jumpscares` đúng mật độ chống nhờn & đồng bộ ID với `manifest.draft.json`.
