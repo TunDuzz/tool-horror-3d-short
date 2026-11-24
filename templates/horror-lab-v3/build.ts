@@ -7,16 +7,21 @@
 import * as THREE from "three";
 import {
   Batch,
+  CornerLurker3D,
   DoubleDoorCtrl,
   DustMotes3D,
+  HauntedPortrait3D,
   NOINK,
   SmokeWisps3D,
+  SwarmingFlies3D,
   V,
   addAFrameRoof,
   addAltarOfferingPlate3D,
+  addBloodHandprintDecal3D,
   addBrokenShutterWindow3D,
   addCobwebCluster3D,
   addContactShadow,
+  addCornerLurker3D,
   addCorridorBay,
   addCrackedCurbstone3D,
   addDoubleDoorWithCracks,
@@ -26,8 +31,11 @@ import {
   addFluorescentTube3D,
   addGlassOilLamp3D,
   addHangingCables3D,
+  addHauntedPortrait3D,
+  addIchorPoolDecal3D,
   addIncenseBurner3D,
   addLampHalo3D,
+  addOtherworldGrimeDecal3D,
   addOvergrownWeeds3D,
   addPeelingPaperDecal3D,
   addPipeRun3D,
@@ -36,6 +44,8 @@ import {
   addScatteredDebris3D,
   addSimpleTable,
   addStreetLamp3D,
+  addSwarmingFlies3D,
+  addTalismanPaper3D,
   addVolumetricCone,
   addWallSwitch3D,
   addWallWithOpening,
@@ -45,7 +55,6 @@ import {
   brickWallPair,
   concreteCeilingTex,
   corrugatedTinTex,
-  ctex,
   darkTimberPair,
   hospitalTilePair,
   lam,
@@ -68,9 +77,12 @@ export type FuneralRoomSet = {
   oilLampHalo: ReturnType<typeof addLampHalo3D>;
   altarCandleMat: THREE.MeshBasicMaterial;
   altarHalo: ReturnType<typeof addLampHalo3D>;
+  hauntedPortrait: HauntedPortrait3D;
   doorCtrl: DoubleDoorCtrl;
   incenseSmoke: SmokeWisps3D;
   altarSmoke: SmokeWisps3D;
+  flies: SwarmingFlies3D;
+  windowLurker: CornerLurker3D;
 };
 
 export type HospitalCorridorSet = {
@@ -78,54 +90,15 @@ export type HospitalCorridorSet = {
   tubeA: ReturnType<typeof addFluorescentTube3D>;
   tubeB: ReturnType<typeof addFluorescentTube3D>;
   dust: DustMotes3D;
+  flies: SwarmingFlies3D;
 };
 
 export type VillageAlleySet = {
   group: THREE.Group;
   streetLamp: ReturnType<typeof addStreetLamp3D>;
+  flies: SwarmingFlies3D;
+  alleyLurker: CornerLurker3D;
 };
-
-/** Hand-painted monochrome vintage Vietnamese elder ancestral portrait with mourning ribbon sash. */
-const portraitTex = () =>
-  ctex("hlv3_portrait", 256, 320, (g) => {
-    g.fillStyle = "#cfc7b6";
-    g.fillRect(0, 0, 256, 320);
-    const gr = g.createRadialGradient(128, 140, 18, 128, 150, 175);
-    gr.addColorStop(0, "rgba(0,0,0,0)");
-    gr.addColorStop(1, "rgba(22,16,20,0.56)");
-    g.fillStyle = gr;
-    g.fillRect(0, 0, 256, 320);
-    g.fillStyle = "#1f1d24";
-    g.beginPath();
-    g.ellipse(128, 274, 86, 92, 0, Math.PI, Math.PI * 2);
-    g.fillRect(42, 274, 172, 50);
-    g.fill();
-    g.fillStyle = "#b8b0a0";
-    g.fillRect(108, 176, 40, 34);
-    g.fillStyle = "#26232a";
-    g.beginPath();
-    g.ellipse(128, 114, 42, 50, 0, 0, Math.PI * 2);
-    g.fill();
-    g.fillStyle = "#b6ae9e";
-    g.beginPath();
-    g.ellipse(128, 126, 34, 43, 0, 0, Math.PI * 2);
-    g.fill();
-    g.fillStyle = "#2b272e";
-    g.fillRect(107, 116, 13, 5);
-    g.fillRect(136, 116, 13, 5);
-    g.fillRect(111, 125, 6, 4);
-    g.fillRect(139, 125, 6, 4);
-    g.fillRect(126, 127, 4, 16);
-    g.fillRect(118, 150, 20, 3);
-    g.fillStyle = "#0e0c12";
-    g.beginPath();
-    g.moveTo(174, 0);
-    g.lineTo(256, 0);
-    g.lineTo(256, 86);
-    g.lineTo(146, 0);
-    g.closePath();
-    g.fill();
-  });
 
 export function buildRuralFuneralRoom(): FuneralRoomSet {
   const group = new THREE.Group();
@@ -256,14 +229,28 @@ export function buildRuralFuneralRoom(): FuneralRoomSet {
     seed: 19,
   });
 
-  // Portrait image plane inside frame
-  const pPlane = new THREE.Mesh(
-    new THREE.PlaneGeometry(0.42, 0.54),
-    lam("hlv3_portrait_mat", () => ({ map: portraitTex() }), 1, 0.3),
-  );
-  pPlane.position.set(ax, 1.56, az - 0.125);
-  pPlane.layers.set(NOINK);
-  group.add(pPlane);
+  // Haunted ancestral portrait inside altar frame (dynamically tracks gaze & bleeds ichor as dread rises!)
+  const hauntedPortrait = addHauntedPortrait3D(group, [ax, 1.56, az - 0.125], [0, 0, 0], { width: 0.42, height: 0.54 });
+
+  // Opt-in Vietnamese Folk Horror & Viscera dressing for this funeral story:
+  // Crooked blood-smeared yellow talismans on doorframe/wall + creeping Otherworld mold + dragged bloody handprint on bolted door!
+  addTalismanPaper3D(group, [-0.52, 1.82, -3.57], [0, 0, -0.14], { width: 0.14, height: 0.36, seed: 37 });
+  addTalismanPaper3D(group, [ax + 0.62, 1.62, az - 0.19], [0, 0, 0.09], { width: 0.13, height: 0.32, seed: 41 });
+  addOtherworldGrimeDecal3D(group, [-2.42, 1.12, -3.59], [0, 0, 0.1], 1.25, 1.25, 53);
+  addOtherworldGrimeDecal3D(group, [1.55, 1.38, -3.59], [0, 0, -0.06], 1.35, 1.15, 67);
+  addBloodHandprintDecal3D(group, [ANCHORS.DOUBLE_DOOR[0] - 0.34, 1.04, ANCHORS.DOUBLE_DOOR[2] + 0.065], [0, 0, 0.08], {
+    width: 0.34,
+    height: 0.54,
+    seed: 11,
+  });
+
+  // Subliminal Corner Lurker peeking visibly right between the blue broken shutter slats on right edge of B2!
+  const windowLurker = addCornerLurker3D(group, [2.98, 1.48, -1.22], -Math.PI * 0.5, {
+    side: -1,
+    scale: 1.25,
+    eyeGlow: true,
+    hair: true,
+  });
 
   // Altar tall glowing candle
   const altarCandleBody = new THREE.Mesh(new THREE.CylinderGeometry(0.032, 0.036, 0.22, 10), lam("hlv3_wax", () => ({ color: "#dfd4be" }), 1, 0.2));
@@ -292,6 +279,7 @@ export function buildRuralFuneralRoom(): FuneralRoomSet {
 
   const incenseSmoke = addRisingSmokeWisps(group, [tx + 0.24, 0.92, tz + 0.04], { count: 7, height: 0.85, opacity: 0.22 });
   const altarSmoke = addRisingSmokeWisps(group, [ax, 1.35, az + 0.08], { count: 7, height: 0.95, opacity: 0.20 });
+  const flies = addSwarmingFlies3D(group, [ax - 0.12, 1.44, az + 0.28], { count: 9, radius: 0.44, height: 0.36, seed: 31 });
 
   const doorCtrl = addDoubleDoorWithCracks(
     group,
@@ -299,7 +287,7 @@ export function buildRuralFuneralRoom(): FuneralRoomSet {
     { pos: ANCHORS.DOUBLE_DOOR, width: 1.48, height: 2.24, crackW: 0.032, bottomGap: 0.045, moonColor: "#a2b8dc" },
   );
 
-  return { group, oilLamp, oilLampHalo, altarCandleMat, altarHalo, doorCtrl, incenseSmoke, altarSmoke };
+  return { group, oilLamp, oilLampHalo, altarCandleMat, altarHalo, hauntedPortrait, doorCtrl, incenseSmoke, altarSmoke, flies, windowLurker };
 }
 
 export function buildHospitalCorridor(): HospitalCorridorSet {
@@ -416,9 +404,16 @@ export function buildHospitalCorridor(): HospitalCorridorSet {
   addContactShadow(group, [ix, 0.004, iz], 0.34, 0.34, 0.52);
   addContactShadow(group, [ANCHORS.HOSP_ENTITY[0], 0.004, ANCHORS.HOSP_ENTITY[2]], 0.52, 0.42, 0.68);
   addWetPuddleDecal(group, [-0.18, 0.004, -1.25], 0.68, 0.92, "#0c1415", 0.72);
+  // Opt-in Viscera & Otherworld Horror dressing for abandoned hospital ward:
+  addBloodHandprintDecal3D(group, [0.96, 1.32, -2.23], [0, 0, -0.10], { width: 0.36, height: 0.56, seed: 19 });
+  addBloodHandprintDecal3D(group, [-1.37, 1.18, -1.15], [0, Math.PI * 0.5, 0.06], { width: 0.38, height: 0.58, seed: 27 });
+  addIchorPoolDecal3D(group, [0.12, 0.004, -1.85], 0.56, 0.78, 23);
+  addOtherworldGrimeDecal3D(group, [1.05, 0.92, -2.24], [0, 0, 0], 1.10, 1.45, 73);
+  addOtherworldGrimeDecal3D(group, [-1.05, 0.78, -2.24], [0, 0, 0], 1.05, 1.30, 81);
   const dust = addDustMotes(group, [0, 1.45, -1.8], [2.2, 2.3, 6.5], 34, 19, "#c4ded8");
+  const flies = addSwarmingFlies3D(group, [0.06, 1.12, -1.75], { count: 10, radius: 0.52, height: 0.48, seed: 59 });
 
-  return { group, tubeA, tubeB, dust };
+  return { group, tubeA, tubeB, dust, flies };
 }
 
 export function buildFoggyVillageAlley(): VillageAlleySet {
@@ -548,11 +543,26 @@ export function buildFoggyVillageAlley(): VillageAlleySet {
   addWetPuddleDecal(group, [0.45, 0.004, -5.2], 0.82, 1.40, "#141a26", 0.78);
   addWetPuddleDecal(group, [-0.62, 0.004, -1.9], 0.66, 0.98, "#131924", 0.72);
 
-  // Chaotic bundled overhead Vietnamese alley power cables!
+  // Chaotic bundled overhead Vietnamese alley power cables + Folk/Subliminal Horror dressing!
   addHangingCables3D(group, [-2.2, 3.65, -3.6], [2.2, 3.45, -4.4], 5, 0.48, 7);
   addHangingCables3D(group, [-2.2, 3.72, -6.2], [2.2, 3.60, -6.6], 4, 0.42, 19);
+  addTalismanPaper3D(group, [-2.02, 1.58, -3.8], [0, Math.PI * 0.5, -0.10], { width: 0.16, height: 0.40, seed: 61 });
+  addIchorPoolDecal3D(group, [0.22, 0.004, -2.55], 0.48, 0.66, 47);
+  const flies = addSwarmingFlies3D(group, [streetLamp.bulbWorldPos[0], streetLamp.bulbWorldPos[1] - 0.25, streetLamp.bulbWorldPos[2]], {
+    count: 11,
+    radius: 0.65,
+    height: 0.42,
+    seed: 71,
+  });
+  // Second eerie lurker peeking silently inside the 9:16 alley frustum right beside the right wall/streetlamp pole in B6!
+  const alleyLurker = addCornerLurker3D(group, [1.58, 1.48, -5.85], -0.35, {
+    side: -1,
+    scale: 1.30,
+    eyeGlow: true,
+    hair: true,
+  });
 
-  return { group, streetLamp };
+  return { group, streetLamp, flies, alleyLurker };
 }
 
 export { attachOutlineRig };

@@ -6,9 +6,9 @@
 // elongated tendon neck, protruding ribs/clavicles/spine, 3-joint spider claw hands, extra arms, crawler/stalkLoom poses).
 
 import * as THREE from "three";
-import { FPS, clamp01, lerp, uncannyTime, uncannyTwitch, type V3 } from "./camera";
+import { FPS, clamp01, jacobsLadderTwitch, lerp, uncannyTime, uncannyTwitch, type V3 } from "./camera";
 import { NOINK } from "./ink";
-import type { FaceExpr, PoseAction } from "./manifest";
+import type { CharacterBlueprint, FaceExpr, PoseAction } from "./manifest";
 import { attachOutlineRig, type OutlineMode } from "./outline3d";
 import { cadaverSkinPair, hairStrandPair, humanSkinPair, tatteredGownPair, wovenFabricPair } from "./paint";
 import { stylizedShade } from "./shade";
@@ -20,7 +20,9 @@ import {
   buildHorrorEyes3D,
   buildHorrorJaw3D,
   buildHorrorSkullHeadGeo,
+  buildMattedLongHair3D,
   buildSpiderClawHand3D,
+  buildSuturesAndWounds3D,
   buildTendonNeck3D,
 } from "./bodyHorror";
 
@@ -88,7 +90,8 @@ export type EntityConfig = {
   eyeGlowColor?: [number, number, number];
   breathing?: boolean; // false = uncanny dead stillness
   steppedFps?: number; // optional subtle stepped motion (e.g. 8-10 fps)
-  bodyHorror?: BodyHorrorConfig; // Horror Engine v4 modular Dark / Gore / Body Horror anatomy
+  headTwitch?: number; // 0..1 opt-in Jacob's Ladder multi-axis violent head spasm
+  bodyHorror?: BodyHorrorConfig; // Horror Engine v4/v5 modular opt-in Dark / Gore / Body Horror anatomy
 };
 
 export type CharacterConfig = {
@@ -104,6 +107,7 @@ export type CharacterConfig = {
   garment?: GarmentStyle;
   headbandCol?: string; // e.g. white funeral headband (khăn tang)
   lowPoly?: boolean; // v4.5 PSX faceted low-poly geometry + flatShading (default true!)
+  uncannyRealism?: boolean; // v5.0 opt-in PS1 Silent Hill / Mouthwashing dark facial charcoal/flash shading
   outlineMode?: OutlineMode; // default "off" (Style B / PSX), or "grittyThin" (Style A) / "cleanBold"
   outlinePx?: number; // legacy explicit outline width override
   entity?: EntityConfig;
@@ -147,6 +151,7 @@ export type PoseEvalOpts = {
   headRoll?: number;
   jawOpen?: number; // 0..1 explicit override for 3D articulated horror jaw
   twitch?: boolean;
+  headTwitch?: number; // 0..1 per-beat override for Jacob's Ladder violent head spasm
   seed?: number;
   ageLines?: boolean;
   sweat?: boolean;
@@ -781,8 +786,15 @@ export function createCharacter3D(cfg: CharacterConfig): Character3D {
   }
   head.add(eyeGlowGroup);
 
-  // 3D layered hair + optional funeral headband (khăn tang)
-  buildHairMeshes(head, cfg.hairStyle ?? "shortParted", hairMat, headRx, headRy, headRz, !!ent?.hairCurtain, disposables);
+  // 3D layered hair + optional East-Asian matted horror hair curtain + optional surgical wounds/sutures + optional funeral headband
+  if (bh?.mattedLongHair) {
+    buildMattedLongHair3D(head, headRx, headRy, headRz, hScale, lowPoly, disposables);
+  } else {
+    buildHairMeshes(head, cfg.hairStyle ?? "shortParted", hairMat, headRx, headRy, headRz, !!ent?.hairCurtain, disposables);
+  }
+  if (bh?.suturesAndWounds) {
+    buildSuturesAndWounds3D(head, spine, headRx, headRy, headRz, hScale, disposables);
+  }
   if (cfg.headbandCol && !isSil) {
     const bandP = wovenFabricPair(`v4_band_${cfg.id}`, cfg.headbandCol);
     const bandMat = stylizedShade(new THREE.MeshLambertMaterial({ map: bandP.map, bumpMap: bandP.bumpMap, bumpScale: 0.005 }), 1, 0.25);
@@ -957,6 +969,7 @@ export function createCharacter3D(cfg: CharacterConfig): Character3D {
       skinCol: skinHex,
       realisticStyle: resolvedOutlineMode === "off",
       pixelFace: lowPoly,
+      uncannyRealism: cfg.uncannyRealism ?? false,
       eyeHorror: bh?.eyeHorror,
       cheekSplitGrin: bh?.cheekSplitGrin,
       ...spec,
@@ -1145,6 +1158,61 @@ export function createCharacter3D(cfg: CharacterConfig): Character3D {
       rightArm.upperArm.rotation.set(-1.35, -0.18, 0.34);
       leftArm.forearm.rotation.set(-0.42, 0, 0);
       rightArm.forearm.rotation.set(-0.42, 0, 0);
+    } else if (action === "doorwayPeek") {
+      // Psychological dread pose: torso stays concealed behind right doorframe while elongated neck cranes LEFTWARD (+Z rot)
+      // into the open doorway and the left spider-clawed hand reaches out to grip the jamb!
+      spine.rotation.set(0.08, -0.22, 0.34);
+      chest.rotation.set(0.06, -0.14, 0.20);
+      neck.rotation.z = 0.42;
+      head.rotation.set(0.06, -0.26, 0.14);
+      // Left spider arm reaches forward-left to clutch doorframe edge visibly
+      leftArm.upperArm.rotation.set(-0.96, 0.18, -0.34);
+      leftArm.forearm.rotation.set(-0.54, 0, 0.22);
+      leftArm.hand.rotation.set(-0.42, 0.20, -0.28);
+      // Right arm tucked behind the wall in darkness
+      rightArm.upperArm.rotation.set(0.16, -0.22, 0.14);
+      rightArm.forearm.rotation.set(-0.34, 0, 0);
+      if (extraArms) {
+        extraArms.leftExtraArm.rotation.set(0.10, 0.24, -0.78);
+        extraArms.rightExtraArm.rotation.set(0.28, -0.25, 0.22);
+      }
+    } else if (action === "backbendCrab") {
+      // Grotesque Exorcist / Grudge reverse backbend contortion with head hanging upside-down staring straight at camera!
+      pelvis.position.y = 0.52 * hScale;
+      pelvis.rotation.x = -1.28;
+      spine.rotation.x = -0.58;
+      chest.rotation.x = -0.34;
+      neck.rotation.x = -0.45;
+      head.rotation.z = Math.PI;
+      leftLeg.thigh.rotation.set(0.95, 0.34, -0.36);
+      rightLeg.thigh.rotation.set(0.95, -0.34, 0.36);
+      leftLeg.calf.rotation.set(1.42, 0, 0);
+      rightLeg.calf.rotation.set(1.42, 0, 0);
+      leftArm.upperArm.rotation.set(-2.35, 0.22, -0.42);
+      rightArm.upperArm.rotation.set(-2.35, -0.22, 0.42);
+      leftArm.forearm.rotation.set(-0.28, 0, 0);
+      rightArm.forearm.rotation.set(-0.28, 0, 0);
+    } else if (action === "lungeCloseUp") {
+      // Violent close-quarters lunge: crooked neck thrust forward, jaw maximally unhinged, claws spreading toward frame edges!
+      pelvis.position.y = hipY - 0.06 * hScale;
+      spine.rotation.x = 0.30;
+      chest.rotation.x = 0.14;
+      neck.rotation.x = -0.28;
+      head.rotation.x = -0.14;
+      leftArm.upperArm.rotation.set(-1.18, 0.28, -0.62);
+      rightArm.upperArm.rotation.set(-1.22, -0.28, 0.62);
+      leftArm.forearm.rotation.set(-0.32, 0, 0.26);
+      rightArm.forearm.rotation.set(-0.32, 0, -0.26);
+      leftArm.hand.rotation.set(-0.48, 0, -0.24);
+      rightArm.hand.rotation.set(-0.48, 0, 0.24);
+      if (extraArms) {
+        extraArms.leftExtraArm.rotation.set(-0.48, 0.24, -1.16);
+        extraArms.rightExtraArm.rotation.set(-0.48, -0.24, 1.16);
+      }
+      if (jawSocket) {
+        jawSocket.rotation.x = 0.94;
+        jawSocket.position.y = -headRy * 0.24 - 0.030 * hScale;
+      }
     }
 
     // Twisted unnatural elbow/wrist offsets when bodyHorror.twistedJoints is enabled
@@ -1165,6 +1233,14 @@ export function createCharacter3D(cfg: CharacterConfig): Character3D {
     if (opts.twitch || ent?.neckTiltDeg) {
       const tw = uncannyTwitch(frame, seed, 28, 0.26);
       if (opts.twitch) neck.rotation.z += tw;
+    }
+    const jtAmt = opts.headTwitch ?? ent?.headTwitch ?? 0;
+    if (jtAmt > 0.001) {
+      const jt = jacobsLadderTwitch(frame, seed + 5, jtAmt);
+      neck.rotation.z += jt.rz * 0.65;
+      head.rotation.x += jt.rx;
+      head.rotation.y += jt.ry;
+      head.rotation.z += jt.rz * 0.55;
     }
 
     if (opts.headYaw !== undefined) head.rotation.y += opts.headYaw;
@@ -1248,4 +1324,40 @@ export function createCharacter3D(cfg: CharacterConfig): Character3D {
   };
 
   return { group: root, sockets, config: cfg, setFace, setPose, setPoseBlend, lookAtWorld, dispose };
+}
+
+/**
+ * Horror Engine v5.0: Story-Driven Character Factory.
+ * Builds a Character3D strictly from a `CharacterBlueprint` declared in SceneManifest so every character & entity's
+ * appearance is tailored to its story description — zero hardcoded cookie-cutter monsters across unrelated videos!
+ */
+export function createCharacterFromBlueprint(
+  bp: CharacterBlueprint,
+  overrides: Partial<CharacterConfig> = {},
+): Character3D {
+  const ap = bp.appearance ?? {};
+  const entRaw = ap.entity as EntityConfig | undefined;
+  const resolvedEntity: EntityConfig | undefined =
+    bp.role === "silhouette"
+      ? { silhouetteMode: true, breathing: false, ...(entRaw ?? {}) }
+      : entRaw;
+
+  return createCharacter3D({
+    id: bp.id,
+    height: ap.height,
+    skinCol: ap.skinCol,
+    hairStyle: ap.hairStyle as HairStyle | undefined,
+    hairCol: ap.hairCol,
+    garment: ap.garment as GarmentStyle | undefined,
+    topCol: ap.topCol,
+    innerCol: ap.innerCol,
+    bottomCol: ap.bottomCol,
+    shoeCol: ap.shoeCol,
+    headbandCol: ap.headbandCol,
+    lowPoly: ap.lowPoly ?? true,
+    uncannyRealism: ap.uncannyRealism ?? false,
+    outlineMode: ap.outlineMode ?? "off",
+    entity: resolvedEntity,
+    ...overrides,
+  });
 }

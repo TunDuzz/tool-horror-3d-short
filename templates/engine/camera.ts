@@ -336,6 +336,64 @@ export const uncannyTwitch = (f: number, seed = 1, period = 26, amp = 1): number
   return 0;
 };
 
+/**
+ * Horror Engine v5.0: Deterministic multi-axis violent "Jacob's Ladder / Silent Hill" head-twitch spasm.
+ * Alternates dead-still dread pauses with rapid 5-7 frame unnatural angular bursts across yaw/pitch/roll.
+ */
+export const jacobsLadderTwitch = (
+  f: number,
+  seed = 13,
+  intensity = 1.0,
+): { rx: number; ry: number; rz: number } => {
+  const k = Math.max(0, intensity);
+  if (k <= 0.001) return { rx: 0, ry: 0, rz: 0 };
+  const period = 20;
+  const bucket = Math.floor(f / period);
+  const startOff = Math.floor(hash01(bucket, seed + 17) * 9);
+  const burstLen = 6;
+  const dt = f - (bucket * period + startOff);
+  if (dt < 0 || dt >= burstLen) return { rx: 0, ry: 0, rz: 0 };
+  const env = Math.sin(((dt + 0.5) / burstLen) * Math.PI);
+  const s1 = (hash01(f * 3 + 1, seed + 31) - 0.5) * 2;
+  const s2 = (hash01(f * 5 + 2, seed + 59) - 0.5) * 2;
+  const s3 = (hash01(f * 7 + 3, seed + 97) - 0.5) * 2;
+  return {
+    rx: s1 * 0.24 * k * env,
+    ry: s2 * 0.38 * k * env,
+    rz: s3 * 0.44 * k * env,
+  };
+};
+
+/**
+ * Horror Engine v5.0: Deterministic flashlight malfunction + "P.T. / Lights Out" Blink-Advance stage counter.
+ * Each declared blackout window `[a, b)` sputters power sharply to near-zero; once `frame >= b`, `stage` increments
+ * so an entity can snap closer on every light recovery while staying 100% synced with planned OVERLAYS blackouts.
+ */
+export const torchMalfunction = (
+  f: number,
+  blackouts: Array<[number, number]>,
+  seed = 19,
+): { power: number; stage: number; isDark: boolean } => {
+  let stage = 0;
+  let isDark = false;
+  let power = 1.0;
+
+  for (const [a, b] of blackouts) {
+    if (f >= b) {
+      stage++;
+    } else if (f >= a && f < b) {
+      isDark = true;
+      power = 0.02;
+    } else if (f >= a - 3 && f < a) {
+      // Pre-failure electrical sputter
+      power = Math.min(power, 0.35 + 0.55 * hash01(f * 2, seed + a));
+    } else if (f >= b && f < b + 2) {
+      power = Math.min(power, 0.72 + 0.28 * hash01(f * 3, seed + b));
+    }
+  }
+  return { power, stage, isDark };
+};
+
 /** Evaluate camera key list at frame `f`, returning both camera pose and active hard-cut start frame. */
 export const evalCamKeysWithCut = (keys: CamKey[], f: number): { cam: Cam; cutStartFrame: number } => {
   let cur = fullCam(keys[0].s(f));

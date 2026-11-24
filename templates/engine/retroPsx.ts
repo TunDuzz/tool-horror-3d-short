@@ -41,6 +41,13 @@ uniform float uVhsWave;
 uniform float uChromaPx;
 uniform float uCurvature;
 uniform float uGlitch;
+uniform float uDread;
+
+float hash12(vec2 p) {
+  vec3 p3 = fract(vec3(p.xyx) * 0.1031);
+  p3 += dot(p3, p3.yzx + 33.33);
+  return fract((p3.x + p3.y) * p3.z);
+}
 
 float bayer4(ivec2 p) {
   int x = p.x & 3;
@@ -105,7 +112,7 @@ void mainImage(const in vec4 inputColor, const in vec2 uv, out vec4 outputColor)
   vec2 vCoord = floor(crtUv * vRes);
   vec2 qUv = (vCoord + 0.5) / vRes;
 
-  // 3. Deterministic VHS horizontal tracking wobble + slow rolling head-switch band (surges dynamically with uGlitch!)
+  // 3. Deterministic VHS horizontal tracking wobble + slow rolling head-switch band + intense tapeTear shear on monster scares!
   float surge = clamp(uGlitch, 0.0, 1.8);
   float waveAmt = (uVhsWave * 0.0022 + surge * 0.0065);
   float rollBand = exp(-pow(fract(qUv.y * 1.15 - t * 0.14) - 0.5, 2.0) * 90.0);
@@ -114,6 +121,13 @@ void mainImage(const in vec4 inputColor, const in vec2 uv, out vec4 outputColor)
     sin(qUv.y * 74.0 - t * 5.2) * 0.30 +
     sin(qUv.y * 140.0 + t * 8.5) * 0.15
   ) * waveAmt * (1.0 + rollBand * (1.2 + surge * 1.8));
+
+  // Razor-thin authentic VHS horizontal tracking-error tear line when surge > 0.28 (never smothers entity faces in snow!)
+  float tearGate = smoothstep(0.28, 0.72, surge);
+  float tearCenter = 0.14 + 0.14 * sin(t * 1.45);
+  float tearBand = exp(-pow((qUv.y - tearCenter) * 58.0, 2.0)) * tearGate;
+  float tearLineNoise = hash12(vec2(vCoord.y, floor(uFrame * 0.5))) - 0.5;
+  jitter += tearBand * tearLineNoise * 0.044;
 
   vec2 sampleUv = vec2(clamp(qUv.x + jitter, 0.001, 0.999), clamp(qUv.y, 0.001, 0.999));
 
@@ -137,8 +151,26 @@ void mainImage(const in vec4 inputColor, const in vec2 uv, out vec4 outputColor)
     disp = floor(disp * uColorLevels + 0.5) / uColorLevels;
   }
 
-  // Subtle VHS composite luma-edge grit along rolling tracking band
+  // Subtle VHS composite luma-edge grit along rolling tracking band + thin static streak inside tracking tear
   disp += (rollBand * 0.024 * (0.4 + surge)) * sin(qUv.y * 220.0 + t * 14.0);
+  if (tearBand > 0.06) {
+    float snow = step(0.84, hash12(vCoord + vec2(uFrame * 1.7, uFrame * 0.3)));
+    disp = mix(disp, vec3(0.76, 0.80, 0.82), snow * tearBand * 0.34);
+  }
+
+  // Heartbeat claustrophobic dread vignette + peripheral desaturation (opt-in via uDread > 0)
+  float dread = clamp(uDread, 0.0, 1.0);
+  if (dread > 0.01) {
+    float hbPhase = fract(t * 1.35);
+    float lub = exp(-pow((hbPhase - 0.12) / 0.06, 2.0));
+    float dub = 0.65 * exp(-pow((hbPhase - 0.28) / 0.07, 2.0));
+    float hb = lub + dub;
+    float edgeDist = smoothstep(0.32, 1.25, r2);
+    float vigDrop = edgeDist * dread * (0.34 + 0.24 * hb);
+    float luma = dot(disp, vec3(0.299, 0.587, 0.114));
+    disp = mix(disp, vec3(luma), edgeDist * dread * 0.55);
+    disp *= clamp(1.0 - vigDrop, 0.12, 1.0);
+  }
 
   // 6. Luminance-preserving horizontal CRT phosphor scanlines aligned cleanly to virtual retro rows
   if (uScanline > 0.001) {
@@ -174,6 +206,7 @@ export class RetroPsxEffect extends Effect {
         ["uChromaPx", new Uniform(o.chromaPx)],
         ["uCurvature", new Uniform(o.crtCurvature)],
         ["uGlitch", new Uniform(0)],
+        ["uDread", new Uniform(0)],
       ]),
     });
   }
@@ -200,5 +233,11 @@ export class RetroPsxEffect extends Effect {
   }
   get glitchSurge(): number {
     return this.uniforms.get("uGlitch")!.value as number;
+  }
+  set dreadLevel(v: number) {
+    this.uniforms.get("uDread")!.value = Math.max(0, Math.min(1, v));
+  }
+  get dreadLevel(): number {
+    return this.uniforms.get("uDread")!.value as number;
   }
 }

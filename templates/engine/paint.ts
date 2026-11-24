@@ -1807,17 +1807,22 @@ export const cadaverSkinPair = (key = "v4_cadaverSkinPair", baseHex = "#9e9ea6",
       }
     }
 
-    // Dried dark crimson-brown blood seepage & necrosis stains scaled by bloodLevel
+    // Dried dark crimson-brown blood seepage & heavy necrotic mottling scaled by bloodLevel
     if (bloodLevel > 0.02) {
-      const nStains = Math.round(16 + bloodLevel * 38);
+      const nStains = Math.round(18 + bloodLevel * 44);
       for (let i = 0; i < nStains; i++) {
         const x = U(r, 0, S), y = U(r, 0, S);
-        blotch(g, x, y, U(r, 14, 64) * (0.6 + bloodLevel * 0.7), U(r, 0.5, 1.8), "68,12,14", U(r, 0.22, 0.54) * bloodLevel);
+        blotch(g, x, y, U(r, 16, 72) * (0.65 + bloodLevel * 0.75), U(r, 0.5, 1.8), "62,9,11", U(r, 0.26, 0.62) * bloodLevel);
+        if (bloodLevel >= 0.45 && r() < 0.45) {
+          // Dark black-violet necrotic bruise cores & raised scab crust in bumpMap
+          blotch(g, x + U(r, -12, 12), y + U(r, -12, 12), U(r, 10, 32), 1.0, "24,6,12", U(r, 0.30, 0.56) * bloodLevel);
+          blotch(gb, x, y, U(r, 10, 28), 1.0, "215,215,215", 0.35 * bloodLevel);
+        }
         // Vertical dark drip trail
-        if (r() < 0.5) {
-          const h = U(r, 35, 145) * bloodLevel;
-          g.fillStyle = `rgba(54,8,10,${(0.48 * bloodLevel).toFixed(2)})`;
-          g.fillRect(x - 2, y, U(r, 2.5, 6.5), h);
+        if (r() < 0.55) {
+          const h = U(r, 40, 165) * bloodLevel;
+          g.fillStyle = `rgba(48,6,8,${(0.56 * bloodLevel).toFixed(2)})`;
+          g.fillRect(x - 2, y, U(r, 2.5, 6.8), h);
         }
       }
     }
@@ -1864,6 +1869,207 @@ export const tatteredGownPair = (key = "v4_tatteredGownPair", baseHex = "#8c8b84
         const bx = U(r, 80, S - 80), by = U(r, 120, S - 80);
         blotch(g, bx, by, U(r, 20, 96) * (0.5 + bloodLevel * 0.8), U(r, 0.6, 1.8), "68,10,12", U(r, 0.28, 0.62) * bloodLevel);
         blotch(g, bx + U(r, -16, 16), by + U(r, -16, 16), U(r, 10, 42), 1.0, "34,5,7", U(r, 0.34, 0.68) * bloodLevel);
+      }
+    }
+  });
+
+/**
+ * Horror Engine v5.0 (Opt-in Viscera & Folk Horror Texture Kit):
+ * All textures below are strictly opt-in per story/location and stay 100% compatible with NearestFilter PSX mode.
+ */
+
+/** Smeared crimson-black bloody palm print + 5 dragged fingernail claw streaks sliding downward (transparent alpha). */
+export const bloodHandprintTex = (seed = 11) =>
+  ctex(`v5_bloodHand_${seed}`, 512, 768, (g) => {
+    const r = rng(seed * 733 + 19);
+    g.clearRect(0, 0, 512, 768);
+    // Dragged palm smear sliding downward
+    const palmGr = g.createLinearGradient(256, 170, 256, 610);
+    palmGr.addColorStop(0, "rgba(104, 10, 12, 0.90)");
+    palmGr.addColorStop(0.45, "rgba(62, 6, 8, 0.76)");
+    palmGr.addColorStop(0.82, "rgba(42, 4, 6, 0.38)");
+    palmGr.addColorStop(1, "rgba(30, 3, 5, 0)");
+    g.fillStyle = palmGr;
+    g.beginPath();
+    g.ellipse(254, 295, 92, 108, -0.08, 0, TAU);
+    g.fill();
+    g.fillRect(184, 305, 138, 255);
+
+    // 5 fingers + long desperate scratched downward blood drag marks
+    const fingers: Array<[number, number, number, number]> = [
+      [126, 268, 24, 310], // thumb
+      [182, 136, 24, 495], // index
+      [238, 102, 26, 560], // middle
+      [294, 122, 24, 520], // ring
+      [346, 172, 21, 435], // pinky
+    ];
+    g.lineCap = "round";
+    for (const [fx, fy, fw, dragLen] of fingers) {
+      const fGr = g.createLinearGradient(fx, fy, fx, fy + dragLen);
+      fGr.addColorStop(0, "rgba(116, 12, 14, 0.94)");
+      fGr.addColorStop(0.32, "rgba(74, 8, 10, 0.82)");
+      fGr.addColorStop(0.75, "rgba(48, 5, 7, 0.42)");
+      fGr.addColorStop(1, "rgba(28, 3, 4, 0)");
+      g.strokeStyle = fGr;
+      g.lineWidth = fw;
+      g.beginPath();
+      g.moveTo(fx, fy);
+      g.quadraticCurveTo(fx + U(r, -10, 10), fy + dragLen * 0.45, fx + U(r, -16, 14), fy + dragLen);
+      g.stroke();
+
+      // Inner dark claw-nail scrape channel
+      g.strokeStyle = "rgba(24, 2, 4, 0.72)";
+      g.lineWidth = 4.5;
+      g.beginPath();
+      g.moveTo(fx, fy - 4);
+      g.lineTo(fx + U(r, -8, 8), fy + dragLen * 0.72);
+      g.stroke();
+    }
+    // Splatter droplets & smeared grit
+    for (let i = 0; i < 48; i++) {
+      const sx = U(r, 64, 448), sy = U(r, 70, 710);
+      g.fillStyle = `rgba(${r() < 0.5 ? "78,8,10" : "40,4,6"},${U(r, 0.35, 0.85).toFixed(2)})`;
+      g.beginPath();
+      g.ellipse(sx, sy, U(r, 2, 10), U(r, 3, 18), U(r, -0.3, 0.3), 0, TAU);
+      g.fill();
+    }
+  });
+
+/** Coagulated glossy dark blood / black ichor floor pool with organic spattered edges (transparent alpha). */
+export const blackIchorPoolTex = (seed = 23) =>
+  ctex(`v5_ichorPool_${seed}`, 512, 512, (g) => {
+    const r = rng(seed * 911 + 7);
+    g.clearRect(0, 0, 512, 512);
+    // Multi-lobe viscous coagulated dark black-crimson pool silhouette (looks wet & ominous, never bright cherry red!)
+    const lobes = 14;
+    for (let i = 0; i < lobes; i++) {
+      const ang = (i / lobes) * TAU + U(r, -0.35, 0.35);
+      const dist = i === 0 ? 0 : U(r, 24, 128);
+      const rx = i === 0 ? 148 : U(r, 34, 102);
+      const ry = i === 0 ? 132 : U(r, 28, 86);
+      const cx = 256 + Math.cos(ang) * dist;
+      const cy = 256 + Math.sin(ang) * dist;
+      const gr = g.createRadialGradient(cx, cy, rx * 0.12, cx, cy, Math.max(rx, ry));
+      gr.addColorStop(0, "rgba(10, 2, 4, 0.96)");
+      gr.addColorStop(0.58, "rgba(26, 4, 6, 0.88)");
+      gr.addColorStop(0.88, "rgba(42, 6, 8, 0.52)");
+      gr.addColorStop(1, "rgba(32, 4, 6, 0)");
+      g.fillStyle = gr;
+      g.beginPath();
+      g.ellipse(cx, cy, rx, ry, U(r, 0, Math.PI), 0, TAU);
+      g.fill();
+    }
+    // Irregular streak & outer spatter droplets
+    for (let i = 0; i < 48; i++) {
+      const ang = U(r, 0, TAU);
+      const dist = U(r, 122, 240);
+      g.fillStyle = `rgba(34, 5, 7, ${U(r, 0.45, 0.88).toFixed(2)})`;
+      g.beginPath();
+      g.ellipse(256 + Math.cos(ang) * dist, 256 + Math.sin(ang) * dist, U(r, 2, 11), U(r, 2, 7), ang, 0, TAU);
+      g.fill();
+    }
+  });
+
+/** Aged yellow-ochre Vietnamese/East-Asian occult paper talisman (bùa chú) with cinnabar glyphs, scorched edge & dried blood smear. */
+export const bloodyTalismanTex = (seed = 37) =>
+  ctex(`v5_talisman_${seed}`, 256, 640, (g) => {
+    const r = rng(seed * 419 + 5);
+    g.clearRect(0, 0, 256, 640);
+    g.save();
+    // Slightly frayed yellow-ochre paper strip
+    g.beginPath();
+    g.moveTo(16, 12);
+    g.lineTo(240, 18);
+    g.lineTo(234, 480);
+    g.lineTo(244, 624);
+    g.lineTo(160, 612);
+    g.lineTo(118, 630);
+    g.lineTo(22, 616);
+    g.lineTo(12, 310);
+    g.closePath();
+    g.fillStyle = "#c9a446";
+    g.fill();
+    g.clip();
+
+    // Aged mottled grime & scorched border vignette
+    for (let i = 0; i < 24; i++) {
+      blotch(g, U(r, 0, 256), U(r, 0, 640), U(r, 20, 74), U(r, 0.6, 1.6), "54,36,14", U(r, 0.14, 0.34));
+    }
+    g.strokeStyle = "#8a1812";
+    g.lineWidth = 8;
+    g.strokeRect(26, 28, 204, 574);
+
+    // Traditional cinnabar occult brush glyphs (stylized non-semantic strokes)
+    g.strokeStyle = "#921410";
+    g.lineCap = "round";
+    g.lineJoin = "round";
+    // Top 3-prong crown sigil
+    g.lineWidth = 10;
+    g.beginPath();
+    g.moveTo(76, 98); g.lineTo(128, 56); g.lineTo(180, 98);
+    g.moveTo(128, 52); g.lineTo(128, 152);
+    g.moveTo(64, 126); g.lineTo(192, 126);
+    g.stroke();
+    // Middle coiled incantation spiral & cross bars
+    g.lineWidth = 9;
+    g.beginPath();
+    let y = 178;
+    g.moveTo(128, y);
+    for (let k = 0; k < 6; k++) {
+      const s = k % 2 === 0 ? -1 : 1;
+      g.quadraticCurveTo(128 + s * 66, y + 24, 128, y + 48);
+      y += 48;
+    }
+    g.stroke();
+    for (const barY of [210, 294, 386, 466]) {
+      g.lineWidth = 7;
+      g.beginPath();
+      g.moveTo(68 + U(r, -8, 12), barY);
+      g.lineTo(188 + U(r, -12, 8), barY + U(r, -8, 8));
+      g.stroke();
+    }
+    // Bottom seal box
+    g.lineWidth = 8;
+    g.strokeRect(84, 502, 88, 72);
+    g.beginPath();
+    g.moveTo(96, 524); g.lineTo(160, 524);
+    g.moveTo(128, 508); g.lineTo(128, 566);
+    g.stroke();
+
+    // Dried dark blood thumbprint & drip smeared across bottom half
+    blotch(g, 168, 412, 58, 1.35, "68,7,9", 0.72);
+    blotch(g, 108, 496, 44, 1.2, "52,5,7", 0.58);
+    g.fillStyle = "rgba(58, 6, 8, 0.76)";
+    g.fillRect(160, 420, 9, 170);
+    g.fillRect(102, 504, 6, 110);
+    g.restore();
+  });
+
+/** Creeping Silent Hill Otherworld black-mold, rust & organic rot wall patch (transparent alpha). */
+export const otherworldRustTex = (seed = 53) =>
+  ctex(`v5_otherworldRust_${seed}`, 512, 512, (g) => {
+    const r = rng(seed * 613 + 29);
+    g.clearRect(0, 0, 512, 512);
+    for (let i = 0; i < 42; i++) {
+      const x = U(r, 70, 442), y = U(r, 70, 442), rad = U(r, 24, 108);
+      const col = r() < 0.45 ? "18,12,16" : r() < 0.78 ? "56,20,14" : "36,24,18";
+      blotch(g, x, y, rad, U(r, 0.65, 1.65), col, U(r, 0.24, 0.62));
+    }
+    // Creeping black fungal vein tendrils radiating outward
+    g.lineCap = "round";
+    for (let v = 0; v < 26; v++) {
+      let x = 256 + U(r, -90, 90);
+      let y = 256 + U(r, -90, 90);
+      let ang = U(r, 0, TAU);
+      for (let s = 0; s < 6; s++) {
+        const len = U(r, 18, 48);
+        const nx = x + Math.cos(ang) * len;
+        const ny = y + Math.sin(ang) * len;
+        g.strokeStyle = `rgba(14, 8, 12, ${(0.72 - s * 0.10).toFixed(2)})`;
+        g.lineWidth = Math.max(1.2, 5.2 - s * 0.7);
+        g.beginPath(); g.moveTo(x, y); g.lineTo(nx, ny); g.stroke();
+        x = nx; y = ny;
+        ang += U(r, -0.65, 0.65);
       }
     }
   });

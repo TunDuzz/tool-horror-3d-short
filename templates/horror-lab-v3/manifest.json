@@ -1,12 +1,18 @@
 {
   "projectId": "horror-lab-v3",
-  "title": "HorrorLabV3 — 3-Archetype Dark-Horror POV Proof",
+  "title": "HorrorLabV3 — Engine v5.0 Maximum Dread × Story-Driven PSX Showcase",
   "totalFrames": 300,
   "aspect": "9:16",
   "header": {
     "title": "CHỦ NHẬT · 01:06",
-    "subtitle": "Horror Engine v4.5 · PSX",
+    "subtitle": "Horror Engine v5.0 · PSX DREAD",
     "badge": "PHIM NGẮN HƯ CẤU"
+  },
+  "camcorder": {
+    "enabled": true,
+    "label": "VHS · SP",
+    "startClock": "01:06:00",
+    "dateLabel": "22/11/1998"
   },
   "locations": [
     {
@@ -20,8 +26,8 @@
         "ceiling": "thatchRoofTex"
       },
       "practicalLights": ["oilLamp", "altarCandle", "phoneScreen"],
-      "heroProps": ["lacqueredCoffin", "ancestralPortraitAltar", "glassOilLamp", "boltedDoubleDoor"],
-      "signatureShadowBeat": "Cold moonlight strip under bolted double door blocked by two dark foot shadows"
+      "heroProps": ["lacqueredCoffin", "hauntedAncestralPortrait", "bloodyYellowTalisman", "boltedDoubleDoor"],
+      "signatureShadowBeat": "Cold moonlight strip under blood-smeared bolted double door blocked by two dark foot shadows"
     },
     {
       "id": "hospitalCorridor",
@@ -34,8 +40,8 @@
         "ceiling": "concreteCeilingTex"
       },
       "practicalLights": ["fluorescentTubeA", "fluorescentTubeB", "handheldFlashlight"],
-      "heroProps": ["steelGurney", "ivDripStand", "recessedWardDoors"],
-      "signatureShadowBeat": "Flickering fluorescent tube and flashlight SpotLight cone revealing gaunt figure down hallway"
+      "heroProps": ["steelGurney", "ivDripStand", "bloodyDoorframeHandprints", "blackIchorPool"],
+      "signatureShadowBeat": "Silent Hill abyssal corridor with malfunctioning 19-deg flashlight advancing stitched 4-armed entity each blackout"
     },
     {
       "id": "foggyVillageAlley",
@@ -48,8 +54,140 @@
         "ceiling": "openSky"
       },
       "practicalLights": ["sodiumStreetLamp"],
-      "heroProps": ["concretePowerPole", "rustedTinEave", "woodenAlleyGate"],
-      "signatureShadowBeat": "Warm sodium streetlamp cone carving misty alley around turning silhouette"
+      "heroProps": ["concretePowerPole", "rustedTinEave", "woodenAlleyGate", "alleyCornerLurker"],
+      "signatureShadowBeat": "Pitch-black fog swallowing far village alley while uncanny figure turns in stepped motion under sodium cone"
+    }
+  ],
+  "castBlueprints": [
+    {
+      "id": "chuBay",
+      "role": "human",
+      "storyDescription": "Chú Bảy trung niên gầy gò ngồi canh linh cữu, quấn khăn tang trắng, áo khoác nâu xám cũ, hốc mắt thâm mệt mỏi",
+      "appearance": {
+        "height": 1.74,
+        "skinCol": "#bfa389",
+        "hairCol": "#1a1718",
+        "hairStyle": "shortParted",
+        "topCol": "#3d3c36",
+        "innerCol": "#635c50",
+        "bottomCol": "#1a1b20",
+        "garment": "casualJacket",
+        "headbandCol": "#e3dbcc",
+        "lowPoly": true,
+        "uncannyRealism": true,
+        "outlineMode": "off"
+      }
+    },
+    {
+      "id": "doorEntity",
+      "role": "entity",
+      "storyDescription": "Ma nữ áo liệm tối bên khe cửa nhà tang: tóc đen dài bết rũ che nửa khuôn mặt, hé 1 mắt trắng dã tia máu nhìn qua kẽ tóc, cổ dài ngoẹo gãy, hàm trật khớp răng khấp khểnh",
+      "appearance": {
+        "height": 1.78,
+        "skinCol": "#7e808a",
+        "hairStyle": "longDraped",
+        "topCol": "#34353e",
+        "bottomCol": "#16171d",
+        "garment": "shroud",
+        "lowPoly": true,
+        "outlineMode": "off",
+        "entity": {
+          "heightScale": 1.18,
+          "gauntness": 0.72,
+          "armScale": 1.28,
+          "fingerScale": 1.48,
+          "neckTiltDeg": 24,
+          "shoulderSkew": 0.12,
+          "breathing": false,
+          "steppedFps": 8,
+          "headTwitch": 0.78,
+          "bodyHorror": {
+            "skullHollows": true,
+            "uncannySkullMask": true,
+            "mattedLongHair": true,
+            "jawDrop3D": 0.90,
+            "crookedTeeth": true,
+            "neckStretch": 1.92,
+            "exposedRibs": false,
+            "protrudingSpine": false,
+            "clawHands": true,
+            "twistedJoints": true,
+            "extraArms": 0,
+            "cadaverSkin": true,
+            "bloodStainLevel": 0.52,
+            "eyeHorror": "weepingIchor",
+            "cheekSplitGrin": true,
+            "tatteredCloth": true
+          }
+        }
+      }
+    },
+    {
+      "id": "wardEntity",
+      "role": "entity",
+      "storyDescription": "Thực thể thí nghiệm hỏng ở hành lang khoa cũ: đầu trọc lở loét có đường khâu chỉ đen chéo trán-má, áo bệnh nhân dính máu rách cổ lộ lồng ngực xương sườn và vết mổ khâu, 4 tay móng nhện",
+      "appearance": {
+        "height": 1.76,
+        "skinCol": "#7c7e86",
+        "hairStyle": "bald",
+        "topCol": "#6c6d66",
+        "bottomCol": "#282c2e",
+        "garment": "hospitalGown",
+        "lowPoly": true,
+        "outlineMode": "off",
+        "entity": {
+          "heightScale": 1.16,
+          "gauntness": 0.72,
+          "armScale": 1.26,
+          "fingerScale": 1.50,
+          "neckTiltDeg": -46,
+          "shoulderSkew": -0.10,
+          "breathing": false,
+          "steppedFps": 8,
+          "headTwitch": 0.88,
+          "bodyHorror": {
+            "skullHollows": true,
+            "uncannySkullMask": true,
+            "mattedLongHair": false,
+            "suturesAndWounds": true,
+            "jawDrop3D": 0.94,
+            "crookedTeeth": true,
+            "neckStretch": 2.02,
+            "exposedRibs": true,
+            "protrudingSpine": true,
+            "clawHands": true,
+            "twistedJoints": true,
+            "extraArms": 2,
+            "cadaverSkin": true,
+            "bloodStainLevel": 0.78,
+            "eyeHorror": "weepingIchor",
+            "cheekSplitGrin": true,
+            "tatteredCloth": true
+          }
+        }
+      }
+    },
+    {
+      "id": "alleyFigure",
+      "role": "human",
+      "storyDescription": "Người đàn ông áo khoác tối màu đứng quay lưng cuối ngõ vắng, chậm rãi ngoái đầu lại giật khung với gương mặt hốc hác vô hồn",
+      "appearance": {
+        "height": 1.75,
+        "skinCol": "#b49c86",
+        "hairCol": "#16141a",
+        "hairStyle": "messyFringe",
+        "topCol": "#343942",
+        "innerCol": "#5a5c60",
+        "bottomCol": "#181920",
+        "garment": "casualJacket",
+        "lowPoly": true,
+        "uncannyRealism": true,
+        "outlineMode": "off",
+        "entity": {
+          "breathing": false,
+          "steppedFps": 10
+        }
+      }
     }
   ],
   "beats": [
@@ -80,7 +218,7 @@
         "phone": { "visible": false, "state": "hidden" },
         "door": { "visible": true, "state": "closedBolted" }
       },
-      "cameraIntent": "POV seated facing non-chibi dark-horror Chu Bay with A-frame thatch roof, coffin, altar, and glowing oil lamp"
+      "cameraIntent": "POV seated facing uncanny PS1 Chu Bay with haunted ancestral portrait, bloody yellow talisman, swarming flies, oil lamp, and REC camcorder overlay"
     },
     {
       "beatId": "B2_WHIP_PHONE",
@@ -119,7 +257,7 @@
         },
         "door": { "visible": true, "state": "closedBolted" }
       },
-      "cameraIntent": "7-frame Whip-Pan with motion blur turning to glowing Phone3D (01:06) in POV hands synced with notification card"
+      "cameraIntent": "7-frame Whip-Pan to glowing Phone3D (01:06) synced with notification card while shadowed lurker eyes and skeletal fingers peek through broken shutter window behind"
     },
     {
       "beatId": "B3_DOOR_SHADOW",
@@ -150,7 +288,7 @@
         "phone": { "visible": false, "state": "hidden" },
         "door": { "visible": true, "state": "closedBolted" }
       },
-      "cameraIntent": "Lights out cold moonlight shift looking down at POV legs and bolted double door crack blocked by 2 dark foot shadows"
+      "cameraIntent": "Lights out cold moonlight shift on bolted wooden door marked with dragged bloody handprint, crooked talisman, Otherworld mold, and 2 dark foot shadows"
     },
     {
       "beatId": "B4_ENTITY_LOOM",
@@ -179,7 +317,7 @@
         "phone": { "visible": false, "state": "hidden" },
         "door": { "visible": true, "state": "closedBolted" }
       },
-      "cameraIntent": "Close-up cold moonlight chiaroscuro on tall cadaver entity with snapped tendon neck, hollow skull sockets, weeping sanpaku eyes, and dislocated crooked-tooth jaw"
+      "cameraIntent": "Close-up cold moonlight folk-horror shroud ghost with matted black long hair covering half face, one glaring bloodshot eye through strands, snapped neck, crooked jaw, 8fps head twitch and VHS tape tear"
     },
     {
       "beatId": "B5_HOSPITAL_CORRIDOR",
@@ -196,7 +334,8 @@
       },
       "lightState": {
         "preset": "fluorescent",
-        "lampsOn": ["fluorescentTubeA", "handheldFlashlight"]
+        "lampsOn": ["fluorescentTubeA", "handheldFlashlight"],
+        "fogOverride": { "color": "#020504", "near": 2.0, "far": 9.8 }
       },
       "castStates": {
         "wardEntity": { "visible": true, "anchor": "HOSP_ENTITY", "pose": "stalkLoom", "expr": "deadStare", "eyeGlow": false }
@@ -204,7 +343,7 @@
       "propStates": {
         "flashlight": { "visible": true, "state": "aimed" }
       },
-      "cameraIntent": "Abandoned decaying hospital corridor with broken tiles, torn warning poster, hanging wires, and POV flashlight spotlighting body-horror entity with exposed ribs, unhinged jaw, and extra arms"
+      "cameraIntent": "Silent Hill abyssal hospital corridor with bloody doorframe handprints, black ichor pool, tight 19-deg malfunctioning flashlight advancing bald stitched 4-armed body-horror entity from doorwayPeek to stalkLoom to lungeCloseUp"
     },
     {
       "beatId": "B6_VILLAGE_ALLEY",
@@ -221,13 +360,14 @@
       },
       "lightState": {
         "preset": "duskFog",
-        "lampsOn": ["sodiumStreetLamp"]
+        "lampsOn": ["sodiumStreetLamp"],
+        "fogOverride": { "color": "#04060d", "near": 2.8, "far": 13.5 }
       },
       "castStates": {
         "alleyFigure": { "visible": true, "anchor": "ALLEY_FIGURE", "pose": "turnHead", "expr": "dread", "lookAt": [0, 1.48, 1.35] }
       },
       "propStates": {},
-      "cameraIntent": "Wet asphalt rural night alley flanked by brick walls under warm sodium streetlamp pool with turning dark-horror figure"
+      "cameraIntent": "Pitch-black fog swallowing far wet rural alley under sodium streetlamp with swarming gnats, bloody wall talisman, uncanny stepping turning man, and second lurker peeking from right brick corner"
     }
   ]
 }

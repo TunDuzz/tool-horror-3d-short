@@ -20,7 +20,7 @@ import {
   applyPsxTextureFilter,
   beatAt,
   clamp01,
-  createCharacter3D,
+  createCharacterFromBlueprint,
   createFlashlight3D,
   createPhone3D,
   createPovRig3D,
@@ -31,6 +31,7 @@ import {
   propStateOf,
   setLocalLights,
   setSpotLight,
+  torchMalfunction,
   untone,
 } from "../engine";
 import {
@@ -41,7 +42,7 @@ import {
   buildHospitalCorridor,
   buildRuralFuneralRoom,
 } from "./build";
-import { ANCHORS, CAMS, KICKS, MANIFEST, SHOTS, evalShotMotion } from "./story";
+import { ANCHORS, CAMS, HOSP_BLACKOUTS, KICKS, MANIFEST, SHOTS, evalShotMotion } from "./story";
 
 export class HorrorLabV3World implements ShortWorld {
   root = new THREE.Group();
@@ -101,111 +102,23 @@ export class HorrorLabV3World implements ShortWorld {
     this.alleySet = buildFoggyVillageAlley();
     this.root.add(this.funeralSet.group, this.hospitalSet.group, this.alleySet.group);
 
-    // 1. Human NPC (Style B sculpted face + multi-layer coarse-woven jacket + tousled 3D hair locks)
-    this.chuBay = createCharacter3D({
-      id: "chuBay",
-      height: 1.74,
-      skinCol: "#bfa389",
-      hairCol: "#1a1718",
-      hairStyle: "shortParted",
-      topCol: "#3d3c36",
-      innerCol: "#635c50",
-      bottomCol: "#1a1b20",
-      garment: "casualJacket",
-      headbandCol: "#e3dbcc",
-      outlineMode: "off",
-    });
+    // Build ALL 4 cast characters strictly from story-driven MANIFEST.castBlueprints (zero cookie-cutter hardcoding!)
+    const bpOf = (id: string) => {
+      const found = (MANIFEST.castBlueprints ?? []).find((b) => b.id === id);
+      if (!found) throw new Error(`HorrorLabV3World: missing CharacterBlueprint '${id}' in manifest.json`);
+      return found;
+    };
+
+    this.chuBay = createCharacterFromBlueprint(bpOf("chuBay"));
     this.chuBay.group.position.set(...ANCHORS.NPC_SEAT);
 
-    // 2. Doorway Body-Horror Entity (B4 — Uncanny Cadaver Looming in Cold Moonlight Chiaroscuro!)
-    this.doorEntity = createCharacter3D({
-      id: "doorEntity",
-      height: 1.78,
-      skinCol: "#787a84",
-      hairStyle: "bald",
-      topCol: "#3c3d46",
-      bottomCol: "#1b1c22",
-      garment: "shroud",
-      outlineMode: "off",
-      entity: {
-        heightScale: 1.18,
-        gauntness: 0.72,
-        armScale: 1.28,
-        fingerScale: 1.48,
-        neckTiltDeg: 46,
-        shoulderSkew: 0.12,
-        breathing: false,
-        bodyHorror: {
-          skullHollows: true,
-          jawDrop3D: 0.88,
-          crookedTeeth: true,
-          neckStretch: 1.95,
-          exposedRibs: true,
-          protrudingSpine: true,
-          clawHands: true,
-          twistedJoints: true,
-          cadaverSkin: true,
-          bloodStainLevel: 0.58,
-          eyeHorror: "weepingIchor",
-          cheekSplitGrin: true,
-          tatteredCloth: true,
-        },
-      },
-    });
+    this.doorEntity = createCharacterFromBlueprint(bpOf("doorEntity"));
     this.doorEntity.group.position.set(...ANCHORS.ENTITY_DOOR);
 
-    // 3. Hospital Ward Body-Horror Entity (B5 — Matches approved Style B concept: snapped neck, hollow skull + sanpaku weeping eyes,
-    //    unhinged crooked-tooth jaw, sculpted ribs under filthy blood-stained gown, spider claw hands & 2 extra shadowy arms!)
-    this.wardEntity = createCharacter3D({
-      id: "wardEntity",
-      height: 1.76,
-      skinCol: "#7c7e86",
-      hairStyle: "bald",
-      topCol: "#6d6e68",
-      bottomCol: "#2a2e30",
-      garment: "hospitalGown",
-      outlineMode: "off",
-      entity: {
-        heightScale: 1.16,
-        gauntness: 0.72,
-        armScale: 1.26,
-        fingerScale: 1.48,
-        neckTiltDeg: -48,
-        shoulderSkew: -0.10,
-        breathing: false,
-        bodyHorror: {
-          skullHollows: true,
-          jawDrop3D: 0.92,
-          crookedTeeth: true,
-          neckStretch: 2.05,
-          exposedRibs: true,
-          protrudingSpine: true,
-          clawHands: true,
-          twistedJoints: true,
-          extraArms: 2,
-          cadaverSkin: true,
-          bloodStainLevel: 0.72,
-          eyeHorror: "weepingIchor",
-          cheekSplitGrin: true,
-          tatteredCloth: true,
-        },
-      },
-    });
+    this.wardEntity = createCharacterFromBlueprint(bpOf("wardEntity"));
     this.wardEntity.group.position.set(...ANCHORS.HOSP_ENTITY);
 
-    // 4. Alley Human Figure (Style B sculpted face + layered weathered jacket + messy 3D fringe hair)
-    this.alleyFigure = createCharacter3D({
-      id: "alleyFigure",
-      height: 1.75,
-      skinCol: "#b89f88",
-      hairCol: "#16141a",
-      hairStyle: "messyFringe",
-      topCol: "#343942",
-      innerCol: "#5a5c60",
-      bottomCol: "#181920",
-      garment: "casualJacket",
-      outlineMode: "off",
-    });
+    this.alleyFigure = createCharacterFromBlueprint(bpOf("alleyFigure"));
     this.alleyFigure.group.position.set(...ANCHORS.ALLEY_FIGURE);
 
     this.root.add(this.chuBay.group, this.doorEntity.group, this.wardEntity.group, this.alleyFigure.group);
@@ -287,23 +200,26 @@ export class HorrorLabV3World implements ShortWorld {
         }
       }
     } else if (beat.locationId === "hospitalCorridor") {
-      // Stark chiaroscuro: eerie sickly yellow-green overhead tubes + fierce POV handheld flashlight SpotLight carving the Body Horror entity!
-      const flkA = flickerAt(frame, 13, 0.30, 0.25);
-      const flkB = flickerAt(frame, 41, 0.20, 0.58);
-      pts.push({ pos: [0, 2.72, -0.4], color: [0.58 * flkA, 0.74 * flkA, 0.54 * flkA], radius: 5.8 });
-      pts.push({ pos: [0, 2.72, -6.8], color: [0.66 * flkB, 0.92 * flkB, 0.66 * flkB], radius: 6.6 });
-      this.hospitalSet.tubeA.setIntensity(flkA * 0.75);
-      this.hospitalSet.tubeB.setIntensity(flkB * 0.70);
+      // Stark Silent Hill abyssal chiaroscuro + P.T./Lights Out malfunctioning tight 20-deg flashlight beam!
+      const malf = torchMalfunction(frame, HOSP_BLACKOUTS, 19);
+      const flkA = flickerAt(frame, 13, 0.30, 0.22) * (malf.isDark ? 0.08 : 1.0);
+      const flkB = flickerAt(frame, 41, 0.20, 0.45) * (malf.isDark ? 0.08 : 1.0);
+      pts.push({ pos: [0, 2.72, -0.4], color: [0.46 * flkA, 0.62 * flkA, 0.44 * flkA], radius: 4.8 });
+      pts.push({ pos: [0, 2.72, -6.4], color: [0.44 * flkB, 0.66 * flkB, 0.46 * flkB], radius: 5.2 });
+      this.hospitalSet.tubeA.setIntensity(flkA * 0.72);
+      this.hospitalSet.tubeB.setIntensity(flkB * 0.68);
       const torchSpot = this.flashlight.getSpotLight();
-      if (torchSpot) {
-        // Balanced chiaroscuro beam carving cadaver veins, skull hollows, teeth, ribs & broken tiles with ZERO neon-white blowout!
+      if (torchSpot && !malf.isDark) {
+        const ep = this.wardEntity.group.position;
+        const aimY = malf.stage >= 2 ? 1.62 : 1.46;
+        const beamK = malf.stage >= 2 ? 0.94 : 1.06;
         setSpotLight({
           ...torchSpot,
-          target: [ANCHORS.HOSP_ENTITY[0] - 0.04, 1.44, ANCHORS.HOSP_ENTITY[2]],
-          color: [1.06, 1.00, 0.90],
-          distance: 10.5,
-          angleDeg: 29,
-          penumbra: 0.54,
+          target: [ep.x - 0.04, aimY, ep.z],
+          color: [beamK * malf.power, 0.98 * beamK * malf.power, 0.86 * beamK * malf.power],
+          distance: 9.2,
+          angleDeg: malf.stage === 0 ? 22 : 20,
+          penumbra: 0.44,
         });
       }
     } else if (beat.locationId === "foggyVillageAlley") {
@@ -363,13 +279,14 @@ export class HorrorLabV3World implements ShortWorld {
     su.e.value.set(e[1], e[2], e[3], e[4]);
     this.sky.position.copy(cam.position);
 
-    untone(L.fog, this.fog.color);
-    this.fog.near = L.fogNear;
-    this.fog.far = L.fogFar;
+    const fogOv = beat.lightState.fogOverride;
+    untone(fogOv?.color ?? L.fog, this.fog.color);
+    this.fog.near = fogOv?.near ?? L.fogNear;
+    this.fog.far = fogOv?.far ?? L.fogFar;
     scene.fog = this.fog;
     scene.background = null;
 
-    // 4. Location props & atmospheric FX driven directly by MANIFEST
+    // 4. Location props, Haunted Portrait, Corner Lurkers & Swarming Flies driven directly by MANIFEST
     if (beat.locationId === "ruralFuneralRoom") {
       const oilOn = isLampLit(beat, "oilLamp");
       const altarOn = isLampLit(beat, "altarCandle");
@@ -381,8 +298,20 @@ export class HorrorLabV3World implements ShortWorld {
       this.funeralSet.doorCtrl.setMoonlight(!!beat.lightState.doorMoonlight, !!beat.lightState.feetShadow);
       this.funeralSet.incenseSmoke.update(frame, true);
       this.funeralSet.altarSmoke.update(frame, true);
+      this.funeralSet.flies.update(frame);
+      // Ancestral portrait gradually shifts gaze sideways & weeps dark blood as lights die!
+      const hauntK = frame < 50 ? 0.25 + (frame / 50) * 0.25 : frame < 95 ? 0.65 : 0.96;
+      this.funeralSet.hauntedPortrait.setHaunt(hauntK, frame < 50 ? -0.45 : 0.55);
+      // Subliminal Corner Lurker peeking through broken shutter window right behind Phone3D in B2!
+      const winPeek = beat.beatId === "B2_WHIP_PHONE" ? clamp01((frame - 62) / 10) : 0;
+      this.funeralSet.windowLurker.setPeek(winPeek, frame);
     } else if (beat.locationId === "hospitalCorridor") {
       this.hospitalSet.dust.update(frame);
+      this.hospitalSet.flies.update(frame);
+    } else if (beat.locationId === "foggyVillageAlley") {
+      this.alleySet.flies.update(frame);
+      const alleyPeek = clamp01((frame - 246) / 14);
+      this.alleySet.alleyLurker.setPeek(alleyPeek, frame);
     }
 
     // 5. Characters driven directly by beat.castStates
@@ -401,23 +330,39 @@ export class HorrorLabV3World implements ShortWorld {
     const deState = beat.castStates.doorEntity;
     this.doorEntity.group.visible = !!deState?.visible;
     if (deState?.visible) {
-      // Slightly angled facing the POV camera so the broken neck & gaping crooked-tooth jaw hit hard!
-      this.doorEntity.group.rotation.y = 0.24;
-      this.doorEntity.setPose(deState.pose, frame, { jawOpen: 0.90, twitch: frame > 142 });
+      // Folk-horror shroud ghost with matted long hair & Jacob's Ladder head-twitch
+      this.doorEntity.group.rotation.y = 0.22;
+      this.doorEntity.setPose(deState.pose, frame, { jawOpen: 0.92, twitch: frame > 138, headTwitch: frame > 134 ? 0.78 : 0.22 });
     }
 
     const weState = beat.castStates.wardEntity;
     this.wardEntity.group.visible = !!weState?.visible;
     if (weState?.visible) {
-      this.wardEntity.group.rotation.y = -0.06;
-      this.wardEntity.setPose(weState.pose, frame, { jawOpen: 0.94, twitch: frame > 205 });
+      // Iconic P.T. / Lights Out 3-stage Blink-Advance synced to HOSP_BLACKOUTS!
+      const malf = torchMalfunction(frame, HOSP_BLACKOUTS, 19);
+      if (malf.stage === 0) {
+        // Stage 0 (f160..185): Torso hidden behind right doorway wall, neck craning LEFTWARD into open doorway & spider hand clutching jamb!
+        this.wardEntity.group.position.set(0.72, 0, -2.56);
+        this.wardEntity.group.rotation.y = -0.28;
+        this.wardEntity.setPose("doorwayPeek", frame, { jawOpen: 0.78, headTwitch: 0.35 });
+      } else if (malf.stage === 1) {
+        // Stage 1 (f191..206, peakFrame 198): Suddenly snapped 0.5m forward into doorway center with 4 arms splayed!
+        this.wardEntity.group.position.set(0.05, 0, -2.28);
+        this.wardEntity.group.rotation.y = -0.06;
+        this.wardEntity.setPose("stalkLoom", frame, { jawOpen: 0.94, twitch: true, headTwitch: 0.82 });
+      } else {
+        // Stage 2 (f212..229): Snapped terrifyingly close right into the narrow flashlight beam!
+        this.wardEntity.group.position.set(0.02, 0, -0.74);
+        this.wardEntity.group.rotation.y = -0.04;
+        this.wardEntity.setPose("lungeCloseUp", frame, { jawOpen: 0.98, twitch: true, headTwitch: 0.95 });
+      }
     }
 
     const afState = beat.castStates.alleyFigure;
     this.alleyFigure.group.visible = !!afState?.visible;
     if (afState?.visible) {
       this.alleyFigure.group.rotation.y = -0.78;
-      this.alleyFigure.setPose(afState.pose, frame, { expr: afState.expr ?? "dread", gazeX: 0.45, sweat: true, autoBlink: true });
+      this.alleyFigure.setPose(afState.pose, frame, { expr: afState.expr ?? "dread", gazeX: 0.45, sweat: true, autoBlink: false });
     }
 
     // 6. POV Rig + Diegetic 3D Props synced to beat.propStates
@@ -427,7 +372,8 @@ export class HorrorLabV3World implements ShortWorld {
     const showFlash = !!flashState?.visible;
     this.phone.group.visible = showPhone;
     this.flashlight.group.visible = showFlash;
-    this.flashlight.setOn(showFlash, 1.05);
+    const flashPower = beat.locationId === "hospitalCorridor" ? torchMalfunction(frame, HOSP_BLACKOUTS, 19).power : 1.05;
+    this.flashlight.setOn(showFlash && flashPower > 0.05, flashPower * 1.05);
 
     if (showPhone && phoneState?.detail) {
       const det = phoneState.detail;
@@ -470,6 +416,7 @@ export class HorrorLabV3World implements ShortWorld {
     this.doorEntity.dispose();
     this.wardEntity.dispose();
     this.alleyFigure.dispose();
+    this.funeralSet.hauntedPortrait.dispose();
     this.phone.dispose();
   }
 }

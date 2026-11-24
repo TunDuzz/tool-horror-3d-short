@@ -34,6 +34,7 @@ export type FaceSpec = {
   sweat?: boolean; // subtle cold sweat bead on temple (auto-enabled in terrified)
   realisticStyle?: boolean; // default true (v4 Style B): softer lash shading, textured iris, shaded lips
   pixelFace?: boolean; // v4.5 PSX low-poly mode: deeper orbital eye shadows & stronger facial contrast for 360x640 pixelation
+  uncannyRealism?: boolean; // v5.0 opt-in PS1 Silent Hill / Mouthwashing harsh charcoal & flash-lit facial shading
   eyeHorror?: EyeHorrorMode;
   cheekSplitGrin?: boolean;
 };
@@ -67,17 +68,17 @@ function drawAlmondEye(
   const gazeY = Math.max(-1, Math.min(1, spec.gazeY ?? 0));
   const pupilScale = Math.max(0.22, Math.min(1.0, spec.pupilScale ?? def.pupil));
 
-  // 1. Soft orbital & under-eye dark hollow shading (deeper sunken PSX hollows when pixelFace=true!)
-  const pfBoost = spec.pixelFace ? 1.48 : 1.0;
-  if (hollow > 0.02 || spec.pixelFace) {
-    const hVal = Math.max(hollow, spec.pixelFace ? 0.65 : 0);
-    const gr = g.createRadialGradient(cx, cy + 12, 10, cx, cy + 10, spec.pixelFace ? 104 : 94);
-    gr.addColorStop(0, `rgba(12, 7, 18, ${Math.min(0.88, 0.56 * hVal * pfBoost).toFixed(3)})`);
-    gr.addColorStop(0.55, `rgba(18, 11, 26, ${Math.min(0.60, 0.28 * hVal * pfBoost).toFixed(3)})`);
+  // 1. Soft orbital & under-eye dark hollow shading (deeper sunken PSX/Uncanny hollows!)
+  const pfBoost = spec.uncannyRealism ? 1.82 : spec.pixelFace ? 1.48 : 1.0;
+  if (hollow > 0.02 || spec.pixelFace || spec.uncannyRealism) {
+    const hVal = Math.max(hollow, spec.uncannyRealism ? 0.78 : spec.pixelFace ? 0.65 : 0);
+    const gr = g.createRadialGradient(cx, cy + 12, 10, cx, cy + 10, spec.uncannyRealism ? 114 : spec.pixelFace ? 104 : 94);
+    gr.addColorStop(0, `rgba(9, 5, 14, ${Math.min(0.94, 0.56 * hVal * pfBoost).toFixed(3)})`);
+    gr.addColorStop(0.55, `rgba(16, 10, 22, ${Math.min(0.68, 0.28 * hVal * pfBoost).toFixed(3)})`);
     gr.addColorStop(1, "rgba(22, 14, 32, 0)");
     g.fillStyle = gr;
     g.beginPath();
-    g.ellipse(cx, cy + 10, spec.pixelFace ? 102 : 94, spec.pixelFace ? 66 : 58, 0, 0, Math.PI * 2);
+    g.ellipse(cx, cy + 10, spec.uncannyRealism ? 110 : spec.pixelFace ? 102 : 94, spec.uncannyRealism ? 74 : spec.pixelFace ? 66 : 58, 0, 0, Math.PI * 2);
     g.fill();
 
     // Subtle crisp tired under-eye bag crease
@@ -139,11 +140,11 @@ function drawAlmondEye(
       g.fill();
     }
   } else {
-    // Sclera with soft top-lid shadow band for recessed depth
+    // Sclera with soft top-lid shadow band (desaturated uneasy ash-ochre sclera in uncannyRealism mode)
     const scG = g.createLinearGradient(cx, cy - ry, cx, cy + ry);
-    scG.addColorStop(0, "#a9a3ae");
-    scG.addColorStop(0.32, "#e8e4dc");
-    scG.addColorStop(1, "#dcd7cf");
+    scG.addColorStop(0, spec.uncannyRealism ? "#7c757e" : "#a9a3ae");
+    scG.addColorStop(0.32, spec.uncannyRealism ? "#cbc4b8" : "#e8e4dc");
+    scG.addColorStop(1, spec.uncannyRealism ? "#b6afa4" : "#dcd7cf");
     g.fillStyle = scG;
     g.fillRect(cx - rx - 6, cy - ry - 6, rx * 2 + 12, ry * 2 + 12);
 
@@ -559,6 +560,41 @@ export function drawFace2D(g: CanvasRenderingContext2D, spec: FaceSpec): void {
     g.fill();
   }
 
+  // Uncanny PS1 charcoal cheek-plane shadows, deeper nasolabial creases & weathered flash-lit skin grain (opt-in!)
+  if (spec.uncannyRealism) {
+    // Sunken buccal hollows & bruised temple shading
+    for (const s of [-1, 1] as const) {
+      const hx = 256 + s * 138;
+      const hy = 352;
+      const hg = g.createRadialGradient(hx, hy, 6, hx, hy, 88);
+      hg.addColorStop(0, "rgba(12, 7, 15, 0.56)");
+      hg.addColorStop(0.65, "rgba(18, 12, 22, 0.24)");
+      hg.addColorStop(1, "rgba(18, 12, 22, 0)");
+      g.fillStyle = hg;
+      g.beginPath();
+      g.ellipse(hx, hy, 68, 96, s * 0.22, 0, Math.PI * 2);
+      g.fill();
+
+      // Deep gaunt nasolabial fold & lower-lip shadow crease
+      g.strokeStyle = "rgba(14, 8, 16, 0.62)";
+      g.lineWidth = 4.2;
+      g.lineCap = "round";
+      g.beginPath();
+      g.moveTo(256 + s * 54, 308);
+      g.quadraticCurveTo(256 + s * 78, 354, 256 + s * 60, 404);
+      g.stroke();
+    }
+    // Deterministic weathered PS1 facial film/pore stipple (kills plastic smooth skin!)
+    for (let i = 0; i < 420; i++) {
+      const h1 = Math.sin(i * 12.9898 + 78.233) * 43758.5453;
+      const h2 = Math.sin(i * 93.9898 + 19.137) * 43758.5453;
+      const rx = (h1 - Math.floor(h1)) * 410 + 51;
+      const ry = (h2 - Math.floor(h2)) * 410 + 51;
+      g.fillStyle = i % 3 === 0 ? "rgba(12, 8, 14, 0.22)" : "rgba(218, 206, 194, 0.11)";
+      g.fillRect(rx, ry, 3.2, 3.2);
+    }
+  }
+
   drawMouth(g, spec.mouth ?? def.mouth, spec);
   g.restore();
 }
@@ -584,6 +620,7 @@ export class FaceTextureCache {
       !!s.sweat,
       s.realisticStyle !== false,
       !!s.pixelFace,
+      !!s.uncannyRealism,
       s.eyeHorror ?? "",
       !!s.cheekSplitGrin,
     ]);

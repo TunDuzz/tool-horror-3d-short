@@ -345,3 +345,64 @@ export function addWetPuddleDecal(
   parent.add(mesh);
   return mesh;
 }
+
+export type SwarmingFlies3D = {
+  group: THREE.Group;
+  update: (frame: number) => void;
+};
+
+/**
+ * Horror Engine v5.0 (Opt-in Decay FX):
+ * Erratic buzzing black flies/gnats orbiting lamps, altars, corpses, or blood pools (pure function of frame).
+ */
+export function addSwarmingFlies3D(
+  parent: THREE.Object3D,
+  center: V3,
+  opts: { count?: number; radius?: number; height?: number; seed?: number } = {},
+): SwarmingFlies3D {
+  const count = opts.count ?? 10;
+  const radius = opts.radius ?? 0.42;
+  const height = opts.height ?? 0.36;
+  const seed = opts.seed ?? 31;
+
+  const group = new THREE.Group();
+  group.name = "SwarmingFlies3D";
+  group.position.set(...center);
+  group.layers.set(NOINK);
+
+  const geo = new THREE.OctahedronGeometry(0.0085, 0);
+  const mat = new THREE.MeshBasicMaterial({ color: "#0b090e" });
+  const specs: Array<[number, number, number, number]> = [];
+
+  for (let i = 0; i < count; i++) {
+    const m = new THREE.Mesh(geo, mat);
+    m.name = `fly_${i}`;
+    m.layers.set(NOINK);
+    m.userData.noOutline = true;
+    m.userData.noSSAO = true;
+    group.add(m);
+    specs.push([
+      hash(i, seed) * Math.PI * 2,
+      0.45 + hash(i, seed + 5) * 0.55,
+      2.8 + hash(i, seed + 11) * 3.4,
+      (hash(i, seed + 17) - 0.5) * height,
+    ]);
+  }
+  parent.add(group);
+
+  const update = (frame: number) => {
+    const t = frame / FPS;
+    for (let i = 0; i < count; i++) {
+      const m = group.children[i] as THREE.Mesh;
+      const [ph, radK, spd, y0] = specs[i];
+      const ang = t * spd + ph;
+      const r = radius * radK * (0.72 + 0.28 * Math.sin(ang * 1.7 + ph));
+      const x = Math.cos(ang) * r + Math.sin(ang * 3.1) * 0.04;
+      const z = Math.sin(ang * 1.35) * r * 0.85;
+      const y = y0 + Math.sin(ang * 2.4 + ph) * (height * 0.42);
+      m.position.set(x, y, z);
+    }
+  };
+  update(0);
+  return { group, update };
+}

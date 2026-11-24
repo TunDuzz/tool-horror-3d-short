@@ -39,12 +39,54 @@ export type HudChoiceCard = {
   prompt?: string;
 };
 
+export type HudCamcorderConfig = {
+  enabled: boolean;
+  label?: string;      // e.g. "VHS · SP" or "CAM-01"
+  startClock?: string; // e.g. "01:06:00" (ticks forward deterministically by frame/30)
+  dateLabel?: string;  // e.g. "22/11/1998"
+};
+
 export type HorrorHudConfig = {
   header?: { title: string; subtitle?: string; badge?: string };
+  camcorder?: HudCamcorderConfig;
   captions?: HudCaption[];
   notifications?: HudNotification[];
   timeSkips?: HudTimeSkip[];
   choiceCard?: HudChoiceCard;
+};
+
+export type CharacterRole = "human" | "entity" | "silhouette" | "lurker";
+
+export type CharacterBlueprint = {
+  id: string;
+  role: CharacterRole;
+  /** Natural-language appearance description lifted directly from SCRIPT.md / story lore. */
+  storyDescription: string;
+  /** Explicit story-driven visual spec — ALL horror/gore flags default OFF unless declared here. */
+  appearance: {
+    height?: number;
+    skinCol?: string;
+    hairStyle?: string;
+    hairCol?: string;
+    garment?: string;
+    topCol?: string;
+    innerCol?: string;
+    bottomCol?: string;
+    shoeCol?: string;
+    headbandCol?: string;
+    lowPoly?: boolean;
+    outlineMode?: "off" | "grittyThin" | "cleanBold";
+    uncannyRealism?: boolean;
+    entity?: Record<string, unknown>;
+  };
+  /** ONLY set when a multi-part series explicitly revisits the exact same recurring character/entity. */
+  sameCharacterOf?: string;
+};
+
+export type BeatFogOverride = {
+  color?: string;
+  near: number;
+  far: number;
 };
 
 export type CeilingType =
@@ -86,7 +128,10 @@ export type PoseAction =
   | "peekAroundDoor"
   | "stalkLoom"
   | "jawUnlatch"
-  | "crawler";
+  | "crawler"
+  | "doorwayPeek"
+  | "backbendCrab"
+  | "lungeCloseUp";
 
 export type FaceExpr =
   | "calm"
@@ -105,6 +150,7 @@ export type BeatLightState = {
   lampsOn: string[];
   doorMoonlight?: boolean;
   feetShadow?: boolean;
+  fogOverride?: BeatFogOverride;
 };
 
 export type CastBeatState = {
@@ -147,8 +193,10 @@ export type SceneManifest = {
   totalFrames: number;
   aspect: "9:16" | "16:9";
   locations: LocationBlueprint[];
+  castBlueprints?: CharacterBlueprint[];
   beats: ScriptBeat[];
   header?: { title: string; subtitle?: string; badge?: string };
+  camcorder?: HudCamcorderConfig;
   timeSkips?: HudTimeSkip[];
   choiceCard?: HudChoiceCard;
 };
@@ -205,6 +253,7 @@ export const hudFromManifest = (manifest: SceneManifest): HorrorHudConfig => {
 
   return {
     header: manifest.header,
+    camcorder: manifest.camcorder,
     captions,
     notifications,
     timeSkips: manifest.timeSkips ?? [],

@@ -53,7 +53,14 @@ VALID_POSES = {
     "stalkLoom",
     "jawUnlatch",
     "crawler",
+    "doorwayPeek",
+    "backbendCrab",
+    "lungeCloseUp",
 }
+VALID_ROLES = {"human", "entity", "silhouette", "lurker"}
+VALID_HAIR_STYLES = {"shortParted", "spiky", "elderThin", "bun", "longDraped", "messyFringe", "bald"}
+VALID_GARMENTS = {"funeralRobe", "shirt", "coat", "hospitalGown", "casualJacket", "shroud"}
+VALID_EYE_HORROR = {"sanpaku", "voidSockets", "weepingIchor", "stitched", "multiEye"}
 VALID_EXPRS = {
     "calm",
     "wary",
@@ -107,6 +114,48 @@ def check_location_similarity(loc_a: dict, loc_b: dict):
     overlap = len(fa & fb) / max(1, len(union))
     if overlap >= 0.60:
         return f"feature overlap {overlap * 100:.0f}% >= 60% across archetype/materials/heroProps"
+    return None
+
+
+def entity_signature(bp: dict) -> dict:
+    """Extract normalized story-driven visual signature of a horror entity blueprint for Anti-Clone checks."""
+    ap = bp.get("appearance") or {}
+    ent = ap.get("entity") or {}
+    bh = ent.get("bodyHorror") or {}
+    active_bh = sorted(
+        k
+        for k, v in bh.items()
+        if (isinstance(v, bool) and v) or (isinstance(v, (int, float)) and not isinstance(v, bool) and v > 0) or (isinstance(v, str) and v)
+    )
+    return {
+        "hairStyle": str(ap.get("hairStyle", "shortParted")).strip().lower(),
+        "garment": str(ap.get("garment", "shirt")).strip().lower(),
+        "eyeHorror": str(bh.get("eyeHorror", "")).strip().lower(),
+        "mattedLongHair": bool(bh.get("mattedLongHair")),
+        "suturesAndWounds": bool(bh.get("suturesAndWounds")),
+        "extraArms": int(bh.get("extraArms") or 0),
+        "traits": active_bh,
+    }
+
+
+def check_entity_similarity(bp_a: dict, bp_b: dict):
+    """Return an ANTI_REPEAT_ENTITY_ERROR reason if two unrelated entities clone the same anatomy/outfit signature."""
+    if bp_a.get("role") != "entity" or bp_b.get("role") != "entity":
+        return None
+    sa, sb = entity_signature(bp_a), entity_signature(bp_b)
+    if (
+        sa["hairStyle"] == sb["hairStyle"]
+        and sa["garment"] == sb["garment"]
+        and sa["eyeHorror"] == sb["eyeHorror"]
+        and sa["mattedLongHair"] == sb["mattedLongHair"]
+        and sa["suturesAndWounds"] == sb["suturesAndWounds"]
+        and sa["extraArms"] == sb["extraArms"]
+        and sa["traits"] == sb["traits"]
+    ):
+        return (
+            f"exact entity appearance clone (garment={sa['garment']}, hair={sa['hairStyle']}, "
+            f"mattedLongHair={sa['mattedLongHair']}, sutures={sa['suturesAndWounds']}, extraArms={sa['extraArms']})"
+        )
     return None
 
 
@@ -175,11 +224,14 @@ def main():
             if reason:
                 errors.append(f"ANTI_REPEAT_ERROR: unrelated locations '{la['id']}' and '{lb['id']}' in project '{project_id}' repeat background ({reason})")
 
-    # Cross-video anti-repetition check against LOCATION_REGISTRY.json
+    # Cross-video anti-repetition check against LOCATION_REGISTRY.json (backward-compatible with entity records!)
     registry = []
     if args.registry and os.path.isfile(args.registry):
         with open(args.registry, encoding="utf-8") as fp:
             registry = json.load(fp)
+    loc_registry = [r for r in registry if r.get("entryType") != "entity"]
+    ent_registry = [r for r in registry if r.get("entryType") == "entity"]
+
     for loc in loc_list:
         same_ref = loc.get("sameLocationOf")
         if same_ref:
@@ -187,11 +239,11 @@ def main():
             if same_ref in (loc["id"], f"{project_id}:{loc['id']}"):
                 errors.append(f"ANTI_REPEAT_ERROR: location '{loc['id']}' cannot reference itself in sameLocationOf='{same_ref}'")
                 continue
-            known_refs = {f"{r.get('projectId')}:{r.get('id')}" for r in registry} | (set(loc_map.keys()) - {loc["id"]})
+            known_refs = {f"{r.get('projectId')}:{r.get('id')}" for r in loc_registry} | (set(loc_map.keys()) - {loc["id"]})
             if args.registry and same_ref not in known_refs:
                 errors.append(f"Location '{loc['id']}' has sameLocationOf='{same_ref}' not found in registry")
             continue
-        for prev in registry:
+        for prev in loc_registry:
             if prev.get("projectId") == project_id and prev.get("id") == loc.get("id"):
                 continue
             reason = check_location_similarity(loc, prev)
@@ -199,6 +251,66 @@ def main():
                 errors.append(
                     f"ANTI_REPEAT_ERROR: project '{project_id}' location '{loc['id']}' repeats unrelated "
                     f"'{prev.get('projectId')}:{prev.get('id')}' ({reason}). Build a distinct environment or declare `sameLocationOf` if genuinely the same place."
+                )
+
+    # 1b. Validate story-driven castBlueprints & Anti-Clone Entity Gate (v5.0)
+    cast_blueprints = manifest.get("castBlueprints") or []
+    cast_bp_map = {}
+    for bp in cast_blueprints:
+        cid = str(bp.get("id", "")).strip()
+        if not cid:
+            errors.append("CharacterBlueprint missing `id`")
+            continue
+        if cid in cast_bp_map:
+            errors.append(f"Duplicate castBlueprint id '{cid}'")
+        cast_bp_map[cid] = bp
+
+        role = bp.get("role")
+        if role not in VALID_ROLES:
+            errors.append(f"CharacterBlueprint '{cid}' invalid role={role!r} (allowed: {sorted(VALID_ROLES)})")
+        if not str(bp.get("storyDescription", "")).strip():
+            errors.append(f"CharacterBlueprint '{cid}' missing non-empty `storyDescription` justifying its appearance")
+        ap = bp.get("appearance") or {}
+        if ap.get("hairStyle") is not None and ap.get("hairStyle") not in VALID_HAIR_STYLES:
+            errors.append(f"CharacterBlueprint '{cid}' invalid hairStyle={ap.get('hairStyle')!r}")
+        if ap.get("garment") is not None and ap.get("garment") not in VALID_GARMENTS:
+            errors.append(f"CharacterBlueprint '{cid}' invalid garment={ap.get('garment')!r}")
+        bh = (ap.get("entity") or {}).get("bodyHorror") or {}
+        if bh.get("eyeHorror") is not None and bh.get("eyeHorror") not in VALID_EYE_HORROR:
+            errors.append(f"CharacterBlueprint '{cid}' invalid eyeHorror={bh.get('eyeHorror')!r}")
+
+    # Intra-project unrelated entity anti-clone check
+    bp_list = list(cast_bp_map.values())
+    for i in range(len(bp_list)):
+        for j in range(i + 1, len(bp_list)):
+            ba, bb = bp_list[i], bp_list[j]
+            ref_a, ref_b = ba.get("sameCharacterOf"), bb.get("sameCharacterOf")
+            if ref_a in (bb["id"], f"{project_id}:{bb['id']}") or ref_b in (ba["id"], f"{project_id}:{ba['id']}"):
+                continue
+            reason = check_entity_similarity(ba, bb)
+            if reason:
+                errors.append(
+                    f"ANTI_REPEAT_ENTITY_ERROR: unrelated entities '{ba['id']}' and '{bb['id']}' in project '{project_id}' "
+                    f"share identical appearance ({reason}). Customize each villain to match its storyDescription!"
+                )
+
+    # Cross-video entity anti-clone check
+    for bp in bp_list:
+        if bp.get("role") != "entity":
+            continue
+        same_c = bp.get("sameCharacterOf")
+        if same_c:
+            if same_c in (bp["id"], f"{project_id}:{bp['id']}"):
+                errors.append(f"ANTI_REPEAT_ENTITY_ERROR: entity '{bp['id']}' cannot reference itself in sameCharacterOf='{same_c}'")
+            continue
+        for prev in ent_registry:
+            if prev.get("projectId") == project_id and prev.get("id") == bp.get("id"):
+                continue
+            reason = check_entity_similarity(bp, prev)
+            if reason:
+                errors.append(
+                    f"ANTI_REPEAT_ENTITY_ERROR: project '{project_id}' entity '{bp['id']}' clones unrelated "
+                    f"'{prev.get('projectId')}:{prev.get('id')}' ({reason}). Customize appearance to storyDescription or declare `sameCharacterOf`."
                 )
 
     # 2. Validate beats timeline contiguity, lightState, castStates, propStates & script sync
@@ -258,6 +370,8 @@ def main():
         for cid, cst in (b.get("castStates") or {}).items():
             if not isinstance(cst, dict):
                 continue
+            if cast_bp_map and cid not in cast_bp_map:
+                errors.append(f"Beat '{bid}' references cast '{cid}' missing from `castBlueprints`")
             pose = cst.get("pose")
             if pose is not None and pose not in VALID_POSES:
                 errors.append(f"Beat '{bid}' cast '{cid}' invalid pose={pose!r}")
@@ -352,6 +466,9 @@ def main():
         for loc in loc_list:
             if not loc.get("sameLocationOf"):
                 kept.append({**loc, "projectId": project_id})
+        for bp in bp_list:
+            if bp.get("role") == "entity" and not bp.get("sameCharacterOf"):
+                kept.append({**bp, "entryType": "entity", "projectId": project_id})
         reg_dir = os.path.dirname(args.registry)
         if reg_dir:
             os.makedirs(reg_dir, exist_ok=True)

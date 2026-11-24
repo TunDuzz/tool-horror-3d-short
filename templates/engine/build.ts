@@ -3,7 +3,7 @@
 import * as THREE from "three";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import { flickerAt, type V3 } from "./camera";
-import { rng } from "./paint";
+import { blackIchorPoolTex, bloodHandprintTex, bloodyTalismanTex, otherworldRustTex, rng } from "./paint";
 import { stylizedShade } from "./shade";
 import { NOINK } from "./ink";
 import { attachOutlineRig, type OutlineMode } from "./outline3d";
@@ -1824,6 +1824,302 @@ export function addScatteredDebris3D(
     );
     b.add(new THREE.BoxGeometry(1, 1, 1), isWood ? woodMat : brickMat, m);
   }
+}
+
+// ---------------- Horror Engine v5.0: Opt-in Viscera & Folk Horror Dressing Kit ----------------
+
+/** Smeared bloody handprint + 5 dragged claw streaks applied flush onto any wall, doorframe, or wooden door leaf. */
+export function addBloodHandprintDecal3D(
+  parent: THREE.Object3D,
+  pos: V3,
+  rotEuler: V3 = [0, 0, 0],
+  opts: { width?: number; height?: number; seed?: number; opacity?: number } = {},
+): THREE.Mesh {
+  const w = opts.width ?? 0.34;
+  const h = opts.height ?? 0.54;
+  const tex = bloodHandprintTex(opts.seed ?? 11);
+  const mat = stylizedShade(
+    new THREE.MeshPhongMaterial({
+      map: tex,
+      transparent: true,
+      opacity: opts.opacity ?? 0.92,
+      depthWrite: false,
+      specular: "#5a1418",
+      shininess: 52,
+      polygonOffset: true,
+      polygonOffsetFactor: -3,
+      side: THREE.DoubleSide,
+    }),
+    0.72,
+    0.22,
+  );
+  const mesh = new THREE.Mesh(new THREE.PlaneGeometry(w, h), mat);
+  mesh.name = "BloodHandprintDecal3D";
+  mesh.position.set(...pos);
+  mesh.rotation.set(...rotEuler);
+  mesh.layers.set(NOINK);
+  mesh.userData.noOutline = true;
+  mesh.userData.noSSAO = true;
+  mesh.renderOrder = 3;
+  parent.add(mesh);
+  return mesh;
+}
+
+/** Glossy coagulated dark blood / black ichor floor puddle catching wet highlights from flashlights & lamps. */
+export function addIchorPoolDecal3D(
+  parent: THREE.Object3D,
+  pos: V3,
+  rx = 0.65,
+  rz = 0.85,
+  seed = 23,
+): THREE.Mesh {
+  const tex = blackIchorPoolTex(seed);
+  const geo = new THREE.PlaneGeometry(rx * 2, rz * 2);
+  geo.rotateX(-Math.PI * 0.5);
+  const mat = stylizedShade(
+    new THREE.MeshPhongMaterial({
+      map: tex,
+      transparent: true,
+      opacity: 0.94,
+      depthWrite: false,
+      specular: "#74282e",
+      shininess: 88,
+      polygonOffset: true,
+      polygonOffsetFactor: -3,
+    }),
+    0.65,
+    0.15,
+  );
+  const mesh = new THREE.Mesh(geo, mat);
+  mesh.name = "IchorPoolDecal3D";
+  mesh.position.set(pos[0], pos[1] + 0.008, pos[2]);
+  mesh.layers.set(NOINK);
+  mesh.userData.noOutline = true;
+  mesh.userData.noSSAO = true;
+  mesh.renderOrder = 3;
+  parent.add(mesh);
+  return mesh;
+}
+
+/** Curled, crooked Vietnamese/East-Asian yellow paper talisman (bùa chú) smeared with dried blood. */
+export function addTalismanPaper3D(
+  parent: THREE.Object3D,
+  pos: V3,
+  rotEuler: V3 = [0, 0, 0.08],
+  opts: { width?: number; height?: number; seed?: number } = {},
+): THREE.Mesh {
+  const w = opts.width ?? 0.14;
+  const h = opts.height ?? 0.36;
+  const tex = bloodyTalismanTex(opts.seed ?? 37);
+  const geo = new THREE.PlaneGeometry(w, h, 3, 5);
+  const p = geo.attributes.position;
+  for (let i = 0; i < p.count; i++) {
+    const py = p.getY(i);
+    if (py < 0) {
+      // Bottom half curls eerily away from wall surface
+      const k = -py / (h * 0.5);
+      p.setZ(i, k * k * 0.024);
+    }
+  }
+  geo.computeVertexNormals();
+  const mat = stylizedShade(
+    new THREE.MeshLambertMaterial({
+      map: tex,
+      transparent: true,
+      alphaTest: 0.25,
+      side: THREE.DoubleSide,
+    }),
+    0.92,
+    0.35,
+  );
+  const mesh = new THREE.Mesh(geo, mat);
+  mesh.name = "TalismanPaper3D";
+  mesh.position.set(...pos);
+  mesh.rotation.set(...rotEuler);
+  mesh.layers.set(NOINK);
+  mesh.userData.noOutline = true;
+  mesh.userData.noSSAO = true;
+  parent.add(mesh);
+  return mesh;
+}
+
+/** Creeping Silent Hill Otherworld black-mold & rust rot patch clinging to walls or corners. */
+export function addOtherworldGrimeDecal3D(
+  parent: THREE.Object3D,
+  pos: V3,
+  rotEuler: V3 = [0, 0, 0],
+  width = 1.15,
+  height = 1.15,
+  seed = 53,
+): THREE.Mesh {
+  const tex = otherworldRustTex(seed);
+  const mat = stylizedShade(
+    new THREE.MeshLambertMaterial({
+      map: tex,
+      transparent: true,
+      opacity: 0.86,
+      depthWrite: false,
+      polygonOffset: true,
+      polygonOffsetFactor: -2,
+      side: THREE.DoubleSide,
+    }),
+    0.65,
+    0.3,
+  );
+  const mesh = new THREE.Mesh(new THREE.PlaneGeometry(width, height), mat);
+  mesh.name = "OtherworldGrimeDecal3D";
+  mesh.position.set(...pos);
+  mesh.rotation.set(...rotEuler);
+  mesh.layers.set(NOINK);
+  mesh.userData.noOutline = true;
+  mesh.userData.noSSAO = true;
+  mesh.renderOrder = 2;
+  parent.add(mesh);
+  return mesh;
+}
+
+export type HauntedPortrait3D = {
+  group: THREE.Group;
+  setHaunt: (dreadLevel: number, gazeX?: number) => void;
+  dispose: () => void;
+};
+
+/**
+ * Horror Engine v5.0 (Opt-in Folk Horror Prop):
+ * Vintage monochrome ancestral portrait (di ảnh thờ) that looks normal at dreadLevel = 0,
+ * then shifts its eyes sideways toward the viewer, weeps black-crimson ichor tears, and warps its mouth hollow as dread rises!
+ */
+export function addHauntedPortrait3D(
+  parent: THREE.Object3D,
+  pos: V3,
+  rotEuler: V3 = [0, 0, 0],
+  opts: { width?: number; height?: number } = {},
+): HauntedPortrait3D {
+  const w = opts.width ?? 0.42;
+  const h = opts.height ?? 0.54;
+  const group = new THREE.Group();
+  group.name = "HauntedPortrait3D";
+  group.position.set(...pos);
+  group.rotation.set(...rotEuler);
+
+  let cv: HTMLCanvasElement | null = null;
+  let tex: THREE.CanvasTexture;
+  if (typeof document !== "undefined" && typeof document.createElement === "function") {
+    cv = document.createElement("canvas");
+    cv.width = 256;
+    cv.height = 320;
+    tex = new THREE.CanvasTexture(cv);
+  } else {
+    tex = new THREE.CanvasTexture(null as unknown as HTMLCanvasElement);
+  }
+  tex.colorSpace = THREE.SRGBColorSpace;
+
+  const drawPortrait = (dread: number, gazeX: number) => {
+    if (!cv) return;
+    const g = cv.getContext("2d");
+    if (!g) return;
+    const d = Math.max(0, Math.min(1, dread));
+    const gx = Math.max(-1, Math.min(1, gazeX));
+
+    g.fillStyle = d > 0.5 ? "#b4aba0" : "#cfc7b6";
+    g.fillRect(0, 0, 256, 320);
+    const gr = g.createRadialGradient(128, 140, 14, 128, 150, 175);
+    gr.addColorStop(0, "rgba(0,0,0,0)");
+    gr.addColorStop(1, `rgba(18,10,14,${(0.56 + d * 0.34).toFixed(2)})`);
+    g.fillStyle = gr;
+    g.fillRect(0, 0, 256, 320);
+
+    // Shoulders & dark funeral attire
+    g.fillStyle = "#19171e";
+    g.beginPath();
+    g.ellipse(128, 274, 86, 92, 0, Math.PI, Math.PI * 2);
+    g.fillRect(42, 274, 172, 50);
+    g.fill();
+
+    // Neck & monochrome head
+    g.fillStyle = "#afa698";
+    g.fillRect(108, 176, 40, 34);
+    g.fillStyle = "#221f26";
+    g.beginPath();
+    g.ellipse(128, 114, 42, 50, 0, 0, Math.PI * 2);
+    g.fill();
+    g.fillStyle = "#aea595";
+    g.beginPath();
+    g.ellipse(128, 126, 34, 43, 0, 0, Math.PI * 2);
+    g.fill();
+
+    // Sunken eye hollows deepening with dread
+    for (const ex of [112, 144]) {
+      g.fillStyle = `rgba(14, 8, 12, ${(0.28 + d * 0.64).toFixed(2)})`;
+      g.beginPath();
+      g.ellipse(ex, 127, 10 + d * 3, 7 + d * 4, 0, 0, Math.PI * 2);
+      g.fill();
+
+      // Glaring eyes shifting toward viewer
+      g.fillStyle = d > 0.35 ? "#e6e0d4" : "#3a353c";
+      g.fillRect(ex - 6, 124, 12, 5);
+      g.fillStyle = "#060408";
+      g.fillRect(ex - 2 + gx * 4, 124, 4, 5);
+
+      // Black-crimson weeping ichor trails streaking down cheeks at high dread!
+      if (d > 0.35) {
+        const streakLen = (d - 0.35) * 95;
+        g.fillStyle = "rgba(42, 4, 7, 0.88)";
+        g.fillRect(ex - 2, 129, 4, streakLen);
+        g.fillRect(ex + 2, 131, 2.5, streakLen * 0.72);
+      }
+    }
+
+    // Brows, nose & warping hollow scream mouth
+    g.fillStyle = "#26222a";
+    g.fillRect(105, 115, 14, 4);
+    g.fillRect(137, 115, 14, 4);
+    g.fillRect(126, 128, 4, 15);
+    if (d > 0.55) {
+      g.fillStyle = "#080409";
+      g.beginPath();
+      g.ellipse(128, 154, 10 + d * 4, 4 + (d - 0.55) * 26, 0, 0, Math.PI * 2);
+      g.fill();
+    } else {
+      g.fillRect(118, 150, 20, 3);
+    }
+
+    // Diagonal mourning black corner ribbon
+    g.fillStyle = "#0c0a10";
+    g.beginPath();
+    g.moveTo(174, 0);
+    g.lineTo(256, 0);
+    g.lineTo(256, 86);
+    g.lineTo(146, 0);
+    g.closePath();
+    g.fill();
+  };
+
+  drawPortrait(0, 0);
+  const geo = new THREE.PlaneGeometry(w, h);
+  const mat = stylizedShade(new THREE.MeshLambertMaterial({ map: tex }), 1, 0.3);
+  const mesh = new THREE.Mesh(geo, mat);
+  mesh.name = "hauntedPortraitPlane";
+  mesh.layers.set(NOINK);
+  group.add(mesh);
+  parent.add(group);
+
+  let lastKey = "0.00_0.00";
+  const setHaunt = (dreadLevel: number, gazeX = 0) => {
+    const k = `${dreadLevel.toFixed(2)}_${gazeX.toFixed(2)}`;
+    if (k === lastKey) return;
+    lastKey = k;
+    drawPortrait(dreadLevel, gazeX);
+    tex.needsUpdate = true;
+  };
+
+  const dispose = () => {
+    tex.dispose();
+    geo.dispose();
+    mat.dispose();
+  };
+
+  return { group, setHaunt, dispose };
 }
 
 

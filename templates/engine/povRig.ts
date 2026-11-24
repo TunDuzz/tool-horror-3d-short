@@ -358,9 +358,9 @@ export function createFlashlight3D(outlineMode: OutlineMode = "off"): Flashlight
         gl_FragColor = vec4(uCol, along * rim * uOpacity);
       }`,
   });
-  const coneGeo = new THREE.CylinderGeometry(0.72, 0.035, 4.4, 16, 1, true);
+  const coneGeo = new THREE.CylinderGeometry(0.46, 0.032, 4.2, 14, 1, true);
   coneGeo.rotateX(-Math.PI * 0.5);
-  coneGeo.translate(0, 0, -2.35);
+  coneGeo.translate(0, 0, -2.25);
   const cone = new THREE.Mesh(coneGeo, coneMat);
   cone.userData.noOutline = true;
   cone.userData.noSSAO = true;
@@ -391,10 +391,10 @@ export function createFlashlight3D(outlineMode: OutlineMode = "off"): Flashlight
     return {
       pos: [wp.x, wp.y, wp.z],
       target: [wp.x + dir.x * 8, wp.y + dir.y * 8, wp.z + dir.z * 8],
-      color: [1.42 * power, 1.38 * power, 1.24 * power],
-      distance: 13.5,
-      angleDeg: 24,
-      penumbra: 0.54,
+      color: [1.52 * power, 1.46 * power, 1.28 * power],
+      distance: 11.5,
+      angleDeg: 19,
+      penumbra: 0.42,
     };
   };
 

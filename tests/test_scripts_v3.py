@@ -250,6 +250,79 @@ export const CAMS = {
             self.assertIn("flashlight", txt, msg=f"{p} missing flashlight")
             self.assertNotIn('"blood"', txt, msg=f"{p} must not retain banned v2 blood light")
 
+    def test_validate_manifest_enforces_story_driven_cast_blueprints_and_entity_anti_clone(self):
+        with tempfile.TemporaryDirectory() as td:
+            reg = os.path.join(td, "REGISTRY.json")
+            m1_path = os.path.join(td, "m1.json")
+            m2_path = os.path.join(td, "m2.json")
+
+            m1 = make_sample_manifest("video-alpha")
+            m1["beats"][1]["castStates"] = {"ghostA": {"visible": True, "anchor": "A", "pose": "doorwayPeek"}}
+            m1["castBlueprints"] = [
+                {
+                    "id": "npc",
+                    "role": "human",
+                    "storyDescription": "Người đàn ông ngồi trong phòng",
+                    "appearance": {"hairStyle": "shortParted", "garment": "shirt"},
+                },
+                {
+                    "id": "ghostA",
+                    "role": "entity",
+                    "storyDescription": "Ma nữ tóc dài mặc áo liệm",
+                    "appearance": {
+                        "hairStyle": "longDraped",
+                        "garment": "shroud",
+                        "entity": {"bodyHorror": {"mattedLongHair": True, "eyeHorror": "weepingIchor"}},
+                    },
+                },
+            ]
+            write_json(m1_path, m1)
+            r1 = subprocess.run([sys.executable, VALIDATE, m1_path, "--registry", reg, "--update-registry"], capture_output=True, text=True)
+            self.assertEqual(r1.returncode, 0, msg=r1.stdout + r1.stderr)
+
+            # Unrelated video cloning the exact same entity signature without sameCharacterOf -> MUST FAIL!
+            m2 = make_sample_manifest("video-beta")
+            m2["locations"][0]["id"] = "abandonedWard"
+            m2["locations"][0]["archetype"] = "hospitalWard"
+            m2["locations"][0]["ceilingType"] = "flatConcrete"
+            m2["locations"][0]["materials"] = {"wall": "hospitalTileTex", "floor": "vintagePatternTileTex", "ceiling": "concreteCeilingTex"}
+            m2["locations"][0]["heroProps"] = ["gurney", "ivStand", "locker"]
+            for b in m2["beats"]:
+                b["locationId"] = "abandonedWard"
+            m2["beats"][1]["castStates"] = {"ghostClone": {"visible": True, "anchor": "A", "pose": "lungeCloseUp"}}
+            m2["castBlueprints"] = [
+                {
+                    "id": "npc",
+                    "role": "human",
+                    "storyDescription": "Y tá trực đêm",
+                    "appearance": {"hairStyle": "bun", "garment": "shirt"},
+                },
+                {
+                    "id": "ghostClone",
+                    "role": "entity",
+                    "storyDescription": "Bóng ma bản sao không đổi tạo hình",
+                    "appearance": {
+                        "hairStyle": "longDraped",
+                        "garment": "shroud",
+                        "entity": {"bodyHorror": {"mattedLongHair": True, "eyeHorror": "weepingIchor"}},
+                    },
+                },
+            ]
+            write_json(m2_path, m2)
+            r2 = subprocess.run([sys.executable, VALIDATE, m2_path, "--registry", reg], capture_output=True, text=True)
+            self.assertNotEqual(r2.returncode, 0, msg="Expected ANTI_REPEAT_ENTITY_ERROR on cloned unrelated entity")
+            self.assertIn("ANTI_REPEAT_ENTITY_ERROR", r2.stdout + r2.stderr)
+
+            # Customizing the entity appearance to match its own story (bald + sutures + hospitalGown) -> MUST PASS!
+            m2["castBlueprints"][1]["appearance"] = {
+                "hairStyle": "bald",
+                "garment": "hospitalGown",
+                "entity": {"bodyHorror": {"suturesAndWounds": True, "extraArms": 2, "eyeHorror": "stitched"}},
+            }
+            write_json(m2_path, m2)
+            r3 = subprocess.run([sys.executable, VALIDATE, m2_path, "--registry", reg], capture_output=True, text=True)
+            self.assertEqual(r3.returncode, 0, msg=r3.stdout + r3.stderr)
+
 
 def res_err(r):
     return r.stderr or ""

@@ -28,6 +28,9 @@ export type BodyHorrorConfig = {
   eyeHorror?: EyeHorrorMode;   // Primal 3D eye horror inside skull sockets
   cheekSplitGrin?: boolean;    // Torn stretched cheek tissue connecting upper maxilla to dislocated jaw
   tatteredCloth?: boolean;     // Continuous hanging tattered robe/gown with jagged shredded hem & V-neck tear
+  mattedLongHair?: boolean;    // v5.0 opt-in: oil-slicked black long hair draping over half face, exposing 1 staring eye
+  suturesAndWounds?: boolean;  // v5.0 opt-in: dark surgical cross-stitch sutures, raw arterial flesh tears & chin blood trails
+  uncannySkullMask?: boolean;  // v5.0 opt-in: deeper bruised orbital shadow rings & clotted crimson lip/nasal decay
 };
 
 type Disposable = { dispose(): void };
@@ -259,9 +262,14 @@ export function buildHorrorEyes3D(
     rim.userData.noOutline = true;
     g.add(rim);
 
-    // Subtle dark bruised orbital skin ring hugging the outer edge of the pit
-    const ringGeo = new THREE.TorusGeometry(0.024 * hScale, 0.0055 * hScale, 6, 14);
-    ringGeo.scale(1.12, 1.0, 0.55);
+    // Subtle dark bruised orbital skin ring hugging the outer edge of the pit (heavier in uncannySkullMask)
+    const ringGeo = new THREE.TorusGeometry(
+      (cfg.uncannySkullMask ? 0.027 : 0.024) * hScale,
+      (cfg.uncannySkullMask ? 0.0085 : 0.0055) * hScale,
+      6,
+      14,
+    );
+    ringGeo.scale(1.14, 1.05, 0.58);
     disposables.push(ringGeo);
     const ring = new THREE.Mesh(ringGeo, bruisedMat);
     ring.name = s < 0 ? "orbitalBruiseL" : "orbitalBruiseR";
@@ -931,6 +939,298 @@ export function buildExtraArms3D(
     leftExtraArm: buildOne(-1),
     rightExtraArm: buildOne(1),
   };
+}
+
+/**
+ * Horror Engine v5.0 (Opt-in East-Asian Folk Horror Hair):
+ * Oil-slicked jet-black matted long hair draping asymmetrically across HALF of the skull,
+ * obscuring one eye while parting starkly around the opposite wide staring bloodshot eye.
+ */
+export function buildMattedLongHair3D(
+  head: THREE.Group,
+  rx: number,
+  ry: number,
+  rz: number,
+  hScale: number,
+  lowPoly: boolean,
+  disposables: Disposable[],
+): THREE.Group {
+  const g = new THREE.Group();
+  g.name = "mattedLongHair";
+
+  const hairMat = stylizedShade(
+    new THREE.MeshPhongMaterial({
+      color: "#0b0a10",
+      specular: "#363442",
+      shininess: 34,
+      flatShading: lowPoly,
+      side: THREE.DoubleSide,
+    }),
+    0.55,
+    0.45,
+  );
+  disposables.push(hairMat);
+
+  // 1. Matted wet scalp crown hugging skull top & rear
+  const capGeo = new THREE.SphereGeometry(1, lowPoly ? 12 : 20, lowPoly ? 8 : 14, 0, Math.PI * 2, 0, Math.PI * 0.56);
+  disposables.push(capGeo);
+  const cap = new THREE.Mesh(capGeo, hairMat);
+  cap.name = "mattedHairCap";
+  cap.position.set(0, ry * 0.14, -rz * 0.05);
+  cap.rotation.x = -0.26;
+  cap.scale.set(rx * 1.12, ry * 1.06, rz * 1.12);
+  cap.castShadow = true;
+  g.add(cap);
+
+  // 2. Contoured rear hair drape hugging back of skull & neck (-Z) so neck tilt never throws stiff boards across chest!
+  const backLen = 0.34 * hScale;
+  const backGeo = new THREE.CylinderGeometry(rx * 1.08, rx * 1.24, backLen, lowPoly ? 10 : 18, 3, true, Math.PI * 0.55, Math.PI * 0.90);
+  disposables.push(backGeo);
+  const back = new THREE.Mesh(backGeo, hairMat);
+  back.name = "mattedHairBack";
+  back.position.set(0, ry * 0.10 - backLen * 0.5, -rz * 0.18);
+  back.rotation.x = 0.12;
+  g.add(back);
+
+  // 3. Asymmetric contoured matted locks: covers entity's RIGHT (+X) eye & cheek while leaving LEFT (-X) glaring bloodshot eye
+  //    AND the terrifying crooked-tooth gaping jaw clearly visible through parted wisps!
+  const strands: Array<[number, number, number, number, number, number]> = [
+    // [uX, yTopFrac, zBias, len, rad, rotZ]
+    [-0.98, 0.58, 0.42, 0.30, 0.022, 0.12],
+    [-0.82, 0.68, 0.72, 0.26, 0.016, 0.08], // outer temple frame left of glaring eye
+    [-0.10, 0.80, 0.96, 0.18, 0.010, -0.06], // fine dark hair wisp dipping across forehead bridge
+    [0.24, 0.80, 0.96, 0.24, 0.019, -0.08], // covers right (+X) eye socket
+    [0.48, 0.76, 0.92, 0.28, 0.022, -0.06], // thick wet matted lock over right cheek
+    [0.72, 0.68, 0.80, 0.31, 0.023, -0.08],
+    [0.92, 0.60, 0.54, 0.34, 0.024, -0.10],
+    [1.02, 0.52, 0.22, 0.36, 0.024, -0.12],
+    [-1.02, 0.50, 0.10, 0.34, 0.022, 0.12],
+  ];
+  strands.forEach(([uX, yTop, zBias, len, rad, rotZ], i) => {
+    const sGeo = new THREE.ConeGeometry(rad * hScale, len * hScale, 5);
+    sGeo.rotateX(Math.PI);
+    sGeo.scale(1.0, 1.0, 0.32);
+    disposables.push(sGeo);
+    const m = new THREE.Mesh(sGeo, hairMat);
+    m.name = `mattedStrand_${i}`;
+    m.position.set(uX * rx * 0.96, ry * yTop - len * hScale * 0.46, rz * zBias);
+    m.rotation.set(0.05, 0, rotZ);
+    m.userData.noOutline = true;
+    g.add(m);
+  });
+
+  head.add(g);
+  return g;
+}
+
+/**
+ * Horror Engine v5.0 (Opt-in Surgical / Gore Anatomy):
+ * Raw wet arterial crimson wound gashes, jet-black surgical cross-stitch sutures across forehead/cheek/sternum,
+ * and clotted blood seepage trailing from jaw onto collarbones.
+ */
+export function buildSuturesAndWounds3D(
+  head: THREE.Group,
+  spine: THREE.Group,
+  rx: number,
+  ry: number,
+  rz: number,
+  hScale: number,
+  disposables: Disposable[],
+): THREE.Group {
+  const g = new THREE.Group();
+  g.name = "suturesAndWounds";
+
+  const fleshMat = stylizedShade(
+    new THREE.MeshPhongMaterial({
+      color: "#42060b",
+      specular: "#9e4850",
+      shininess: 82,
+      flatShading: true,
+    }),
+    0.55,
+    0.15,
+  );
+  const sutureMat = new THREE.MeshBasicMaterial({ color: "#080507" });
+  disposables.push(fleshMat, sutureMat);
+
+  // 1. Diagonal jagged forehead surgical incision + 5 black cross-stitch suture threads
+  const gashGeo = new THREE.BoxGeometry(rx * 0.88, 0.013 * hScale, 0.012 * hScale);
+  disposables.push(gashGeo);
+  const gash = new THREE.Mesh(gashGeo, fleshMat);
+  gash.name = "foreheadGash";
+  gash.position.set(rx * 0.10, ry * 0.56, rz * 0.86);
+  gash.rotation.set(-0.28, 0.10, -0.32);
+  gash.userData.noOutline = true;
+  g.add(gash);
+
+  const threadGeo = new THREE.BoxGeometry(0.0038 * hScale, 0.026 * hScale, 0.005 * hScale);
+  disposables.push(threadGeo);
+  for (let i = 0; i < 5; i++) {
+    const u = (i - 2) * 0.18 * rx;
+    const st = new THREE.Mesh(threadGeo, sutureMat);
+    st.name = `foreheadSuture_${i}`;
+    st.position.set(rx * 0.10 + u, ry * 0.56 - u * 0.32, rz * 0.89 - Math.abs(u) * 0.14);
+    st.rotation.set(-0.28, 0.10, -0.32 + (i % 2 === 0 ? 0.22 : -0.22));
+    st.userData.noOutline = true;
+    g.add(st);
+  }
+
+  // 2. Cheek laceration + 4 cross-stitches pulling across left hollow cheek
+  const cheekGeo = new THREE.BoxGeometry(rx * 0.52, 0.010 * hScale, 0.010 * hScale);
+  disposables.push(cheekGeo);
+  const cheekWound = new THREE.Mesh(cheekGeo, fleshMat);
+  cheekWound.name = "cheekWound";
+  cheekWound.position.set(-rx * 0.50, -ry * 0.18, rz * 0.72);
+  cheekWound.rotation.set(0.12, -0.45, 0.22);
+  cheekWound.userData.noOutline = true;
+  g.add(cheekWound);
+
+  for (let i = 0; i < 4; i++) {
+    const u = (i - 1.5) * 0.11 * rx;
+    const st = new THREE.Mesh(threadGeo, sutureMat);
+    st.name = `cheekSuture_${i}`;
+    st.position.set(-rx * 0.50 + u * 0.85, -ry * 0.18 + u * 0.18, rz * 0.75 + u * 0.35);
+    st.rotation.set(0.12, -0.45, 0.22 + (i % 2 === 0 ? 0.26 : -0.26));
+    st.userData.noOutline = true;
+    g.add(st);
+  }
+
+  // 3. Organic jagged tapered arterial sternum autopsy tear + fine asymmetrical dark surgical sutures on spine
+  const chestWoundGroup = new THREE.Group();
+  chestWoundGroup.name = "chestAutopsyWound";
+  const woundSegs: Array<[number, number, number, number, number]> = [
+    [-0.004, 0.39, 0.090, 0.011, 0.08],
+    [0.003, 0.32, 0.095, 0.014, -0.07],
+    [-0.003, 0.25, 0.092, 0.010, 0.06],
+  ];
+  woundSegs.forEach(([wx, wy, wz, wr, rotZ], wi) => {
+    const segGeo = new THREE.CapsuleGeometry(wr * hScale, 0.065 * hScale, 3, 5);
+    segGeo.scale(0.85, 1.0, 0.42);
+    disposables.push(segGeo);
+    const seg = new THREE.Mesh(segGeo, fleshMat);
+    seg.name = `chestGash_${wi}`;
+    seg.position.set(wx * hScale, wy * hScale, wz * hScale);
+    seg.rotation.z = rotZ;
+    seg.userData.noOutline = true;
+    chestWoundGroup.add(seg);
+  });
+
+  const cThreadGeo = new THREE.BoxGeometry(0.026 * hScale, 0.0028 * hScale, 0.0045 * hScale);
+  disposables.push(cThreadGeo);
+  for (let i = 0; i < 6; i++) {
+    const st = new THREE.Mesh(cThreadGeo, sutureMat);
+    st.name = `sternumSuture_${i}`;
+    st.position.set(((i % 2) - 0.5) * 0.005 * hScale, (0.23 + i * 0.034) * hScale, 0.099 * hScale);
+    st.rotation.z = i % 2 === 0 ? 0.32 : -0.28;
+    st.userData.noOutline = true;
+    chestWoundGroup.add(st);
+  }
+  spine.add(chestWoundGroup);
+
+  head.add(g);
+  return g;
+}
+
+export type CornerLurker3D = {
+  group: THREE.Group;
+  setPeek: (amount: number, frame?: number) => void;
+};
+
+/**
+ * Horror Engine v5.0 (Opt-in Subliminal Background Lurker):
+ * Shadowed peeking half-skull + pale staring sanpaku eyes + 4 skeletal clawed fingers gripping a doorframe,
+ * broken window, or alley corner. Slides cleanly from hidden (`amount = 0`) to lurking (`amount = 1`).
+ */
+export function addCornerLurker3D(
+  parent: THREE.Object3D,
+  pos: [number, number, number],
+  yaw = 0,
+  opts: { side?: -1 | 1; scale?: number; eyeGlow?: boolean; hair?: boolean } = {},
+): CornerLurker3D {
+  const side = opts.side ?? 1; // +1 peeks rightward (+X), -1 peeks leftward (-X)
+  const sc = opts.scale ?? 1.0;
+
+  const group = new THREE.Group();
+  group.name = "CornerLurker3D";
+  group.position.set(...pos);
+  group.rotation.y = yaw;
+
+  const pivot = new THREE.Group();
+  pivot.name = "lurkerPivot";
+  group.add(pivot);
+
+  const skinMat = stylizedShade(
+    new THREE.MeshPhongMaterial({ color: "#4e5058", specular: "#3a3642", shininess: 18, flatShading: true }),
+    0.55,
+    0.45,
+  );
+  const darkMat = new THREE.MeshBasicMaterial({ color: "#060409" });
+  const eyeCol = opts.eyeGlow ? new THREE.Color(1.85, 1.92, 2.05) : new THREE.Color("#d8d2c6");
+  const eyeMat = new THREE.MeshBasicMaterial({ color: eyeCol, toneMapped: !opts.eyeGlow });
+
+  // Gaunt shadowed skull cranium peeking sideways
+  const skull = new THREE.Mesh(buildHorrorSkullHeadGeo(0.095 * sc, 0.125 * sc, 0.102 * sc, false, true), skinMat);
+  skull.name = "lurkerSkull";
+  skull.position.set(side * 0.08 * sc, 0, 0);
+  skull.rotation.z = -side * 0.28;
+  skull.layers.set(NOINK);
+  pivot.add(skull);
+
+  // Deep void sockets + stark staring eyes
+  for (const es of [-1, 1] as const) {
+    const sock = new THREE.Mesh(new THREE.SphereGeometry(0.025 * sc, 8, 6), darkMat);
+    sock.scale.set(1.1, 1.0, 0.4);
+    sock.position.set(es * 0.034 * sc, 0.018 * sc, 0.068 * sc);
+    sock.layers.set(NOINK);
+    skull.add(sock);
+
+    const orb = new THREE.Mesh(new THREE.SphereGeometry(0.012 * sc, 8, 6), eyeMat);
+    orb.position.set(es * 0.034 * sc, 0.018 * sc, 0.082 * sc);
+    orb.layers.set(NOINK);
+    orb.userData.noSSAO = true;
+    skull.add(orb);
+
+    const pup = new THREE.Mesh(new THREE.SphereGeometry(0.0045 * sc, 6, 5), darkMat);
+    pup.position.set(es * 0.034 * sc, 0.018 * sc, 0.093 * sc);
+    pup.layers.set(NOINK);
+    skull.add(pup);
+  }
+
+  if (opts.hair !== false) {
+    const hairMat = stylizedShade(new THREE.MeshLambertMaterial({ color: "#0a090e", flatShading: true }), 0.4, 0.5);
+    const cap = new THREE.Mesh(new THREE.SphereGeometry(0.106 * sc, 8, 6, 0, Math.PI * 2, 0, Math.PI * 0.55), hairMat);
+    cap.position.set(0, 0.02 * sc, -0.008 * sc);
+    cap.layers.set(NOINK);
+    skull.add(cap);
+  }
+
+  // 4 skeletal elongated fingers curling visibly around the doorframe / window edge
+  const hand = new THREE.Group();
+  hand.name = "lurkerFingers";
+  hand.position.set(side * 0.03 * sc, -0.18 * sc, 0.055 * sc);
+  for (let i = 0; i < 4; i++) {
+    const f = new THREE.Mesh(new THREE.CapsuleGeometry(0.006 * sc, 0.068 * sc, 3, 5), skinMat);
+    f.position.set(side * 0.028 * sc, -i * 0.024 * sc, 0);
+    f.rotation.set(0.12, 0, Math.PI * 0.5 - side * 0.14);
+    f.layers.set(NOINK);
+    hand.add(f);
+  }
+  pivot.add(hand);
+
+  tagBodyHorrorNoInk(group);
+  parent.add(group);
+
+  const setPeek = (amount: number, frame = 0) => {
+    const k = clamp(amount, 0, 1);
+    group.visible = k > 0.02;
+    if (!group.visible) return;
+    // Slight unsettling stillness with subtle micro-tremor
+    const jit = Math.sin(frame * 1.9) * 0.004 * k;
+    pivot.position.set(side * (-0.18 + k * 0.22) * sc, jit, 0);
+    pivot.rotation.y = side * (-0.35 + k * 0.35);
+  };
+  setPeek(0, 0);
+  return { group, setPeek };
 }
 
 /** Mark all body-horror meshes cleanly onto NOINK so architectural InkPass never interferes. */

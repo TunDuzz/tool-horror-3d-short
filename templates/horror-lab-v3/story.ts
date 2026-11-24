@@ -149,16 +149,28 @@ export const CAMS: Record<number, CamKey[]> = {
   ],
 };
 
+// Planned hospital flashlight malfunction blackout windows (P.T. / Lights Out 3-stage blink-advance!)
+export const HOSP_BLACKOUTS: [number, number][] = [
+  [186, 190],
+  [207, 211],
+];
+
 export const OVERLAYS: ScreenBeat[] = [
   { kind: "dipBlack", at: 160, dur: 8, hold: 1 },
   { kind: "dipBlack", at: 230, dur: 8, hold: 1 },
-  { kind: "aberration", a: 128, b: 158, strength: 0.40, pulse: true },
-  { kind: "aberration", a: 184, b: 226, strength: 0.44, pulse: true },
+  { kind: "blackout", a: 186, b: 190 },
+  { kind: "blackout", a: 207, b: 211 },
+  { kind: "aberration", a: 128, b: 158, strength: 0.55, pulse: true },
+  { kind: "aberration", a: 182, b: 228, strength: 0.62, pulse: true },
 ];
 
 export const KICKS: Kick[] = [];
-// Planned foreground POV prop-raise window (Phone3D lifting smoothly into frame across f59..68)
-export const POV_MOTIONS: [number, number][] = [[59, 69]];
+// Planned foreground POV prop-raise + electrical sputter & blink-advance surge windows
+export const POV_MOTIONS: [number, number][] = [
+  [59, 69],
+  [183, 193],
+  [204, 214],
+];
 
 export const DOF: DofBeat[] = [
   { f: 0, cInf: 3.5, focus: () => [-0.14, 0.96, 0.14] },

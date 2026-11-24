@@ -6,13 +6,14 @@ import React from "react";
 import { clamp01 } from "./camera";
 import type {
   HorrorHudConfig,
+  HudCamcorderConfig,
   HudCaption,
   HudChoiceCard,
   HudNotification,
   HudTimeSkip,
 } from "./manifest";
 
-export type { HorrorHudConfig, HudCaption, HudChoiceCard, HudNotification, HudTimeSkip };
+export type { HorrorHudConfig, HudCamcorderConfig, HudCaption, HudChoiceCard, HudNotification, HudTimeSkip };
 
 export type ActiveHudState = {
   caption: HudCaption | null;
@@ -81,6 +82,17 @@ function renderHighlightedText(text: string, highlights: string[] = []): React.R
   });
 }
 
+const formatTimecode = (startClock: string | undefined, frame: number, fps = 30): string => {
+  const m = /^(\d{1,2}):(\d{2})(?::(\d{2}))?$/.exec((startClock ?? "01:06:00").trim());
+  const baseSec = m ? parseInt(m[1], 10) * 3600 + parseInt(m[2], 10) * 60 + parseInt(m[3] ?? "0", 10) : 3960;
+  const totalSec = baseSec + Math.floor(frame / fps);
+  const hh = Math.floor(totalSec / 3600) % 24;
+  const mm = Math.floor((totalSec % 3600) / 60);
+  const ss = totalSec % 60;
+  const ff = ((frame % fps) + fps) % fps;
+  return `${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}:${String(ss).padStart(2, "0")}:${String(ff).padStart(2, "0")}`;
+};
+
 export const HorrorHUD: React.FC<{
   config: HorrorHudConfig;
   frame: number;
@@ -89,6 +101,9 @@ export const HorrorHUD: React.FC<{
 }> = ({ config, frame, width, height }) => {
   const s = Math.min(width, height) / 1080;
   const active = evalActiveHud(config, frame);
+  const camOn = !!config.camcorder?.enabled;
+  const recBlink = ((frame % 24) + 24) % 24 < 14;
+  const tcText = camOn ? formatTimecode(config.camcorder?.startClock, frame) : "";
 
   return (
     <div
@@ -101,45 +116,136 @@ export const HorrorHUD: React.FC<{
         overflow: "hidden",
       }}
     >
-      {/* Top-left timestamp/location header & top-right fiction badge */}
-      {config.header && (
+      {/* Opt-in Found-Footage VHS Camcorder viewfinder corner brackets (never collides with captions or cards!) */}
+      {camOn && (
+        <>
+          {([
+            { top: 28 * s, left: 28 * s, borderTop: true, borderLeft: true },
+            { top: 28 * s, right: 28 * s, borderTop: true, borderRight: true },
+            { bottom: 28 * s, left: 28 * s, borderBottom: true, borderLeft: true },
+            { bottom: 28 * s, right: 28 * s, borderBottom: true, borderRight: true },
+          ] as const).map((br, idx) => (
+            <div
+              key={`vf-${idx}`}
+              style={{
+                position: "absolute",
+                ...("top" in br ? { top: br.top } : {}),
+                ...("bottom" in br ? { bottom: br.bottom } : {}),
+                ...("left" in br ? { left: br.left } : {}),
+                ...("right" in br ? { right: br.right } : {}),
+                width: 34 * s,
+                height: 34 * s,
+                borderTop: "borderTop" in br ? `${2.5 * s}px solid rgba(240,238,232,0.52)` : undefined,
+                borderBottom: "borderBottom" in br ? `${2.5 * s}px solid rgba(240,238,232,0.52)` : undefined,
+                borderLeft: "borderLeft" in br ? `${2.5 * s}px solid rgba(240,238,232,0.52)` : undefined,
+                borderRight: "borderRight" in br ? `${2.5 * s}px solid rgba(240,238,232,0.52)` : undefined,
+              }}
+            />
+          ))}
+          <div
+            style={{
+              position: "absolute",
+              bottom: 42 * s,
+              left: 48 * s,
+              right: 48 * s,
+              display: "flex",
+              justifyContent: "space-between",
+              fontFamily: "'JetBrains Mono', 'Courier New', monospace",
+              fontSize: 22 * s,
+              fontWeight: 700,
+              letterSpacing: 1.4 * s,
+              color: "rgba(236, 234, 226, 0.78)",
+              textShadow: `0 ${2 * s}px ${6 * s}px rgba(0,0,0,0.92)`,
+            }}
+          >
+            <span>{config.camcorder?.label ?? "SP · VHS"}</span>
+            <span>{config.camcorder?.dateLabel ?? ""}</span>
+          </div>
+        </>
+      )}
+
+      {/* Top-left timestamp/location header (or live REC ● camcorder timecode when camcorder.enabled) & top-right fiction badge */}
+      {(config.header || camOn) && (
         <div
           style={{
             position: "absolute",
             top: 40 * s,
-            left: 44 * s,
-            right: 44 * s,
+            left: 48 * s,
+            right: 48 * s,
             display: "flex",
             justifyContent: "space-between",
             alignItems: "flex-start",
           }}
         >
-          <div>
-            <div
-              style={{
-                fontSize: 38 * s,
-                fontWeight: 800,
-                letterSpacing: 1 * s,
-                textShadow: `0 ${3 * s}px ${10 * s}px rgba(0,0,0,0.85)`,
-              }}
-            >
-              {config.header.title}
-            </div>
-            {config.header.subtitle && (
+          {camOn ? (
+            <div style={{ fontFamily: "'JetBrains Mono', 'Courier New', monospace" }}>
               <div
                 style={{
-                  fontSize: 25 * s,
-                  fontWeight: 500,
-                  opacity: 0.88,
-                  marginTop: 4 * s,
-                  textShadow: `0 ${2 * s}px ${8 * s}px rgba(0,0,0,0.85)`,
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 12 * s,
+                  fontSize: 32 * s,
+                  fontWeight: 800,
+                  letterSpacing: 1.5 * s,
+                  textShadow: `0 ${2 * s}px ${8 * s}px rgba(0,0,0,0.95)`,
                 }}
               >
-                {config.header.subtitle}
+                <span
+                  style={{
+                    width: 18 * s,
+                    height: 18 * s,
+                    borderRadius: "50%",
+                    background: recBlink ? "#e62c2c" : "rgba(180,30,30,0.22)",
+                    boxShadow: recBlink ? `0 0 ${12 * s}px rgba(230,44,44,0.85)` : "none",
+                    display: "inline-block",
+                  }}
+                />
+                <span>REC</span>
+                <span style={{ opacity: 0.92 }}>{tcText}</span>
               </div>
-            )}
-          </div>
-          {config.header.badge && (
+              {config.header?.subtitle && (
+                <div
+                  style={{
+                    fontSize: 21 * s,
+                    fontWeight: 600,
+                    opacity: 0.78,
+                    marginTop: 4 * s,
+                    letterSpacing: 1 * s,
+                    textShadow: `0 ${2 * s}px ${8 * s}px rgba(0,0,0,0.95)`,
+                  }}
+                >
+                  {config.header.subtitle}
+                </div>
+              )}
+            </div>
+          ) : (
+            <div>
+              <div
+                style={{
+                  fontSize: 38 * s,
+                  fontWeight: 800,
+                  letterSpacing: 1 * s,
+                  textShadow: `0 ${3 * s}px ${10 * s}px rgba(0,0,0,0.85)`,
+                }}
+              >
+                {config.header?.title}
+              </div>
+              {config.header?.subtitle && (
+                <div
+                  style={{
+                    fontSize: 25 * s,
+                    fontWeight: 500,
+                    opacity: 0.88,
+                    marginTop: 4 * s,
+                    textShadow: `0 ${2 * s}px ${8 * s}px rgba(0,0,0,0.85)`,
+                  }}
+                >
+                  {config.header.subtitle}
+                </div>
+              )}
+            </div>
+          )}
+          {config.header?.badge && (
             <div
               style={{
                 padding: `${10 * s}px ${22 * s}px`,

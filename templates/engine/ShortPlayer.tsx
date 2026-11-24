@@ -379,7 +379,9 @@ function Inner<TAssets>({
   gradeFor(fx.grade, blend?.from ?? shot.light, f, on.psx ? extraAb * 0.25 : extraAb, blend?.to, blend?.t ?? 0);
   fx.grain.seed = f;
   fx.psx.frame = f;
-  fx.psx.glitchSurge = aberrationAt(overlays, f) + lightningAt(overlays, f) * 0.65;
+  const glitchNow = aberrationAt(overlays, f) + lightningAt(overlays, f) * 0.65;
+  fx.psx.glitchSurge = glitchNow;
+  fx.psx.dreadLevel = Math.min(1, glitchNow * 1.15);
 
   return <primitive object={world.root} dispose={null} />;
 }
