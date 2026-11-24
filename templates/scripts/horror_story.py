@@ -2,8 +2,9 @@
 """Horror Story Architect CLI — zero-dependency pre-production story structurer, validator & HTML Story Bible renderer.
 
 Methodology integrates 2-round skeleton-first story planning, character tiers, narrative-prop binding,
-and deterministic quality gates (inspired by eternityspring/shuohao-skills `novel-outline`, Apache-2.0)
-with psychological horror reveal pacing and Horror Engine v2 (`horror-3d-short`) continuity schemas.
+story-driven CharacterBlueprint appearance briefs, and deterministic quality gates (inspired by
+eternityspring/shuohao-skills `novel-outline`, Apache-2.0) with psychological horror reveal pacing and
+Horror Engine v5.0 (`horror-3d-short`) continuity & anti-repetition schemas.
 """
 
 import argparse
@@ -127,6 +128,7 @@ def cmd_seed(args):
                 "tier": "lead",
                 "role": "Nhân vật chính",
                 "trait": "",
+                "appearanceBrief": "",
                 "arc": "",
                 "from": ["Sáng tác mới" if args.adapt_mode == "original" else "Nguồn gốc"],
             },
@@ -136,6 +138,7 @@ def cmd_seed(args):
                 "tier": "lead",
                 "role": "Thực thể kinh dị / Phản diện",
                 "trait": "",
+                "appearanceBrief": "",
                 "arc": "",
                 "from": ["Sáng tác mới" if args.adapt_mode == "original" else "Nguồn gốc"],
             },
@@ -533,12 +536,14 @@ def render_markdown(doc):
         f"- **Luật thực thể / Cấm kỵ:** {premise.get('entityRule', '')}",
         f"- **Cú lật / Trọng tâm kết:** {premise.get('twistCore', '')}",
         "",
-        "## 1. Nhân vật",
-        "| ID | Tên | Cấp | Vai trò | Cung phát triển (`arc`) |",
-        "|---|---|---|---|---|",
+        "## 1. Nhân vật (Hồ sơ Ngoại hình cho `castBlueprints`)",
+        "| ID | Tên | Cấp | Vai trò | Ngoại hình theo cốt truyện (`appearanceBrief`) | Cung phát triển (`arc`) |",
+        "|---|---|---|---|---|---|",
     ]
     for c in chars:
-        lines.append(f"| `{c.get('id')}` | {c.get('name')} | `{c.get('tier')}` | {c.get('role')} | {c.get('arc', '-')} |")
+        lines.append(
+            f"| `{c.get('id')}` | {c.get('name')} | `{c.get('tier')}` | {c.get('role')} | {c.get('appearanceBrief', c.get('trait', '-'))} | {c.get('arc', '-')} |"
+        )
 
     lines += [
         "",
@@ -623,6 +628,7 @@ def render_html(doc):
         ss = ", ".join(scene_map.get(x, x) for x in (p.get("sceneIds") or []))
         ps = ", ".join(prop_map.get(x, x) for x in (p.get("propIds") or [])) or "—"
         cues = "".join(f"<span class='chip'>{esc(x)}</span>" for x in (p.get("soundCues") or []))
+        cues_html = f"<div class='chips'>{cues}</div>" if cues else ""
         part_cards.append(
             f"<div class='card part-card'><div class='part-top'><h3>Phần {esc(p.get('part'))}: {esc(p.get('title'))}</h3>"
             f"<div class='meta'><span class='pill'>{int(dur)}s (~{wb} từ)</span><span class='pill light-{esc(p.get('light'))}'>{esc(p.get('light'))}</span></div></div>"
@@ -630,7 +636,7 @@ def render_html(doc):
             f"<p class='syn'>{esc(p.get('synopsis'))}</p>"
             f"<p class='kv'><strong>Treo cuối:</strong> {esc(p.get('suspense'))}</p>"
             f"<div class='tags'><span><strong>Nhân vật:</strong> {esc(cs)}</span> · <span><strong>Bối cảnh:</strong> {esc(ss)}</span> · <span><strong>Đạo cụ:</strong> {esc(ps)}</span></div>"
-            f"{'<div class=\"chips\">' + cues + '</div>' if cues else ''}</div>"
+            f"{cues_html}</div>"
         )
 
     gate_rows = []
@@ -791,10 +797,30 @@ def cmd_render(args):
 def cmd_export_outline(args):
     doc = read_json(args.story)
     parts = doc.get("parts") or []
+    chars = doc.get("characters") or []
+    scenes = doc.get("scenes") or []
     outline = {
         "title": doc.get("title", ""),
         "aspect": args.aspect,
         "audio_drone_hz": args.drone_hz,
+        "locations": [
+            {
+                "id": s.get("id", f"S{idx:02d}"),
+                "name": s.get("name", ""),
+                "atmosphere": s.get("atmosphere", ""),
+                "reusePlan": s.get("reusePlan", ""),
+            }
+            for idx, s in enumerate(scenes, 1)
+        ],
+        "castAppearanceBriefs": [
+            {
+                "id": c.get("id", f"C{idx:02d}"),
+                "name": c.get("name", ""),
+                "role": c.get("role", ""),
+                "appearanceBrief": c.get("appearanceBrief") or c.get("trait", ""),
+            }
+            for idx, c in enumerate(chars, 1)
+        ],
         "parts": [
             {
                 "part": p["part"],

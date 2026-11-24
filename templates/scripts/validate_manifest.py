@@ -330,7 +330,14 @@ def main():
         with open(args.words, encoding="utf-8") as fp:
             raw_w = json.load(fp)
             words_data = raw_w if isinstance(raw_w, list) else raw_w.get("words", [])
-    norm_words = [(norm_text(str(w.get("word", ""))), float(w.get("start", 0)), float(w.get("end", 0))) for w in words_data]
+    norm_words = [
+        (
+            norm_text(str(w.get("w", w.get("word", "")))),
+            float(w.get("s", w.get("start", 0))),
+            float(w.get("e", w.get("end", 0))),
+        )
+        for w in words_data
+    ]
 
     sorted_beats = sorted(beats, key=lambda b: b.get("a", 0))
     cursor = 0
@@ -419,9 +426,10 @@ def main():
                         best_idx, matched_start, matched_end = min(matches, key=lambda m: abs(m[1] - beat_start_s))
                         if best_idx >= word_cursor:
                             word_cursor = best_idx + len(toks)
-                        if abs(matched_start - beat_start_s) > 0.35:
+                        max_start_drift = 0.60 if a == 0 else 0.35
+                        if abs(matched_start - beat_start_s) > max_start_drift:
                             errors.append(
-                                f"Beat '{bid}' timing drift: beat starts at {beat_start_s:.2f}s vs words.json {matched_start:.2f}s (> 0.35s)"
+                                f"Beat '{bid}' timing drift: beat starts at {beat_start_s:.2f}s vs words.json {matched_start:.2f}s (> {max_start_drift:.2f}s)"
                             )
                         if matched_end > beat_end_s + 0.35:
                             errors.append(

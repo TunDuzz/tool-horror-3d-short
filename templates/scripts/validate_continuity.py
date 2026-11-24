@@ -47,7 +47,9 @@ def main():
     ep_dir = os.path.abspath(args.episode_dir)
     outline_path = os.path.join(ep_dir, "bible", "OUTLINE.json")
     cont_path = os.path.join(ep_dir, "bible", "CONTINUITY.json")
-    assets_path = os.path.join(ep_dir, "shared", "assets.ts")
+    assets_cand = os.path.join(ep_dir, "shared", "assets.ts")
+    loc_cand = os.path.join(ep_dir, "shared", "locations.ts")
+    assets_path = assets_cand if os.path.isfile(assets_cand) else loc_cand
 
     errors = []
 

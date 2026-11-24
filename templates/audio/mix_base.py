@@ -40,6 +40,52 @@ def load_words(words_json_path):
     return data["words"] if isinstance(data, dict) and "words" in data else data
 
 
+def load_dead_silences(words_json_path):
+    """Load declared `[DEAD SILENCE]` spans `[{'s': float, 'e': float}, ...]` from words.json."""
+    with open(words_json_path, encoding="utf-8") as fp:
+        data = json.load(fp)
+    if isinstance(data, dict) and isinstance(data.get("dead_silences"), list):
+        return [
+            {"s": float(d["s"]), "e": float(d["e"])}
+            for d in data["dead_silences"]
+            if isinstance(d, dict) and "s" in d and "e" in d and float(d["e"]) > float(d["s"])
+        ]
+    return []
+
+
+def apply_dead_silences(music, sfx, dead_silences, sr=SR, pre_fade=0.022, post_fade=0.010, floor_db=-48.0):
+    """
+    Horror Engine v5.0: TRUE Psychoacoustic Dead Silence vacuum gate.
+    Hard-cuts BOTH music and ambient SFX beds to `floor_db` (-48 dB near-vacuum) across every
+    declared `[DEAD SILENCE]` window with crisp cosine edges so the post-silence shock hits out of total void.
+    """
+    m = st(music).copy()
+    s = st(sfx).copy()
+    if not dead_silences:
+        return m, s
+    n = max(m.shape[1], s.shape[1])
+    floor_lin = dbg(floor_db) if floor_db > -120.0 else 0.0
+    env = np.ones(n, dtype=np.float64)
+    f_pre = max(1, int(round(pre_fade * sr)))
+    f_post = max(1, int(round(post_fade * sr)))
+    for ds in dead_silences:
+        a = max(0, int(round(float(ds["s"]) * sr)))
+        b = min(n, int(round(float(ds["e"]) * sr)))
+        if b <= a:
+            continue
+        fa = min(f_pre, max(1, (b - a) // 4))
+        fb = min(f_post, max(1, (b - a) // 4))
+        fade_out = floor_lin + (1.0 - floor_lin) * (0.5 * (1.0 + np.cos(np.pi * np.linspace(0.0, 1.0, fa))))
+        fade_in = floor_lin + (1.0 - floor_lin) * (0.5 * (1.0 - np.cos(np.pi * np.linspace(0.0, 1.0, fb))))
+        env[a : a + fa] = np.minimum(env[a : a + fa], fade_out)
+        if b - fb > a + fa:
+            env[a + fa : b - fb] = np.minimum(env[a + fa : b - fb], floor_lin)
+        env[b - fb : b] = np.minimum(env[b - fb : b], fade_in)
+    m *= env[None, : m.shape[1]]
+    s *= env[None, : s.shape[1]]
+    return m, s
+
+
 def speech_spans(words, merge=0.3):
     sp = []
     for w in words:
@@ -106,8 +152,8 @@ def lufs(x):
     return float(v) if np.isfinite(v) else -99.0
 
 
-def master_mix(voice, music, sfx, target_lufs=-15.0, ceil_db=-1.2, fade_out=0.03):
-    """Sum voice/music/sfx stems, master to `target_lufs` via 4x limiter, return (final_mix, stems_dict, stats_dict)."""
+def master_mix(voice, music, sfx, target_lufs=-15.0, ceil_db=-1.2, fade_out=0.03, dead_silences=None, ds_floor_db=-48.0):
+    """Sum voice/music/sfx stems (applying optional TRUE Dead Silence vacuum cut on music+sfx), master to `target_lufs` via 4x limiter."""
     v, m, s = st(voice), st(music), st(sfx)
     n = max(v.shape[1], m.shape[1], s.shape[1])
 
@@ -119,6 +165,8 @@ def master_mix(voice, music, sfx, target_lufs=-15.0, ceil_db=-1.2, fade_out=0.03
         return out
 
     v, m, s = fit(v), fit(m), fit(s)
+    if dead_silences:
+        m, s = apply_dead_silences(m, s, dead_silences, sr=SR, floor_db=ds_floor_db)
     mix0 = v + m + s
     gain_db = target_lufs - lufs(mix0)
     y = mix0 * dbg(gain_db)

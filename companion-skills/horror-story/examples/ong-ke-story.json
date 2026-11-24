@@ -43,6 +43,7 @@
       "tier": "lead",
       "role": "Đứa trẻ ở nhà một mình ban đêm",
       "trait": "Nhỏ bé, đi rón rén cầm đèn dầu, tò mò nhưng dễ hoảng loạn",
+      "appearanceBrief": "Cậu bé Việt Nam gầy nhỏ mặc áo sơ mi vải thô xám nhạt, quần sẫm màu, tóc cắt ngắn mái lưa thưa, cầm đèn dầu thủy tinh.",
       "arc": "Cảnh giác dò xét -> tò mò soi khe tủ -> kinh hoàng tháo chạy cài then cửa -> chết lặng nhận ra nơi trú ẩn chính là bẫy",
       "from": ["Dân gian Việt Nam"]
     },
@@ -52,6 +53,7 @@
       "tier": "lead",
       "role": "Thực thể dân gian vác bao tải bắt trẻ",
       "trait": "Cao lêu nghêu, cổ ngoẹo hẳn sang một bên, năm ngón tay dài xám ngoét, nhe răng mảnh",
+      "appearanceBrief": "Thực thể dân gian cao lêu nghêu mặc áo tơi/áo vải nâu rách sờn, cổ ngoẹo 30 độ, bàn tay xương xẩu năm ngón dài xám ngoét, hai mắt trắng dã trong hốc mắt sâu, vác bao tải đay đẫm bùn.",
       "arc": "Ẩn mình gõ cửa dụ mồi -> vươn ngón tay mở rộng khe tủ -> lộ hình hài lao chộp -> đón lõng sẵn dưới gầm giường phòng trong",
       "from": ["Dân gian Việt Nam"]
     }
@@ -140,7 +142,7 @@
       "part": 1,
       "title": "Đừng mở tủ lúc nửa đêm",
       "target_sec": 71,
-      "light": "candle",
+      "light": "warmLamp",
       "synopsis": "Đêm mưa mất điện, bé Minh cầm đèn dầu đi ngang chiếc tủ gỗ cũ cuối gian nhà đúng lúc ba tiếng gõ khô khốc vang lên. Cánh tủ khẽ hé để lộ góc chiếc bao tải rách đẫm bùn thò sát sàn nhà. Minh nghiêng đèn soi sát khe tối thì năm ngón tay dài xám ngoét từ từ bám lấy mép gỗ kéo rộng ra rồi ngọn đèn tắt phụt. Trong ánh chớp lóe qua song cửa, Ông Kẹ cổ ngoẹo vác bao tải bật tung cửa tủ lao tới. Cậu bé giằng thoát chạy sang buồng trong, sập cửa cài chặt then gỗ và thở dốc tưởng đã an toàn. Nhưng khi ngoái nhìn lại, chiếc bao tải đã nằm sẵn trên giường còn hai con mắt trắng dã đang mở trừng nhìn cậu từ gầm giường.",
       "hook": "Lời dặn lúc nửa đêm về ba tiếng gõ trong tủ gỗ báo hiệu Ông Kẹ đi tìm đứa trẻ còn thức.",
       "suspense": "Chiếc bao tải nằm sẵn trên giường và đôi mắt trắng dã đang mở trừng từ gầm giường tối đen.",

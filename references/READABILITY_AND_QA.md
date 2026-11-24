@@ -1,22 +1,26 @@
-# Script↔Frame Fidelity Lock, Anti-Repetition Gate & QA Reference v3
+# Script↔Frame Fidelity Lock, Anti-Repetition Gates & QA Reference v5.0
 
-Every Horror Engine v3 video MUST pass **three hard verification gates** before delivery:
-1. **Pre-Render Manifest & Anti-Repetition Gate** (`validate_manifest.py`)
+Every Horror Engine v5.0 video MUST pass **three hard verification gates** before delivery:
+1. **Pre-Render Manifest Alignment & Dual Anti-Repetition Gate** (`align_manifest.py` + `validate_manifest.py`)
 2. **Mandatory Beat-by-Beat Pre-Final Still Gate** (`render-stills.mjs --manifest` + direct `read_file` visual inspection)
-3. **Post-Render Video & Directing QA Gate** (`extract_shots.py` + `short_qa.py`)
+3. **Post-Render Video, Directing & TRUE Dead Silence Audio QA Gate** (`extract_shots.py` + `short_qa.py` + `ffmpeg_ebur`)
 
-Any single gate failure requires fixing the source (`manifest.json`, `story.ts`, `build.ts`, `world.ts`, or `engine/`) and re-verifying before proceeding.
+Any single gate failure requires fixing the source (`manifest.json`, `story.ts`, `build.ts`, `world.ts`, `build_audio.py`, or `engine/`) and re-verifying before proceeding.
 
 ---
 
-## 1. Layer 1 & 2: Single-Source-of-Truth `SceneManifest` & Automated Validation
+## 1. Layer 1 & 2: Single-Source-of-Truth `SceneManifest`, Auto-Align & Validation
 
 Never hardcode conflicting captions, light toggles, prop states, or timestamps across `SCRIPT.md`, `story.ts`, `world.ts`, and `HorrorHUD`.
 
 1. Author `src/<project>/manifest.json` (and export matching `MANIFEST: SceneManifest` in `story.ts`) defining:
-   - `locations[]`: Complete `LocationBlueprint`s (`id`, `archetype`, `dimensions [w, d, h]`, `ceilingType`, `materials { wall, floor, ceiling }`, `practicalLights`, `heroProps`, `signatureShadowBeat`, and optional `sameLocationOf`).
-   - `beats[]`: Contiguous timeline `[0..totalFrames)` with `beatId`, `shotId`, `a`, `b`, `peakFrame`, `locationId`, `spokenLine`, `lightState`, `castStates`, `propStates`, and `cameraIntent`.
-2. Drive `world.ts` strictly from `beatAt(MANIFEST, frame)`, `isLampLit(beat, id)`, `propStateOf(beat, id)`, and pass `hud={hudFromManifest(MANIFEST)}` into `<ShortPlayer />`.
+   - `locations[]`: Complete `LocationBlueprint`s (`id`, `archetype`, `dimensions [w, d, h]`, `ceilingType`, `materials { wall, floor, ceiling }`, `practicalLights`, `heroProps`, `signatureShadowBeat`, optional `sameLocationOf`).
+   - `castBlueprints[]`: Story-driven `CharacterBlueprint`s (`id`, `role`, `storyDescription`, `appearance`, optional `sameCharacterOf`) for every human, entity, silhouette, and lurker appearing in the video.
+   - `beats[]`: Contiguous timeline `[0..totalFrames)` with `beatId`, `shotId`, `a`, `b`, `peakFrame`, `locationId`, `spokenLine`, `lightState`, optional `fogOverride`, `castStates`, `propStates`, and `cameraIntent`.
+2. Lock beat frames automatically to `words.json` (zero manual frame math!):
+   ```bash
+   python3 scripts/align_manifest.py src/<project>/manifest.json --words out/<project>/voice/words.json --in-place
+   ```
 3. Run pre-render machine validation:
    ```bash
    python3 scripts/validate_manifest.py src/<project>/manifest.json \
@@ -28,25 +32,20 @@ Never hardcode conflicting captions, light toggles, prop states, or timestamps a
    ```
    `validate_manifest.py` fails immediately on:
    - Timeline gaps, overlaps, or `peakFrame` outside `[a, b)`.
-   - Missing `LocationBlueprint` fields or undeclared `locationId`.
-   - Legacy/banned lighting presets (e.g. `blood`, `night`, `candle`, `storm`, `eerie` — ONLY `warmLamp | coldMoon | fluorescent | duskFog | flashlight` allowed).
+   - Missing `LocationBlueprint` fields, undeclared `locationId`, or undeclared `castStates` keys missing from `castBlueprints`.
+   - Non-physical/banned lighting presets (ONLY `warmLamp | coldMoon | fluorescent | duskFog | flashlight` allowed).
    - `spokenLine.text` drift from `SCRIPT.md` or `words.json` timing drift `> ±0.35 s`.
    - `Phone3D` lockscreen clock contradicting HUD notification timestamp (`detail.clock !== detail.notifTime`).
-   - **`ANTI_REPEAT_ERROR`** (see Section 2).
+   - **`ANTI_REPEAT_ERROR`** (location collision) or **`ANTI_REPEAT_ENTITY_ERROR`** (entity appearance cloning).
 
 ---
 
-## 2. Cross-Video & Cross-Part Background Anti-Repetition Gate (`LOCATION_REGISTRY.json`)
+## 2. Dual Anti-Repetition Gate (`LOCATION_REGISTRY.json`)
 
-**Hard Policy:** Unrelated horror videos — and unrelated parts of a series — MUST NEVER repeat the same environment architecture, archetype, or material kit.
+**Hard Policy:** Unrelated horror videos — and unrelated Parts of a series — MUST NEVER repeat the same environment layout OR clone the same monster/entity visual template.
 
-- Every project registers its locations into `LOCATION_REGISTRY.json` via `validate_manifest.py --registry LOCATION_REGISTRY.json --update-registry`.
-- If a new video or unrelated Part collides with an existing entry's `(archetype, ceilingType, wall+floor materials, similar dimensions)` without an explicit narrative justification, `validate_manifest.py` exits non-zero with **`ANTI_REPEAT_ERROR`**.
-- **Legitimate Narrative Revisit Exception:** Only when the story explicitly returns to the exact same physical room/site from an earlier Part or episode, declare:
-  ```json
-  "sameLocationOf": "<previousProjectId>:<previousLocationId>"
-  ```
-  Even on an explicit revisit, shift camera angles, lighting state, or prop states to reflect narrative progression.
+- **Location Gate (`ANTI_REPEAT_ERROR`):** Colliding `(archetype, ceilingType, wall+floor materials, similar dimensions)` exits non-zero unless an explicit narrative revisit declares `"sameLocationOf": "<previousProjectId>:<previousLocationId>"`.
+- **Entity Gate (`ANTI_REPEAT_ENTITY_ERROR`):** Every non-human `CharacterBlueprint` (`entity`, `silhouette`, `lurker`) is fingerprinted by its visual appearance (`garment`, `hairStyle`, `bodyHorror` flags, `eyeHorror`, `silhouetteMode`, `heightScale`) and stored in `LOCATION_REGISTRY.json` (`"entryType": "entity"`). Colliding with an unrelated video's monster exits non-zero unless an explicit recurring villain declares `"sameCharacterOf": "<previousProjectId>:<previousCharId>"`.
 
 ---
 
@@ -62,22 +61,21 @@ REMOTION_TMP=/tmp/remotion-tmp node scripts/render-stills.mjs <CompId> out/<proj
 Open and visually inspect **EVERY rendered `.jpg` directly using `read_file`** and verify this Beat-by-Beat Audit Checklist:
 
 1. **REJECT — Script↔Frame Contradiction:**
-   - Does the visible location match `beat.locationId`?
+   - Does the visible location match `beat.locationId` and `fogOverride`?
    - Are practical lamps visibly lit/extinguished matching `beat.lightState.lampsOn`?
-   - Are the right characters visible/hidden in the exact posed action (`sitCrossLegged`, `loomingStill`, `turnHead`, etc.) with NO early monster spoilers?
-   - Does `Phone3D` lockscreen clock/message text match the HUD notification card and subtitle verbatim?
-   - Does the subtitle text accurately describe what is visible on screen?
-2. **REJECT — Chibi / Uncanny Breakdown / v2 Artifacts:**
-   - Characters must look **non-chibi dark-horror 3D** (`~5.6` head-height adult proportions, angular jaws, almond eyes, clean garment collars/folds) — reject cute round chibi heads, black hair-cap clipping over eyes, popped-out detached shoulders, popsicle-stick hair strips, or v2 scratchy 2D billboard cards.
-3. **REJECT — Outline / Clipping / Blowout Defects:**
-   - Outlines must be clean bold `~5–7 px` Inverted-Hull shells with zero double-outlines and zero split corners.
+   - Are the right characters visible/hidden in the exact posed action (`doorwayPeek`, `stalkLoom`, `lungeCloseUp`, `sitCrossLegged`, `turnHead`) with NO early monster spoilers?
+   - Does `Phone3D` lockscreen clock/message text match the HUD notification card verbatim?
+2. **REJECT — Story-Appearance Mismatch / Chibi Breakdown:**
+   - Do every character and entity match their `storyDescription` (`CharacterBlueprint`)? Reject generic horror gore pasted onto stories that don't call for it, cute round chibi heads, or 2D billboard cards.
+   - Verify peripheral lurkers (`addCornerLurker3D`) sit cleanly inside `9:16` portrait FOV and `doorwayPeek` leans into the open doorway (never clipping into a solid wall).
+3. **REJECT — Visual / Clipping / Overlay Defects:**
    - POV hands/wrists/sleeves must NEVER clip through the front of `Phone3D` or block lockscreen text.
+   - `mattedLongHair` must frame the face organically (exposing at least 1 staring eye/jaw cleanly), and VHS `tapeTear` bands (`aberration` / `dreadLevel`) must stay razor-thin near frame edges without covering monster faces.
    - Spotlights/practical lights must NEVER blow out pale garments into solid white Bloom blocks.
 4. **REJECT — Broken Whip-Pan Motion Blur:**
-   - Whip-Pan midpoint frames (`f0 + dur/2`) MUST display unmistakable directional horizontal motion smear, while stationary/settled beats before and after remain razor-sharp.
-5. **REJECT — Repeated or Boxy Environments:**
-   - Reject any environment reusing the old generic wooden box-room layout or missing story-specific architecture/hero props (`LocationBlueprint` check).
-   - Reject empty flat sky cutouts at the end of corridors/alleys or flat decals standing vertically instead of lying flush via `createFlatDecalMesh`.
+   - Whip-Pan midpoint frames (`f0 + dur/2`) MUST display unmistakable directional horizontal motion smear, while settled beats before and after remain razor-sharp.
+5. **REJECT — Repeated or Floating Environments:**
+   - Reject missing story-specific hero props, empty flat sky cutouts at corridor/alley ends, or floor decals standing vertically instead of lying flush via `createFlatDecalMesh`.
 
 ---
 
@@ -87,17 +85,16 @@ Open and visually inspect **EVERY rendered `.jpg` directly using `read_file`** a
 
 ---
 
-## 5. Post-Render Automated QA (`extract_shots.py` + `short_qa.py`)
+## 5. Post-Render Video & Audio QA (`extract_shots.py` + `short_qa.py`)
 
 ```bash
 python3 scripts/extract_shots.py src/<project>/story.ts out/<project>/shots.json
 python3 scripts/short_qa.py out/<project>/final.mp4 out/<project>/qa out/<project>/shots.json
 ```
 
-- `extract_shots.py` resolves chained frame constants (`export const TOTAL = MY_FRAMES;`), `SHOTS` (with `scale` + `light`), `OVERLAYS` (`dipBlack`, `blackout`, `lightning`, `aberration`, `flicker`, `vignettePulse`), `WHIP_PANS` / inline `whipPan(...)` intervals, `POV_MOTIONS` (fast close-to-lens POV prop raises), and `KICKS`.
 - `short_qa.py` MUST pass cleanly with:
   - `0` unplanned black frames (`mean < 0.035`), `0` unplanned white frames (`mean > 0.93`).
-  - `0` frozen spans `>= 12f`, `0` unplanned `pops` (Whip-Pan & POV prop-raise intervals exempt automatically).
-  - `DIRECTING_WARNS none` (POV-aware consecutive scale check + static-camera filter jump-cut detection `corr > 0.88`).
-  - Zero dark readability warnings (`p98 >= 0.34`, `mean >= 0.065`) across all shots.
-- Visually inspect `out/<project>/qa/sheet_*.jpg` via `read_file` to confirm smooth frame-to-frame motion across every Whip-Pan, light-loss blend, and location transition.
+  - `0` frozen spans `>= 12f`, `0` unplanned `pops` (`WHIP_PANS` & `POV_MOTIONS` exempt automatically).
+  - `DIRECTING_WARNS none` and zero dark readability warnings (`p98 >= 0.34`, `mean >= 0.065`).
+- **Audio QA (`mix_base.py` / `ffmpeg_ebur`):** Confirm integrated loudness `I ~ -15.0 LUFS`, True Peak `<= -1.2 dBTP`, limiter `gr.max < 3.0 dB`, distinct dynamic loudness contrast between `whisper` and `panic` lines, and music+SFX RMS inside every `[DEAD SILENCE]` span `<= -40 dBFS`.
+- Visually inspect `out/<project>/qa/sheet_*.jpg` via `read_file` before delivery.

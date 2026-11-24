@@ -674,3 +674,92 @@ def woodblock_omen(times, vel=0.42, r=None, f=580.0, pan_pos=-0.28):
         if k >= 0 and m > 0:
             out[:, k : k + m] += st_k[:, :m]
     return _norm_peak(out, 0.82) * vel
+
+
+# ---------------- Horror Engine v5.0: PSX VHS & Body-Horror SFX Pack ----------------
+
+def vhs_static_burst(dur=0.45, vel=0.55, r=None):
+    """Stereo sharp VHS magnetic tape-tear & tracking snow burst synced to RetroPsxEffect tapeTear/aberration."""
+    r = r or rng(1015)
+    n = ns(dur)
+    t = np.arange(n) / SR
+    u = t / max(dur, 1e-4)
+    # 60 Hz head-switch hum + granular analog snow burst + sharp horizontal tear crackle
+    hum = (np.sin(TAU * 60.0 * t) * 0.35 + np.sin(TAU * 180.0 * t) * 0.22) * (0.6 + 0.4 * smooth_noise(n, r, 24.0))
+    snow_L = bp(r.standard_normal(n), 900.0, 8800.0, order=2)
+    snow_R = bp(r.standard_normal(n), 950.0, 9000.0, order=2)
+    gate = (smooth_noise(n, r, 42.0) > -0.15).astype(np.float64)
+    crackle = bp(r.standard_normal(n) * (r.random(n) > 0.985), 1400.0, 9500.0, order=2) * 2.2
+    env = (np.sin(np.pi * u) ** 0.55) * (0.45 + 0.55 * gate)
+    L = (hum + snow_L * 0.72 + crackle) * env
+    R = (hum + snow_R * 0.72 + np.roll(crackle, ns(0.002))) * env
+    return _norm_peak(fades(np.stack([L, R]), 0.006, 0.018), 0.86) * vel
+
+
+def flashlight_click_sputter(dur=0.60, vel=0.65, r=None, kind="off"):
+    """Stereo tactile metal flashlight switch click + dying electrical sputter synced to torchMalfunction blackouts."""
+    r = r or rng(1016)
+    n = ns(dur)
+    t = np.arange(n) / SR
+    # Crisp 2-stage mechanical spring click (housing transient + spring snap 14ms later)
+    click1 = modal(min(0.08, dur), [(1850.0, 1.0, 0.004), (3920.0, 0.75, 0.0025), (6100.0, 0.45, 0.0018)], r)
+    click2 = modal(min(0.08, dur), [(2350.0, 0.9, 0.0035), (4850.0, 0.68, 0.0020)], r)
+    mono = np.zeros(n, dtype=np.float64)
+    c1_pos = ns(0.01) if kind == "on" else ns(max(0.02, dur * 0.55))
+    c2_pos = c1_pos + ns(0.014)
+    for pos, seg, amp in ((c1_pos, click1, 1.0), (c2_pos, click2, 0.72)):
+        m = min(len(seg), n - pos)
+        if pos >= 0 and m > 0:
+            mono[pos : pos + m] += seg[:m] * amp
+    # Faulty contact electrical sputter arcs before failing or right after snapping back on
+    sp_start = 0 if kind == "off" else ns(0.025)
+    sp_len = min(n - sp_start, ns(dur * 0.50))
+    if sp_len > 16:
+        ts = np.arange(sp_len) / SR
+        pulses = (smooth_noise(sp_len, r, 38.0) > 0.25).astype(np.float64)
+        buzz = (np.sin(TAU * 120.0 * ts) * 0.35 + bp(r.standard_normal(sp_len), 1800.0, 7600.0, order=2) * 0.75) * pulses
+        mono[sp_start : sp_start + sp_len] += buzz * 0.42 * np.exp(-ts / max(0.08, dur * 0.32))
+    return _norm_peak(pan(fades(mono, 0.002, 0.015), 0.18), 0.88) * vel
+
+
+def neck_crack_wet(dur=0.55, vel=0.72, r=None):
+    """Stereo unsettling bone-pop + wet sinew twist synced to Jacob's Ladder head-twitch / broken-neck snaps."""
+    r = r or rng(1017)
+    n = ns(dur)
+    t = np.arange(n) / SR
+    mono = np.zeros(n, dtype=np.float64)
+    # 3 staggered bone/cartilage snaps
+    for dt_k, f_base, amp in ((0.015, 640.0, 1.0), (0.068, 920.0, 0.76), (0.142, 510.0, 0.85)):
+        k0 = ns(dt_k)
+        L = min(ns(0.09), n - k0)
+        if L > 8:
+            tk = np.arange(L) / SR
+            snap = modal(L / SR, [(f_base, 1.0, 0.006), (f_base * 2.18, 0.78, 0.0035), (f_base * 4.1, 0.45, 0.002)], r)[:L]
+            crunch = bp(r.standard_normal(L), 900.0, 4800.0, order=2) * np.exp(-tk / 0.009) * 0.55
+            mono[k0 : k0 + L] += (snap + crunch) * amp
+    # Low wet sinew stretch under-layer
+    wet = bp(colored(n, r, slope=0.4), 220.0, 1650.0, order=2) * (0.5 + 0.5 * np.sin(TAU * 24.0 * t)) * np.exp(-t / 0.22) * 0.28
+    mono = np.tanh((mono + wet) * 1.45)
+    return _norm_peak(pan(fades(mono, 0.001, 0.04), -0.10), 0.90) * vel
+
+
+def fly_buzz_loop(dur=3.5, vel=0.22, r=None):
+    """Stereo erratic buzzing dark flies panning uneasily across ears (synced to SwarmingFlies3D)."""
+    r = r or rng(1018)
+    n = ns(dur)
+    t = np.arange(n) / SR
+    out = np.zeros((2, n), dtype=np.float64)
+    for fi, f_wing in enumerate((192.0, 224.0, 248.0)):
+        f_mod = f_wing * (1.0 + 0.09 * smooth_noise(n, r, 4.2 + fi * 1.3))
+        ph = phase(f_mod)
+        # Buzzy sawtooth-like insect wing harmonic stack
+        wing = np.zeros(n, dtype=np.float64)
+        for h in range(1, 7):
+            wing += (1.0 / (h ** 0.72)) * np.sin(h * ph + fi * 0.7)
+        wing = bp(wing, 180.0, 3200.0, order=2)
+        prox = np.clip(0.35 + 0.65 * smooth_noise(n, r, 1.8 + fi * 0.6), 0.08, 1.0) ** 1.6
+        p_traj = np.clip(smooth_noise(n, r, 1.1 + fi * 0.5) * 1.15, -0.92, 0.92)
+        th = (p_traj + 1.0) * np.pi * 0.25
+        out[0] += wing * prox * np.cos(th)
+        out[1] += wing * prox * np.sin(th)
+    return _norm_peak(fades(out, 0.15, 0.20), 0.72) * vel

@@ -1,6 +1,6 @@
-# Horror Story Schema (`story.json`)
+# Horror Story Schema (`story.json` · Engine v5.0)
 
-Toàn bộ dữ liệu cốt truyện do Agent điền vào 1 file `story.json`. Báo cáo HTML (`story-report.html`), Markdown (`STORY_BIBLE.md`), và `OUTLINE.json` đều được sinh tự động bằng `scripts/horror_story.py`.
+Toàn bộ dữ liệu cốt truyện do Agent điền vào 1 file `story.json`. Báo cáo HTML (`story-report.html`), Markdown (`STORY_BIBLE.md`), và `OUTLINE.json` (kèm `locations` + `castAppearanceBriefs`) đều được sinh tự động bằng `scripts/horror_story.py`.
 
 ```json
 {
@@ -37,6 +37,7 @@ Toàn bộ dữ liệu cốt truyện do Agent điền vào 1 file `story.json`.
       "tier": "lead",
       "role": "Nhân vật chính (người bị săn)",
       "trait": "Nhỏ nhắn, tò mò nhưng dễ hoảng loạn trong bóng tối",
+      "appearanceBrief": "Cậu bé 10 tuổi mặc áo sơ mi vải thô xám nhạt, quần sẫm màu, tóc cắt ngắn mái lưa thưa, cầm đèn dầu thủy tinh.",
       "arc": "Tin rằng chỉ cần không mở tủ thì an toàn -> bị dụ mở khe sáng -> tưởng thoát khi cài cửa -> sụp đổ khi mối họa nằm sẵn dưới gầm giường",
       "from": ["Dân gian Việt Nam"]
     }
@@ -73,14 +74,14 @@ Toàn bộ dữ liệu cốt truyện do Agent điền vào 1 file `story.json`.
       "part": 1,
       "title": "Tiếng gõ lúc nửa đêm",
       "target_sec": 70,
-      "light": "candle",
+      "light": "warmLamp",
       "synopsis": "Văn xuôi kể diễn biến phần này (không viết ngoặc kép đối thoại)...",
       "hook": "Lời dặn lúc nửa đêm về 3 tiếng gõ trong tủ gỗ...",
       "suspense": "Bao tải nằm sẵn trên giường và đôi mắt trắng dã dưới gầm giường.",
       "sceneIds": ["S01", "S02"],
       "characterIds": ["C01", "C02"],
       "propIds": ["P01", "P02"],
-      "soundCues": ["3 tiếng gõ gỗ khô khốc", "Dead silence tắt đèn dầu", "Sấm chớp nổ"],
+      "soundCues": ["3 tiếng gỗ khô khốc", "Dead silence tắt đèn dầu", "Sấm chớp nổ"],
       "warnings": ["Giấu mặt thực thể đến sau Dead Silence"]
     }
   ]
@@ -90,7 +91,7 @@ Toàn bộ dữ liệu cốt truyện do Agent điền vào 1 file `story.json`.
 ## Tóm tắt 14 Cổng Kiểm Định (`horror_story.py validate`)
 
 1. **Tuyến & Luật thực thể (`premise-core`):** Có `core` và `entityRule`; nếu `adaptMode` là `adapt` / `reimagine` thì bắt buộc có ít nhất 1 mục `cut`.
-2. **Giới hạn nhân vật theo cấp (`char-tier-caps`):** `lead` (`1..5`), `support` (`<= 10`), `functional` (`<= 10`).
+2. **Giới hạn nhân vật theo cấp (`char-tier-caps`):** `lead` (`1..5`), `support` (`<= 10`), `functional` (`<= 10`). Nên khai báo đủ `appearanceBrief` theo đúng cốt truyện cho mọi nhân vật/thực thể để chuyển sang `CharacterBlueprint`.
 3. **Cung phát triển & nguồn nhân vật (`char-arcs`):** Mọi `lead` và `support` phải có `arc` và `from` khác rỗng.
 4. **Giới hạn bối cảnh chính (`scene-cap`):** Số `scenes` có `primary: true` không vượt quá `maxPrimaryScenes` (`standalone` mặc định `3`, `series` mặc định `4 + ceil(parts/10)` kẹp `[3, 12]`).
 5. **Tái sử dụng bối cảnh lẻ (`scene-reuse`):** Với `series >= 2` phần, bối cảnh chỉ xuất hiện 1 lần phải khai báo `reusePlan`.
@@ -98,7 +99,7 @@ Toàn bộ dữ liệu cốt truyện do Agent điền vào 1 file `story.json`.
 7. **Nhịp cao trào chính (`beat-major`):** Có ít nhất 1 beat `weight: "major"`; nếu `parts >= 2`, `major` đầu tiên không được dồn đến phần cuối cùng.
 8. **Khoảng cách cao trào (`beat-spacing`):** Không có phần nào bị rỗng hoàn toàn ở đầu/cuối và khoảng cách giữa 2 beat `<= maxBeatGap`.
 9. **Kỷ luật giấu thực thể (`reveal-discipline`):** Ở câu chuyện có nhiều beat, không đặt `major reveal` trước beat `hook`/`omen` mở đầu (tránh lộ quái quá sớm).
-10. **Số phần & Thời lượng (`part-duration`):** Đủ `1..N` phần, mỗi phần `target_sec` nằm trong `[45, 75]` và `light` thuộc `{night, candle, storm, eerie, blood}`.
+10. **Số phần & Thời lượng (`part-duration`):** Đủ `1..N` phần, mỗi phần `target_sec` nằm trong `[45, 75]` và `light` thuộc 5 preset ánh sáng vật lý v5.0 `{warmLamp, coldMoon, fluorescent, duskFog, flashlight}`.
 11. **Văn xuôi cốt truyện (`prose-only`):** `synopsis`, `hook`, `suspense` không chứa lời thoại trong ngoặc kép (`"..."`, `“...”`, `「...」`, `『...』`).
 12. **Móc mở & Treo cuối (`hook-suspense`):** Mọi phần phải có đủ `hook` và `suspense`.
 13. **Khớp nối tham chiếu (`referential-integrity`):** Không có ID rác, không có nhân vật/bối cảnh/đạo cụ nào bị "thất nghiệp" suốt cả câu chuyện.

@@ -1,72 +1,80 @@
 ---
 name: horror-world-lookdev
-description: Use when designing unique non-repeating 3D horror environments (LocationBlueprint), modular architecture/props, real practical PointLights/SpotLights, non-chibi 3D dark-horror characters & uncanny entities (rig3d.ts, face2d.ts), 1st-person POV rigs & diegetic 3D props (povRig.ts), or atmospheric 3D FX (fx3d.ts) in Three.js + Remotion Engine v3.
+description: Use when designing unique non-repeating 3D horror environments (LocationBlueprint), story-driven characters & supernatural entities (CharacterBlueprint + createCharacterFromBlueprint), PSX VHS/CRT or semi-realistic render styles, 5-pillar Maximum Dread horror staging (peripheral lurkers, decay props, opt-in body horror, 3-stage lunge escalation, VHS camcorder HUD), 1st-person POV rigs & diegetic 3D props (povRig.ts), or atmospheric 3D FX (fx3d.ts) in Three.js + Remotion Engine v5.0.
 ---
 
-# Horror World, Character & POV Look-Dev v3 (`3D Stylized Dark-Horror POV`)
+# Horror World, Story-Driven Cast & Maximum Dread Look-Dev v5.0
 
-All project environments, custom textures, character configurations, and story-specific props stay strictly inside `shorts-project/src/<project>/` (or `src/<episode>/shared/`) — never put story-specific code into `src/engine/` (`GEMINI.md`).
+All project environments, custom textures, `CharacterBlueprint` configs, and story-specific props stay strictly inside `shorts-project/src/<project>/` (or `src/<episode>/shared/`) — never put story-specific code into `src/engine/` (`GEMINI.md`).
 
 ---
 
-## 1. Mandatory `LocationBlueprint` First (Zero Background Repetition!)
+## 1. Visual Render Styles (`renderStyle` on `<ShortPlayer />`)
 
-**Legacy v2 Retirement:** NEVER copy the old generic wooden box room (`[-4..4] × 3.5m` + 4 pillars + back-left window + right table + bolted door) and NEVER force `addGnarledTree`/`addReedCluster`/`addStormLantern3D` into unrelated stories. Those helpers remain strictly optional exterior tools ONLY when a rural river/forest story calls for them.
+Engine v5.0 defaults to the acclaimed **PSX Low-Poly VHS/CRT Dark-Horror (`psxHorror`, `1A+2A+3A`)** aesthetic while remaining cleanly switchable per story:
 
-Before writing a single line of `build.ts`, define a unique `LocationBlueprint` inside `manifest.json` for every setting:
+| `renderStyle` | Visual Identity & Post-Processing | When to Use |
+|---|---|---|
+| **`"psxHorror"` *(default)*** | Low-poly angular geometry + PS1 `vertexSnap` (`280`), 360×640 virtual pixel grid (`pixelScale: 3.0`), 22-level color quantization + 4×4 Bayer dithering, subtle luminance-preserving CRT scanlines & curvature, VHS horizontal tracking wobble + `tapeTear` surges (`dreadLevel`), `outlineMode: "off"`, PBR BumpMaps + SSAO. | **Default** for indie PS1/VHS psychological, liminal, rural folklore, found-footage & visceral horror. |
+| `"semiReal"` | Smooth high-poly dark realism (`lowPoly: false`), `outlineMode: "off"`, full PBR BumpMaps + SSAO + subtle film grain (`0.008`), no pixelation/CRT. | Crisp modern 3D cinematic horror without retro CRT filter. |
+| `"painterly"` | Gritty thin ink accents (`outlineMode: "grittyThin"`), rich BumpMaps + SSAO, painterly brush grain. | Dark illustrated / graphic-novel folklore. |
+| `"comic"` | Clean bold Inverted-Hull outlines (`~5–7 px`, `NOINK` layer 3) + architectural `InkPass` (layer 0), smooth stylized shading. | Clean 3D stylized animated horror shorts. |
+
+---
+
+## 2. Mandatory `LocationBlueprint` First (Zero Background Repetition!)
+
+Before writing `build.ts`, define a unique `LocationBlueprint` in `manifest.json` for every location:
 1. **`archetype`:** Story-authentic environment class (e.g. `ruralThatchedHouse`, `hospitalMorgueWing`, `foggyVillageAlley`, `oldApartmentStairwell`, `boardingRoom`, `abandonedClassroom`, `nightBusInterior`, `mountainTemple`, `basementStorage`).
 2. **`dimensions` (`[width, depth, height]`):** Realistic proportions tailored to the space (`[2.8, 16.0, 2.95]` narrow hospital hall vs `[6.4, 7.6, 4.3]` A-frame thatch house vs `[4.2, 26.0, 9.0]` village alley).
 3. **`ceilingType`:** `"aFrameThatch" | "aFrameTile" | "flatConcrete" | "dropCeiling" | "vaulted" | "openSky" | "vehicleCabin"`.
-4. **`materials` (`wall`, `floor`, `ceiling`):** Pick 3 cohesive clean painterly textures from `paint.ts` (`thatchRoofTex`, `tileRoofTex`, `concreteCeilingTex`, `corrugatedTinTex`, `mottledPlasterTex`, `brickWallTex`, `hospitalTileTex`, `paintedConcreteTex`, `darkTimberWallTex`, `terracottaFloorTex`, `vintagePatternTileTex`, `reedMatTex`, `wetAsphaltTex`, `packedEarthTex`, `woodenFloorTex`, `garmentFoldTex`).
-5. **`practicalLights` & `heroProps`:** 1–3 motivated practical light sources + 3–5 story-specific hero props that actually matter to the plot.
-6. **`signatureShadowBeat`:** One unforgettable lighting/shadow visual motif (e.g., *"cold moonlight under bolted double door blocked by 2 dark foot shadows"* or *"flickering fluorescent tube + flashlight beam revealing gaunt figure down hallway"*).
-7. **Anti-Repetition Check:** Validate with `validate_manifest.py --registry LOCATION_REGISTRY.json`. Unrelated videos and unrelated Parts MUST NOT collide; only explicit narrative revisits may declare `sameLocationOf: "<projectId>:<locationId>"`.
+4. **`materials` (`wall`, `floor`, `ceiling`):** Use `paint.ts` textures — including **11 Albedo + BumpMap paired surfaces** (`mottledPlasterPair`, `hospitalTilePair`, `paintedConcretePair`, `brickWallPair`, `wetAsphaltPair`, `darkTimberPair`, `wovenFabricPair`, `hairStrandPair`, `humanSkinPair`, `cadaverSkinPair`, `tatteredGownPair`, scaled via `repPair`) plus clean painterly builders (`thatchRoofTex`, `tileRoofTex`, `concreteCeilingTex`, `corrugatedTinTex`, `terracottaFloorTex`, `vintagePatternTileTex`, `reedMatTex`, `packedEarthTex`, `woodenFloorTex`, `garmentFoldTex`).
+5. **`practicalLights` & `heroProps`:** 1–3 motivated practical light sources + 3–5 story-specific hero props that matter to the plot.
+6. **`signatureShadowBeat`:** One unforgettable lighting/shadow visual motif.
+7. **Anti-Repetition Check:** `validate_manifest.py --registry LOCATION_REGISTRY.json` enforces **`ANTI_REPEAT_ERROR`** on unrelated collisions; only explicit narrative revisits may declare `sameLocationOf: "<projectId>:<locationId>"`.
 
 ---
 
-## 2. Neutral Modular Architecture & Hero-Prop Kits (`build.ts` + `fx3d.ts`)
+## 3. Story-Driven `CharacterBlueprint` (ZERO Hardcoded Monster Templates!)
 
-Compose unique sets cleanly from Engine v3's neutral builders (all lit with `stylizedShade`, architectural meshes on layer 0 for crisp `InkPass` linework, detailed actors/props on `NOINK` with smooth Inverted-Hull outlines):
+**CRITICAL RULE:** Never blindly paste blood, sutures, dislocated jaws, or matted hair onto every video's monster! Every character and supernatural entity MUST be customized strictly from the story's lore via `castBlueprints[]` in `manifest.json` and constructed with **`createCharacterFromBlueprint(bp)`**:
 
-- **Walls, Openings & Doors:** `addWallWithOpening` (real geometric doorway/window cutouts — zero overlapping Z-fighting planes!), `addDoubleDoorWithCracks` (hinged leaves + locking bolt + toggleable center/bottom HDR moonlight strips + toggleable 2 dark foot-shadow blockers via `doorCtrl.setMoonlight(moonOn, feetShadow)`).
-- **Roofs, Corridors & Verticality:** `addAFrameRoof` (exposed beams + king posts + pitched roof decks), `addCorridorBay` (modular hallway bays with recessed ward/apartment doors + baseboards), `addStairFlight` (real stepped staircases + landings + handrails).
-- **Practical 3D Light Fixtures & Furniture:** `addGlassOilLamp3D` (translucent glass chimney + flickering HDR flame + `setLit`), `addIncenseBurner3D` (3 glowing incense embers), `addFluorescentTube3D` (`setIntensity` flicker), `addStreetLamp3D` (`bulbWorldPos` for synced sodium light + cone), `addSimpleTable`, `addWoodenBedFrame`.
-- **Atmospheric 3D FX & Contact Grounding (`fx3d.ts` + `build.ts`, strictly on `NOINK`):** `addContactShadow` (soft radial contact shadows grounding characters/furniture), `addFloorCornerAO` + `addRoomBaseboard` (eliminating floating wall junctions), `addLampHalo3D` (warm additive mist halo around practical flames/streetlamps), `addWetPuddleDecal` (glossy specular floor puddles catching PointLight/SpotLight sheen), `addRisingSmokeWisps`, `addDustMotes`, `addVolumetricCone`, `createFlatDecalMesh`, plus neutral environmental dressing (`addExitSign3D`, `addPipeRun3D`, `addWallSwitch3D`, `addAltarOfferingPlate3D`).
-- **Depth Framing in `9:16`:** Keep walls, distant alley end-caps/rooftops, practical lamps, and hero props within narrow `9:16` horizontal FOV so backgrounds never look like empty sky cutouts.
-
----
-
-## 3. Non-Chibi 3D Dark-Horror Characters & Uncanny Entities (`rig3d.ts` + `face2d.ts`)
-
-- **Create Human Characters (`createCharacter3D`):**
-  - Adult `~5.6` head-height proportions with sculpted jaw, 3D nose bridge, ears, sloping shoulder yoke, 3D collar/belt, clean UV garment folds, and 20 named sockets.
-  - Hair styles: `shortParted`, `spiky`, `elderThin`, `bun`, `longDraped`, `messyFringe`, `bald` (plus optional `headbandCol`).
-  - Garments: `funeralRobe`, `shirt`, `coat`, `hospitalGown`, `casualJacket`, `shroud`. Choose clothes darker or distinctly contrasted against skin (`#2d3340`, `#3a424e`, `#566360`) so pale faces read sharply in low light.
-  - Expressions (`FaceExpr`): `calm`, `wary`, `uneasy`, `dread`, `terrified`, `deadStare`, `unsettlingSmile`, `hollow` + hand-painted facial cheekbone/brow hollow shading (`ageLines`, `sweat`) + deterministic `autoBlink(frame)` + Vietnamese vowel-aware `mouthFromWords(words, frame)` + `gazeX/Y` + `lookAtWorld(...)`.
-  - Poses (`PoseAction`): `standIdle`, `sitCrossLegged`, `sitChair`, `walk`, `creep`, `peerForward`, `recoil`, `holdPhone`, `holdLantern`, `point`, `lunge`, `loomingStill`, `peekAroundDoor`, `turnHead`, plus smooth `setPoseBlend(from, to, t, frame, opts)` transitions.
-- **Create Uncanny Supernatural Entities (`entity: EntityConfig`):**
-  - Push silhouette and posture into dark horror: `heightScale: 1.14–1.24`, `gauntness: 0.72–0.80`, `armScale: 1.20–1.30`, `fingerScale: 1.30–1.40`, `neckTiltDeg: ±24..34`, `shoulderSkew: 0.10`, `hairCurtain: true` (organic parted hair wisps — never thick outline blocks), `breathing: false`, optional `steppedFps: 8–10`, `silhouetteMode: true` + `eyeGlow: true` (`eyeGlowColor: [2.2, 2.35, 2.8]`) for chilling blackout reveals.
-- **Outline Layer Discipline:** `createCharacter3D` automatically attaches angle-weighted smooth-normal Inverted-Hull outlines (`~5.8–6.2 px`) and puts the entire rig on `NOINK` (layer 3) so architectural `InkPass` never double-outlines actors.
+- **All horror/body-horror traits default to OFF (`false`/`0`).** Turn on ONLY traits explicitly described in `bp.storyDescription` (sourced from `story.json` `appearanceBrief` / `SCRIPT.md`):
+  - **Ordinary human / village elder / ghost in ao dai:** Standard `createCharacter3D` proportions (`~5.6` head heights, sculpted jaw/nose, 20 sockets, `face2d.ts` almond eyes + vowel lip-sync `mouthFromWords`), zero gore flags.
+  - **Silent faceless shadow silhouette:** `role: "silhouette"`, `entity: { heightScale: 1.20, gauntness: 0.78, silhouetteMode: true, eyeGlow: true, breathing: false }`, zero body-horror gore.
+  - **Uncanny folklore / body-horror corpse entity (ONLY when story calls for it):** Opt-in `entity.bodyHorror` modifiers (`bodyHorror.ts`): `skullHollows`, `jawDrop3D`, `crookedTeeth`, `neckStretch`, `exposedRibs`, `protrudingSpine`, `clawHands`, `twistedJoints`, `extraArms: 2`, `cadaverSkin`, `bloodStainLevel`, `eyeHorror` (`sanpaku | voidSockets | weepingIchor | stitched | multiEye`), `cheekSplitGrin`, `tatteredCloth`, and v5.0 opt-ins `mattedLongHair`, `suturesAndWounds`, `uncannySkullMask`.
+- **Entity Anti-Repetition Gate (`ANTI_REPEAT_ENTITY_ERROR`):** `validate_manifest.py --registry LOCATION_REGISTRY.json` fingerprints every `entity`/`silhouette`/`lurker` blueprint and blocks accidental cloning across unrelated videos unless `"sameCharacterOf": "<projectId>:<charId>"` is declared for an explicit recurring villain!
 
 ---
 
-## 4. 1st-Person POV Rig & Diegetic 3D Props (`povRig.ts`)
+## 4. The 5 Maximum Dread Pillars (100% Opt-In Per Story Beat)
 
-- Mount `createPovRig3D({ skinCol, sleeveCol, pantsCol, shoeCol })` once in `world.ts` and call `pov.update(cam, { stance, anchor, bodyYaw, propMode, rightArmRaise, leftArmRaise, frame })` every frame:
-  - `stance: "seated" | "standing"` renders visible knees/legs/shoes when camera pitches down (`POV_DOWN`).
-  - `povRightHand` / `povLeftHand` hold camera-aligned props whose forearms slope cleanly downward/back behind the prop (`-Z`) so sleeves NEVER clip across screens.
-- **Diegetic 3D Props:**
-  - `createPhone3D`: Live 420×820 Canvas2D lockscreen (`clock`, `date`, `carrier`, `battery`, `notifications`), slender bezel-hugging fingers, HDR Bloom screen, and `phone.getLight(intensity)` illuminating fingers & face. Always sync `clock` and notification body directly from `beat.propStates.phone.detail`!
-  - `createFlashlight3D`: Metal barrel, HDR lens, soft beam cone, and `flashlight.getSpotLight()` feeding `setSpotLight(...)`. Keep intensity around `0.85–1.0` to avoid garment highlight blowout.
-  - `createHandheldOilLamp3D`: Flickering portable lamp + `lamp.getLight(frame)`.
-  - `createPaperProp3D`: Live Canvas2D letter/rule-sheet/talisman prop.
+Deploy any subset of these 5 dread tools when a story's tone and beats call for maximum terror:
+
+1. **Pillar A — Peripheral Dread & Stalking Lurkers (`bodyHorror.ts`):**
+   - `addCornerLurker3D(parent, { pos, height, eyeGlow, ... })`: Semi-hidden figure peering from window sills, doorway frames, or fog-drenched alley corners. Keep clearly inside `9:16` portrait FOV (`±16–20°`) so attentive viewers spot it!
+2. **Pillar B — Atmospheric Grime, Folk & Viscera Storytelling (`fx3d.ts` + `build.ts`):**
+   - `addSwarmingFlies3D(parent, center, opts)`: Deterministic erratic buzzing flies around rot/altars/corpses.
+   - Opt-in Folk/Viscera kit in `build.ts`: `addBloodHandprintDecal3D`, `addIchorPoolDecal3D`, `addTalismanPaper3D`, `addOtherworldGrimeDecal3D`, and `addHauntedPortrait3D` (`setHaunt(dreadLevel, gazeX)`).
+   - Pair with `addContactShadow`, `addFloorCornerAO`, `addRoomBaseboard`, `addWetPuddleDecal`, `addLampHalo3D`, `addRisingSmokeWisps`, `addDustMotes`, `addVolumetricCone`.
+3. **Pillar C — Story-Driven Visceral Anatomy (`bodyHorror.ts`):**
+   - Opt-in `mattedLongHair` (wet black hair parted over half-face exposing 1 glaring eye), `suturesAndWounds` (surgical stitches & raw tears), `uncannySkullMask` (deep orbital shadow bruises & clotted lip decay), triggered strictly via `CharacterBlueprint.appearance.entity.bodyHorror`.
+4. **Pillar D — 3-Stage Escalating Stalk & Lunge Choreography (`rig3d.ts` + `camera.ts`):**
+   - `doorwayPeek` (Stage 0: head/fingers craning around open doorframe — check lean sign so head enters the doorway opening, NEVER into solid wall!).
+   - `stalkLoom` (Stage 1: unnatural stiff-jointed creeping advance at `steppedFps: 8..10` with zero human breathing; pair with `jacobsLadderTwitch` head snaps or `torchMalfunction`).
+   - `lungeCloseUp` (Stage 2: sudden jaw-snapping forward lunge filling lens foreground; also supports `jawUnlatch`, `crawler`, `backbendCrab`).
+   - Use `setPoseBlend(from, to, t, frame, opts)` for seamless terror transitions.
+5. **Pillar E — Analog VHS Camcorder HUD, Creeping Fog & Tape-Tear Surges (`HorrorHUD.tsx`, `manifest.ts`, `retroPsx.ts`):**
+   - Opt-in `hud.camcorder: { enabled: true, label: "VHS · SP", startClock: "01:06:00", dateLabel: "22/11/1998" }` renders subtle blinking `● REC` + live ticking timecode + CRT corners.
+   - Per-beat `fogOverride: { color, near, far }` smoothly pulls claustrophobic fog inward right before a reveal.
+   - `{ kind: "aberration", a, b, strength }` overlay automatically drives `RetroPsxEffect.dreadLevel` razor-thin horizontal VHS `tapeTear` & chromatic split during monster surges without obscuring monster faces.
 
 ---
 
-## 5. Practical Lighting, Smooth Light-Loss Shifts & Whip-Pan Motion Blur
+## 5. Neutral Modular Architecture, 1st-Person POV Rig & Practical Lighting
 
-- Always update `applyLightUniforms(L, K)`, `setLocalLights([...])` (up to 6 practical lights), and `setSpotLight(...)` in BOTH `world.update()` and `world.syncLighting()` directly from `beat.lightState`.
-- Implement `getLightBlend(shotId, frame)` using `beat.lightState.blendTo` / `blendRange` for smooth lights-out shifts (`warmLamp → coldMoon`).
-- Implement `getMotionVelocity(shotId, frame, aspect, heightPx)` delegating to `evalShotMotion(...)` so `WhipMotionBlurEffect` delivers deterministic 13-tap directional motion blur during `whipPan` bursts while remaining zero-overhead pass-through on calm shots.
+- **Modular Builders (`build.ts`):** `addWallWithOpening`, `addDoubleDoorWithCracks` (`doorCtrl.setMoonlight(moonOn, feetShadow)`), `addAFrameRoof`, `addCorridorBay`, `addStairFlight`, `addGlassOilLamp3D`, `addIncenseBurner3D`, `addFluorescentTube3D`, `addStreetLamp3D`, `addSimpleTable`, `addWoodenBedFrame`, `addExitSign3D`, `addPipeRun3D`, `addWallSwitch3D`, `addAltarOfferingPlate3D`.
+- **1st-Person POV Rig (`povRig.ts`):** `createPovRig3D` (`seated | standing`) + diegetic 3D props: `createPhone3D` (420×820 Canvas2D lockscreen + `phone.getLight()`), `createFlashlight3D` (`getSpotLight()`, keep `0.85–1.0` to prevent blowout), `createHandheldOilLamp3D`, `createPaperProp3D`.
+- **Practical Lights & Whip-Pan Motion Blur:** Update `applyLightUniforms`, `setLocalLights` (up to 6 practical `PointLight`s), and `setSpotLight` in BOTH `world.update()` and `world.syncLighting()`. Implement `getLightBlend(...)` for smooth lamp-death shifts and `getMotionVelocity(...)` delegating to `evalShotMotion(...)` for deterministic 13-tap `WhipMotionBlurEffect`.
 
-See [LIGHTING_AND_PALETTE.md](./references/LIGHTING_AND_PALETTE.md) and [HORROR_STYLE_BIBLE.md](../../references/HORROR_STYLE_BIBLE.md) for calibrated values and verified benchmark stills.
+See [LIGHTING_AND_PALETTE.md](./references/LIGHTING_AND_PALETTE.md) and [HORROR_STYLE_BIBLE.md](../../references/HORROR_STYLE_BIBLE.md) for calibrated values and verified v5.0 benchmark stills.
