@@ -1,24 +1,25 @@
-# Horror Story Schema (`story.json` · Engine v5.0)
+# Horror Story Schema v2.0 (`story.json` · Engine v8.0 Spatial & Action Blocking)
 
-Toàn bộ dữ liệu cốt truyện do Agent điền vào 1 file `story.json`. Báo cáo HTML (`story-report.html`), Markdown (`STORY_BIBLE.md`), và `OUTLINE.json` (kèm `locations` + `castAppearanceBriefs`) đều được sinh tự động bằng `scripts/horror_story.py`.
+Toàn bộ dữ liệu cốt truyện + mặt bằng 2D + bảng blocking hành động do Agent điền vào 1 file `story.json` (`schemaVersion: "2.0"`). Báo cáo HTML kèm **Sơ đồ Mặt bằng 2D SVG** (`story-report.html`), Markdown (`STORY_BIBLE.md`), `OUTLINE.json`, và gói đồng bộ 3 file (`SCRIPT.skeleton.md`, `manifest.draft.json`, `cues.draft.json`) đều được sinh tự động bằng `scripts/horror_story.py`.
 
 ```json
 {
+  "schemaVersion": "2.0",
   "title": "Tên cốt truyện",
   "lang": "vi",
   "params": {
     "mode": "standalone",
     "parts": 1,
-    "secondsPerPart": 70,
+    "secondsPerPart": 55,
     "wordsPerSecond": 2.9,
     "genre": "folklore",
-    "adaptMode": "folklore",
+    "adaptMode": "original",
     "thresholds": {
       "maxLeads": 5,
       "maxSupport": 10,
       "maxFunctional": 10,
       "maxProps": 8,
-      "maxBeatGap": 2,
+      "maxBeatGap": 1,
       "maxPrimaryScenes": 3
     }
   },
@@ -26,81 +27,95 @@ Toàn bộ dữ liệu cốt truyện do Agent điền vào 1 file `story.json`.
     "core": "Một câu nêu xung đột trung tâm...",
     "entityRule": "Luật ngầm hoặc cách thực thể hoạt động...",
     "twistCore": "Sự thật hoặc cú lật cuối cùng...",
-    "keep": [{ "what": "Chi tiết giữ lại", "why": "Lý do", "evidence": "Trích dẫn nguồn (nếu chuyển thể)" }],
+    "keep": [{ "what": "Chi tiết giữ lại", "why": "Lý do", "evidence": "Trích dẫn nguồn" }],
     "cut": [{ "what": "Tuyến phụ bị cắt", "why": "Lý do giữ truyện gọn" }],
     "risks": [{ "what": "Rủi ro mạch truyện", "plan": "Cách xử lý" }]
   },
   "characters": [
     {
       "id": "C01",
-      "name": "Bé Minh",
+      "name": "Nhân vật chính",
       "tier": "lead",
-      "role": "Nhân vật chính (người bị săn)",
-      "trait": "Nhỏ nhắn, tò mò nhưng dễ hoảng loạn trong bóng tối",
-      "appearanceBrief": "Cậu bé 10 tuổi mặc áo sơ mi vải thô xám nhạt, quần sẫm màu, tóc cắt ngắn mái lưa thưa, cầm đèn dầu thủy tinh.",
-      "arc": "Tin rằng chỉ cần không mở tủ thì an toàn -> bị dụ mở khe sáng -> tưởng thoát khi cài cửa -> sụp đổ khi mối họa nằm sẵn dưới gầm giường",
-      "from": ["Dân gian Việt Nam"]
+      "roleType": "human",
+      "role": "Người sống sót (POV)",
+      "heightMeters": 1.72,
+      "trait": "Cảnh giác nhưng hoảng loạn khi quy tắc bị phá vỡ",
+      "appearanceBrief": "Thanh niên mặc áo khoác mỏng tối màu, cầm đèn pin nhỏ trong nhà gỗ cũ.",
+      "movementRules": "Chạy qua đúng cửa thông phòng BEDROOM_DOOR để sang phòng ngủ S02",
+      "arc": "Tin tưởng chốt sắt khóa cửa -> nghi ngờ tiếng cào -> hoảng loạn chạy trốn -> sụp đổ khi mối họa nằm dưới gầm giường",
+      "from": ["Sáng tác mới"]
     }
   ],
   "scenes": [
     {
       "id": "S01",
-      "name": "Gian nhà gỗ 3 gian ban đêm",
+      "name": "Gian nhà gỗ cũ lúc 01:06",
       "primary": true,
-      "atmosphere": "Tối sâu, mưa bão ngoài song cửa, tủ gỗ cổ cuối phòng"
+      "archetype": "oldRuralWoodenHouse",
+      "dimensions": [6.0, 7.2, 4.0],
+      "ceilingType": "aFrameThatch",
+      "atmosphere": "Tối sâu, mưa bão ngoài cửa chớp vỡ, cửa gỗ 2 cánh cài chốt sắt",
+      "practicalLights": ["oilLamp", "phoneScreen", "handheldFlashlight"],
+      "landmarks": [
+        { "id": "POV_SEAT", "kind": "stance", "pos": [0.05, 0.0, 1.95], "note": "Chiếu giữa phòng" },
+        { "id": "FRONT_DOOR", "kind": "portal", "pos": [0.0, 0.0, -3.45], "note": "Cửa gỗ 2 cánh thông ra hành lang tối" },
+        { "id": "BEDROOM_DOOR", "kind": "portal", "pos": [2.95, 0.0, 1.80], "connectsTo": "S02:ENTRY_DOOR", "note": "Cửa sang phòng ngủ S02" }
+      ]
     }
   ],
   "beats": [
-    {
-      "id": "B01",
-      "part": 1,
-      "type": "hook",
-      "weight": "minor",
-      "setup": "Lời dặn cấm kỵ về 3 tiếng gõ trong tủ gỗ lúc nửa đêm",
-      "payoff": "Thiết lập luật chơi sinh tử ngay 8 giây đầu"
-    }
+    { "id": "B01", "part": 1, "type": "hook", "weight": "minor", "setup": "Lời dặn không mở cửa sau nửa đêm", "payoff": "Khóa luật sinh tử" }
   ],
   "props": [
     {
       "id": "P01",
-      "name": "Chiếc bao tải rách đẫm bùn",
-      "function": "Dẫn chứng vật lý nối từ tủ gỗ ngoài gian nhà vào thẳng trên giường ngủ ở cú twist cuối",
-      "states": ["Thò góc ướt bùn dưới chân tủ", "Thực thể vác trên lưng", "Nằm sẵn trên giường ngủ"],
-      "beatIds": ["B02", "B04"]
+      "name": "Cửa gỗ 2 cánh & chốt sắt",
+      "sceneId": "S01",
+      "landmarkId": "FRONT_DOOR",
+      "initialState": "closedBolted",
+      "states": ["closedBolted", "boltSliding", "slammedOpen"],
+      "function": "Ngăn cách giữa an toàn và thực thể ngoài hành lang; tự trượt chốt rồi bật tung ở cao trào",
+      "beatIds": ["B01", "B02"]
     }
   ],
   "parts": [
     {
       "part": 1,
-      "title": "Tiếng gõ lúc nửa đêm",
-      "target_sec": 70,
+      "title": "Đừng mở cửa sau nửa đêm",
+      "target_sec": 50,
       "light": "warmLamp",
-      "synopsis": "Văn xuôi kể diễn biến phần này (không viết ngoặc kép đối thoại)...",
-      "hook": "Lời dặn lúc nửa đêm về 3 tiếng gõ trong tủ gỗ...",
-      "suspense": "Bao tải nằm sẵn trên giường và đôi mắt trắng dã dưới gầm giường.",
-      "sceneIds": ["S01", "S02"],
-      "characterIds": ["C01", "C02"],
-      "propIds": ["P01", "P02"],
-      "soundCues": ["3 tiếng gỗ khô khốc", "Dead silence tắt đèn dầu", "Sấm chớp nổ"],
-      "warnings": ["Giấu mặt thực thể đến sau Dead Silence"]
+      "synopsis": "Văn xuôi kể diễn biến phần này (không chứa lời thoại ngoặc kép)...",
+      "hook": "Lời dặn cấm mở cửa sau 01:06 giữa đêm mưa...",
+      "suspense": "Đèn pin phụt tắt và đôi mắt trắng dã lao ra từ gầm giường.",
+      "sceneIds": ["S01"],
+      "characterIds": ["C01"],
+      "propIds": ["P01"],
+      "soundCues": ["Mưa đêm", "Chốt sắt trượt", "Jumpscare"],
+      "warnings": ["Cấm để cửa mở rồi tự đóng lại trước khi trượt chốt"],
+      "actionBeats": [
+        {
+          "beatId": "AB01",
+          "sceneId": "S01",
+          "durationSec": 6.0,
+          "mood": "calm_omen",
+          "light": "warmLamp",
+          "camera": { "stance": "seated", "posLandmark": "POV_SEAT", "lookLandmark": "FRONT_DOOR", "motion": "dolly" },
+          "actors": [],
+          "propChanges": [{ "id": "P01", "fromState": "closedBolted", "toState": "closedBolted" }],
+          "actionSummary": "Mở màn đêm mưa gió rít qua khe cửa gỗ cài chốt sắt",
+          "audioCue": "distant_thunder",
+          "jumpscareStyle": null
+        }
+      ]
     }
   ]
 }
 ```
 
-## Tóm tắt 14 Cổng Kiểm Định (`horror_story.py validate`)
+## Tóm tắt 18 Cổng Kiểm Định (`horror_story.py validate`)
 
-1. **Tuyến & Luật thực thể (`premise-core`):** Có `core` và `entityRule`; nếu `adaptMode` là `adapt` / `reimagine` thì bắt buộc có ít nhất 1 mục `cut`.
-2. **Giới hạn nhân vật theo cấp (`char-tier-caps`):** `lead` (`1..5`), `support` (`<= 10`), `functional` (`<= 10`). Nên khai báo đủ `appearanceBrief` theo đúng cốt truyện cho mọi nhân vật/thực thể để chuyển sang `CharacterBlueprint`.
-3. **Cung phát triển & nguồn nhân vật (`char-arcs`):** Mọi `lead` và `support` phải có `arc` và `from` khác rỗng.
-4. **Giới hạn bối cảnh chính (`scene-cap`):** Số `scenes` có `primary: true` không vượt quá `maxPrimaryScenes` (`standalone` mặc định `3`, `series` mặc định `4 + ceil(parts/10)` kẹp `[3, 12]`).
-5. **Tái sử dụng bối cảnh lẻ (`scene-reuse`):** Với `series >= 2` phần, bối cảnh chỉ xuất hiện 1 lần phải khai báo `reusePlan`.
-6. **Đạo cụ kể chuyện (`prop-purpose`):** Tối đa `maxProps` (`8`) món; mỗi món bắt buộc có `function` rõ ràng và trỏ tới `beatIds` hợp lệ.
-7. **Nhịp cao trào chính (`beat-major`):** Có ít nhất 1 beat `weight: "major"`; nếu `parts >= 2`, `major` đầu tiên không được dồn đến phần cuối cùng.
-8. **Khoảng cách cao trào (`beat-spacing`):** Không có phần nào bị rỗng hoàn toàn ở đầu/cuối và khoảng cách giữa 2 beat `<= maxBeatGap`.
-9. **Kỷ luật giấu thực thể (`reveal-discipline`):** Ở câu chuyện có nhiều beat, không đặt `major reveal` trước beat `hook`/`omen` mở đầu (tránh lộ quái quá sớm).
-10. **Số phần & Thời lượng (`part-duration`):** Đủ `1..N` phần, mỗi phần `target_sec` nằm trong `[45, 75]` và `light` thuộc 5 preset ánh sáng vật lý v5.0 `{warmLamp, coldMoon, fluorescent, duskFog, flashlight}`.
-11. **Văn xuôi cốt truyện (`prose-only`):** `synopsis`, `hook`, `suspense` không chứa lời thoại trong ngoặc kép (`"..."`, `“...”`, `「...」`, `『...』`).
-12. **Móc mở & Treo cuối (`hook-suspense`):** Mọi phần phải có đủ `hook` và `suspense`.
-13. **Khớp nối tham chiếu (`referential-integrity`):** Không có ID rác, không có nhân vật/bối cảnh/đạo cụ nào bị "thất nghiệp" suốt cả câu chuyện.
-14. **Gợi ý âm thanh / căng thẳng (`horror-cues`):** Mỗi phần có ít nhất 1 gợi ý âm thanh/nhịp (`soundCues` hoặc `warnings`) để nối mạch sang sản xuất.
+1–14. Giữ nguyên 14 cổng cốt truyện nền (`premise-core`, `char-tier-caps`, `char-arcs`, `scene-cap`, `scene-reuse`, `prop-purpose`, `beat-major`, `beat-spacing`, `reveal-discipline`, `part-duration`, `prose-only`, `hook-suspense`, `referential-integrity`, `horror-cues`).
+15. **Khóa ngoại hình nhân vật (`char-appearance-brief`):** Mọi nhân vật/thực thể phải có `appearanceBrief` chi tiết (`>= 12` ký tự) và `roleType` hợp lệ.
+16. **Mặt bằng 2D & Tọa độ Điểm neo (`scene-spatial-floorplan`):** Mỗi bối cảnh chính phải khai báo `dimensions` `[w, d, h]` + `>= 3` `landmarks` nằm trong giới hạn vật lý của phòng, và mọi cửa nối `connectsTo: "S02:LANDMARK"` đều phải tồn tại.
+17. **Liên tục hành động & Trạng thái đạo cụ (`action-blocking-continuity`):** Kiểm định tuần tự `actionBeats[]` — **chặn lỗi nhân vật dịch chuyển tức thời (`TELEPORT`)** trong cùng phòng và **chặn lỗi nhảy ngược/nhảy cóc trạng thái đạo cụ (`PROP_STATE_DRIFT`)**!
+18. **Giới hạn Jumpscare & Đồng bộ Audio (`horror-pacing-jumpscare-cap`):** Khóa tối đa **`<= 2` Jumpscare/phần** đúng 4 phong cách v7.1 (`cinema_stab | entity_shriek | metal_dread | vhs_psx_glitch`), cấm đặt Jumpscare lạnh ở beat mở đầu Phần 1.

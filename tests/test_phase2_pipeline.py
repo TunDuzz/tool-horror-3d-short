@@ -884,6 +884,147 @@ class TestPhase2Pipeline(unittest.TestCase):
                 rep_txt = fp.read()
             self.assertIn("Kiểm Định Jumpscare Thực Đo", rep_txt)
 
+    def test_v8_story_spatial_18_gates_svg_blueprint_and_manifest_continuity(self):
+        import argparse
+        import horror_story as hs
+
+        with tempfile.TemporaryDirectory() as td:
+            # 1. Valid v2.0 story.json with floorplan landmarks, portal connection, prop state machine & actionBeats
+            good_story = {
+                "schemaVersion": "2.0",
+                "title": "Đêm Cửa Gỗ",
+                "lang": "vi",
+                "params": {"mode": "standalone", "parts": 1, "secondsPerPart": 50, "wordsPerSecond": 2.9, "genre": "folklore", "adaptMode": "original"},
+                "premise": {
+                    "core": "Không được mở cửa sau nửa đêm",
+                    "entityRule": "Thực thể chỉ vào được khi chốt cửa trượt mở",
+                    "twistCore": "Nó đã chui sẵn dưới gầm giường",
+                },
+                "characters": [
+                    {"id": "C01", "name": "Tôi", "tier": "lead", "roleType": "human", "role": "Người kể", "heightMeters": 1.72, "trait": "Cảnh giác", "appearanceBrief": "Thanh niên mặc áo khoác mỏng tối màu cầm đèn pin.", "arc": "Bình tĩnh -> hoảng loạn", "from": ["Sáng tác mới"]},
+                    {"id": "C02", "name": "Bóng đêm", "tier": "lead", "roleType": "entity", "role": "Thực thể", "heightMeters": 1.82, "trait": "Lạnh lẽo", "appearanceBrief": "Thực thể cao gầy tóc dài bết rũ áo vải tối rách cổ gãy.", "arc": "Rình sau cửa -> lao ra gầm giường", "from": ["Sáng tác mới"]},
+                ],
+                "scenes": [
+                    {
+                        "id": "S01", "name": "Gian nhà gỗ", "primary": True, "archetype": "oldRuralWoodenHouse",
+                        "dimensions": [6.0, 7.2, 4.0], "ceilingType": "aFrameThatch", "atmosphere": "Mưa bão tối sầm",
+                        "practicalLights": ["oilLamp"],
+                        "landmarks": [
+                            {"id": "POV_SEAT", "kind": "stance", "pos": [0.0, 0.0, 1.8], "note": "Giữa phòng"},
+                            {"id": "FRONT_DOOR", "kind": "portal", "pos": [0.0, 0.0, -3.45], "note": "Cửa chính"},
+                            {"id": "HALL_OUT", "kind": "entity", "pos": [0.0, 0.0, -4.3], "note": "Ngoài hành lang"},
+                            {"id": "BEDROOM_DOOR", "kind": "portal", "pos": [2.95, 0.0, 1.5], "connectsTo": "S02:ENTRY_DOOR", "note": "Cửa phòng ngủ"},
+                        ],
+                    },
+                    {
+                        "id": "S02", "name": "Phòng ngủ khóa kín", "primary": True, "archetype": "woodenBedroom",
+                        "dimensions": [4.6, 5.6, 3.1], "ceilingType": "flatConcrete", "atmosphere": "Ngột ngạt",
+                        "practicalLights": ["handheldFlashlight"],
+                        "landmarks": [
+                            {"id": "ENTRY_DOOR", "kind": "portal", "pos": [0.0, 0.0, 2.7], "note": "Cửa vào"},
+                            {"id": "BED_FRONT", "kind": "stance", "pos": [0.0, 0.0, 1.1], "note": "Trước giường"},
+                            {"id": "UNDER_BED_HEAD", "kind": "entity", "pos": [-0.2, 0.26, -1.4], "note": "Đầu dưới gầm giường"},
+                        ],
+                    },
+                ],
+                "beats": [
+                    {"id": "B01", "part": 1, "type": "hook", "weight": "minor", "setup": "Lời dặn không mở cửa", "payoff": "Khóa luật"},
+                    {"id": "B02", "part": 1, "type": "scare", "weight": "major", "setup": "Chốt trượt mở", "payoff": "Cửa bật tung"},
+                    {"id": "B03", "part": 1, "type": "twist", "weight": "major", "setup": "Đèn tắt", "payoff": "Lao ra dưới gầm giường"},
+                ],
+                "props": [
+                    {"id": "P01", "name": "Cửa chốt sắt", "sceneId": "S01", "landmarkId": "FRONT_DOOR", "initialState": "closedBolted", "states": ["closedBolted", "boltSliding", "slammedOpen"], "function": "Ngăn thực thể", "beatIds": ["B01", "B02"]},
+                ],
+                "parts": [
+                    {
+                        "part": 1, "title": "Đêm mưa", "target_sec": 50, "light": "warmLamp",
+                        "synopsis": "Đêm mưa bão thanh niên ở nhà gỗ cũ nghe tiếng cào ngoài cửa rồi chốt sắt tự trượt mở và cửa bật tung.",
+                        "hook": "Lời dặn cấm mở cửa sau nửa đêm.", "suspense": "Đôi mắt dưới gầm giường lao thẳng ra.",
+                        "sceneIds": ["S01", "S02"], "characterIds": ["C01", "C02"], "propIds": ["P01"],
+                        "soundCues": ["Mưa đêm", "Chốt trượt", "Jumpscare"], "warnings": ["Đúng thứ tự chốt cửa"],
+                        "actionBeats": [
+                            {"beatId": "AB01", "sceneId": "S01", "durationSec": 10.0, "mood": "calm_omen", "light": "warmLamp", "camera": {"stance": "seated", "posLandmark": "POV_SEAT", "lookLandmark": "FRONT_DOOR"}, "actors": [{"id": "C02", "visible": False, "fromLandmark": "HALL_OUT", "toLandmark": "HALL_OUT", "pose": "loomingStill"}], "propChanges": [{"id": "P01", "fromState": "closedBolted", "toState": "closedBolted"}], "actionSummary": "Mở màn đêm mưa", "audioCue": "distant_thunder"},
+                            {"beatId": "AB02", "sceneId": "S01", "durationSec": 10.0, "mood": "fear", "light": "coldMoon", "deadSilenceBeforeSec": 0.75, "camera": {"stance": "standing", "posLandmark": "POV_SEAT", "lookLandmark": "FRONT_DOOR"}, "actors": [{"id": "C02", "visible": True, "fromLandmark": "HALL_OUT", "toLandmark": "FRONT_DOOR", "pose": "stalkLoom"}], "propChanges": [{"id": "P01", "fromState": "closedBolted", "toState": "boltSliding", "triggerWord": "chốt"}], "actionSummary": "Chốt sắt tự trượt mở", "jumpscareStyle": "cinema_stab"},
+                            {"beatId": "AB03", "sceneId": "S01", "durationSec": 10.0, "mood": "panic", "light": "coldMoon", "camera": {"stance": "standing", "posLandmark": "POV_SEAT", "lookLandmark": "BEDROOM_DOOR"}, "actors": [{"id": "C02", "visible": True, "fromLandmark": "FRONT_DOOR", "toLandmark": "POV_SEAT", "pose": "lungeCloseUp"}], "propChanges": [{"id": "P01", "fromState": "boltSliding", "toState": "slammedOpen"}], "actionSummary": "Cửa bật tung, chạy sang cửa phòng ngủ", "audioCue": "heavy_door_slam"},
+                            {"beatId": "AB04", "sceneId": "S02", "durationSec": 15.0, "mood": "dread", "light": "coldMoon", "camera": {"stance": "crouched", "posLandmark": "BED_FRONT", "lookLandmark": "UNDER_BED_HEAD"}, "actors": [{"id": "C02", "visible": True, "fromLandmark": "UNDER_BED_HEAD", "toLandmark": "UNDER_BED_HEAD", "pose": "lungeCloseUp", "alignPart": "head"}], "propChanges": [], "actionSummary": "Lao ra từ gầm giường", "jumpscareStyle": "vhs_psx_glitch"},
+                        ],
+                    }
+                ],
+            }
+            gates, failed = hs.evaluate_gates(good_story, stage="full")
+            self.assertEqual(len(gates), 18)
+            self.assertEqual(failed, [], f"Expected 18/18 PASS, got failed: {failed}")
+
+            # 2D SVG Floorplan & Action Blocking Table rendered inside HTML Story Bible
+            html_out = hs.render_html(good_story)
+            self.assertIn("<svg viewBox=", html_out)
+            self.assertIn("BẮC (-Z)", html_out)
+            self.assertIn("Bảng Blocking Hành Động", html_out)
+
+            # Export synchronized blueprint (SCRIPT.skeleton.md + manifest.draft.json + cues.draft.json)
+            sp = os.path.join(td, "story.json")
+            bp_dir = os.path.join(td, "blueprint")
+            hs.write_text(sp, json.dumps(good_story, ensure_ascii=False, indent=2))
+            hs.cmd_export_blueprint(argparse.Namespace(story=sp, out=bp_dir, part=1, project_id="test-v8", aspect="9:16", bed_sound="night_rain_indoor"))
+            self.assertTrue(os.path.isfile(os.path.join(bp_dir, "SCRIPT.skeleton.md")))
+            self.assertTrue(os.path.isfile(os.path.join(bp_dir, "manifest.draft.json")))
+            self.assertTrue(os.path.isfile(os.path.join(bp_dir, "cues.draft.json")))
+
+            # 2. Bad v2.0 story catches TELEPORT, PROP_STATE_DRIFT, OUT_OF_BOUNDS & >2 Jumpscares!
+            bad_story = json.loads(json.dumps(good_story))
+            bad_story["characters"][0]["appearanceBrief"] = ""
+            bad_story["scenes"][0]["landmarks"][0]["pos"] = [99.0, 0.0, 0.0]
+            bad_story["parts"][0]["actionBeats"][2]["actors"][0]["fromLandmark"] = "BEDROOM_DOOR"  # teleport!
+            bad_story["parts"][0]["actionBeats"][2]["propChanges"][0]["fromState"] = "closedBolted"  # drift!
+            bad_story["parts"][0]["actionBeats"][2]["jumpscareStyle"] = "metal_dread"  # 3rd jumpscare!
+            _, bad_failed = hs.evaluate_gates(bad_story, stage="full")
+            bad_ids = {g["id"] for g in bad_failed}
+            self.assertTrue({"char-appearance-brief", "scene-spatial-floorplan", "action-blocking-continuity", "horror-pacing-jumpscare-cap"}.issubset(bad_ids))
+
+            # 3. validate_manifest.py v8.0 Spatial, Prop State Machine & --cues sync gates + align_manifest triggerFrame
+            man_path = os.path.join(bp_dir, "manifest.draft.json")
+            cues_path = os.path.join(bp_dir, "cues.draft.json")
+            val_script = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "templates", "scripts", "validate_manifest.py"))
+            # Run validate_manifest on exported blueprint -> must PASS!
+            proc_ok = subprocess.run(
+                [sys.executable, val_script, man_path, "--cues", cues_path],
+                capture_output=True, text=True, check=False,
+            )
+            self.assertEqual(proc_ok.returncode, 0, proc_ok.stdout + proc_ok.stderr)
+
+            # Corrupt exported manifest with teleport + prop state regression + undeclared anchor + out-of-bounds + bad audioCueId -> must FAIL!
+            bad_man = json.loads(open(man_path, encoding="utf-8").read())
+            bad_man["locations"][0]["anchors"]["BAD_SPOT"] = [50.0, 0.0, 0.0]
+            bad_man["beats"][2]["castStates"]["C02"]["moveFromAnchor"] = "BEDROOM_DOOR"  # teleport from FRONT_DOOR
+            bad_man["beats"][2]["propStates"]["P01"]["fromState"] = "closedBolted"       # regression from boltSliding
+            bad_man["beats"][0]["camera"]["lookAnchor"] = "NONEXISTENT_ANCHOR"
+            bad_man["beats"][0]["audioCueIds"] = ["missing_cue_xyz"]
+            bad_man_p = os.path.join(td, "bad_manifest.json")
+            hs.write_text(bad_man_p, json.dumps(bad_man, ensure_ascii=False, indent=2))
+            proc_bad = subprocess.run(
+                [sys.executable, val_script, bad_man_p, "--cues", cues_path],
+                capture_output=True, text=True, check=False,
+            )
+            self.assertNotEqual(proc_bad.returncode, 0)
+            out_all = proc_bad.stdout + proc_bad.stderr
+            for code in ("OUT_OF_BOUNDS_ERROR", "ANCHOR_UNDECLARED_ERROR", "SPATIAL_TELEPORT_ERROR", "PROP_STATE_REGRESSION_ERROR", "AUDIO_CUES_SYNC_ERROR"):
+                self.assertIn(code, out_all)
+
+            # 4. align_manifest.py auto-resolves triggerFrame from triggerWord
+            am_man = {
+                "projectId": "trig-test", "title": "Trig", "totalFrames": 90, "aspect": "9:16",
+                "locations": [],
+                "beats": [
+                    {"beatId": "B1", "shotId": 1, "a": 0, "b": 90, "peakFrame": 45, "locationId": "S01", "spokenLine": {"text": "Chốt sắt trượt ra"}, "lightState": {"preset": "coldMoon", "lampsOn": []}, "castStates": {}, "propStates": {"P01": {"visible": True, "state": "boltSliding", "triggerWord": "trượt"}}, "cameraIntent": "bolt"},
+                ],
+            }
+            words_list = [
+                {"w": "Chốt", "s": 0.2, "e": 0.5}, {"w": "sắt", "s": 0.5, "e": 0.8},
+                {"w": "trượt", "s": 1.2, "e": 1.6}, {"w": "ra", "s": 1.6, "e": 1.9},
+            ]
+            updated_m, _ = am.align_manifest_data(am_man, words_list, fps=30.0)
+            self.assertEqual(updated_m["beats"][0]["propStates"]["P01"]["triggerFrame"], 36)
+
 
 if __name__ == "__main__":
     unittest.main()

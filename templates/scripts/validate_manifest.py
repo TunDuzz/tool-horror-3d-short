@@ -164,6 +164,7 @@ def main():
     ap.add_argument("manifest", help="Path to manifest.json")
     ap.add_argument("--script", help="Optional SCRIPT.md to verify spokenLine fidelity")
     ap.add_argument("--words", help="Optional words.json to verify spokenLine timing alignment (+-0.35s)")
+    ap.add_argument("--cues", help="Optional cues.json to cross-check beat audioCueIds & jumpscare timing (+-0.30s)")
     ap.add_argument("--registry", help="Optional LOCATION_REGISTRY.json for cross-video anti-repetition check")
     ap.add_argument("--update-registry", action="store_true", help="Register validated locations into --registry on pass")
     ap.add_argument("--still-out", help="Output path for generated still_manifest.json")
@@ -210,6 +211,20 @@ def main():
         props = loc.get("heroProps") or []
         if len(props) < 3:
             errors.append(f"Location '{lid}' must declare >= 3 story-unique `heroProps` (got {len(props)})")
+
+        # v8.0 Spatial Bounds Gate: verify declared location.anchors lie within room physical bounds
+        anchors = loc.get("anchors")
+        if isinstance(anchors, dict) and isinstance(dims, list) and len(dims) == 3:
+            rw, rd, rh = float(dims[0]), float(dims[1]), float(dims[2])
+            for aname, apos in anchors.items():
+                if not (isinstance(apos, list) and len(apos) == 3 and all(isinstance(v, (int, float)) for v in apos)):
+                    errors.append(f"Location '{lid}' anchor '{aname}' must be 3-number [x, y, z], got {apos!r}")
+                    continue
+                ax, ay, az = float(apos[0]), float(apos[1]), float(apos[2])
+                if abs(ax) > rw * 0.5 + 2.5 or not (-1.0 <= ay <= rh + 1.0) or abs(az) > rd * 0.5 + 5.0:
+                    errors.append(
+                        f"OUT_OF_BOUNDS_ERROR: Location '{lid}' anchor '{aname}' pos={apos} lies outside room dimensions {dims}"
+                    )
 
     # Intra-project unrelated location anti-repetition check
     loc_list = list(loc_map.values())
@@ -343,6 +358,16 @@ def main():
     cursor = 0
     word_cursor = 0
     still_entries = []
+    actor_prev_state = {}  # cid -> (locationId, endAnchor, visible, beatId)
+    prop_prev_state = {}   # (locationId, pid) -> (state, beatId)
+    cues_events_by_id = {}
+    cues_raw = None
+    if args.cues:
+        with open(args.cues, encoding="utf-8") as fp:
+            cues_raw = json.load(fp)
+        for ev in cues_raw.get("events") or []:
+            if ev.get("id"):
+                cues_events_by_id[str(ev["id"])] = ev
 
     for b in sorted_beats:
         bid = str(b.get("beatId", "?"))
@@ -374,6 +399,19 @@ def main():
             if not (isinstance(br, list) and len(br) == 2 and all(isinstance(v, int) for v in br) and a <= br[0] < br[1] <= bb):
                 errors.append(f"Beat '{bid}' invalid lightState.blendRange={br!r} (must satisfy {a} <= f0 < f1 <= {bb})")
 
+        loc_obj = loc_map.get(lid) or {}
+        loc_anchors = loc_obj.get("anchors") if isinstance(loc_obj.get("anchors"), dict) else None
+
+        # v8.0 Camera anchor check when location declares anchors
+        cam_spec = b.get("camera")
+        if isinstance(cam_spec, dict) and loc_anchors is not None:
+            for ck in ("posAnchor", "lookAnchor"):
+                aval = str(cam_spec.get(ck, "")).strip()
+                if aval and aval not in loc_anchors and aval not in cast_bp_map:
+                    errors.append(
+                        f"ANCHOR_UNDECLARED_ERROR: Beat '{bid}' camera.{ck}='{aval}' not found in location '{lid}'.anchors"
+                    )
+
         for cid, cst in (b.get("castStates") or {}).items():
             if not isinstance(cst, dict):
                 continue
@@ -382,15 +420,71 @@ def main():
             pose = cst.get("pose")
             if pose is not None and pose not in VALID_POSES:
                 errors.append(f"Beat '{bid}' cast '{cid}' invalid pose={pose!r}")
+            pose_to = cst.get("poseTo")
+            if pose_to is not None and pose_to not in VALID_POSES:
+                errors.append(f"Beat '{bid}' cast '{cid}' invalid poseTo={pose_to!r}")
             expr = cst.get("expr")
             if expr is not None and expr not in VALID_EXPRS:
                 errors.append(f"Beat '{bid}' cast '{cid}' invalid expr={expr!r}")
 
+            # v8.0 Anchor resolution & Spatial Anti-Teleport Continuity Gate
+            a_base = str(cst.get("anchor") or "").strip()
+            a_from = str(cst.get("moveFromAnchor") or a_base).strip()
+            a_to = str(cst.get("moveToAnchor") or a_from).strip()
+            if loc_anchors is not None:
+                for ak, aval in (("anchor", a_base), ("moveFromAnchor", cst.get("moveFromAnchor")), ("moveToAnchor", cst.get("moveToAnchor"))):
+                    if aval and str(aval).strip() not in loc_anchors:
+                        errors.append(
+                            f"ANCHOR_UNDECLARED_ERROR: Beat '{bid}' cast '{cid}' {ak}='{aval}' not found in location '{lid}'.anchors"
+                        )
+            vis = bool(cst.get("visible", False))
+            prev_c = actor_prev_state.get(cid)
+            if (
+                vis
+                and prev_c is not None
+                and prev_c[2]
+                and prev_c[0] == lid
+                and a_from
+                and prev_c[1]
+                and a_from != prev_c[1]
+                and not cst.get("allowTeleport")
+            ):
+                errors.append(
+                    f"SPATIAL_TELEPORT_ERROR: Beat '{bid}' cast '{cid}' teleports from '{prev_c[1]}' (beat '{prev_c[3]}') to '{a_from}' in same location '{lid}' without `allowTeleport: true`"
+                )
+            actor_prev_state[cid] = (lid, a_to or a_base, vis, bid)
+
         if not str(b.get("cameraIntent", "")).strip():
             errors.append(f"Beat '{bid}' missing non-empty `cameraIntent` for Still Gate audit")
 
-        # Phone3D <-> HUD notification clock consistency
+        # Phone3D <-> HUD notification clock consistency + v8.0 Prop State Machine Continuity Gate
         props = b.get("propStates") or {}
+        for pid_prop, pst in props.items():
+            if not isinstance(pst, dict):
+                continue
+            cur_st = str(pst.get("state") or "").strip()
+            req_from = str(pst.get("fromState") or "").strip()
+            prev_p = prop_prev_state.get((lid, pid_prop))
+            if req_from and prev_p is not None and prev_p[0] and req_from != prev_p[0]:
+                errors.append(
+                    f"PROP_STATE_REGRESSION_ERROR: Beat '{bid}' prop '{pid_prop}' expects fromState='{req_from}' but previous beat '{prev_p[1]}' ended in state='{prev_p[0]}'"
+                )
+            if cur_st:
+                prop_prev_state[(lid, pid_prop)] = (cur_st, bid)
+
+        # v8.0 Optional cues.json audioCueIds cross-check
+        if cues_raw is not None:
+            for qid in b.get("audioCueIds") or []:
+                if str(qid) not in cues_events_by_id:
+                    errors.append(f"AUDIO_CUES_SYNC_ERROR: Beat '{bid}' references audioCueId='{qid}' not found in cues.json events")
+                else:
+                    ev_c = cues_events_by_id[str(qid)]
+                    if "at" in ev_c and ev_c["at"] is not None:
+                        ev_t = float(ev_c["at"]) + float(ev_c.get("offset_s", 0.0))
+                        if not ((a / FPS) - 0.30 <= ev_t <= (bb / FPS) + 0.30):
+                            errors.append(
+                                f"AUDIO_CUES_SYNC_ERROR: Beat '{bid}' [{a/FPS:.2f}..{bb/FPS:.2f}s] audioCueId='{qid}' lands at {ev_t:.2f}s outside beat window (+-0.30s)"
+                            )
         phone = props.get("phone")
         if isinstance(phone, dict) and phone.get("visible"):
             det = phone.get("detail") or {}

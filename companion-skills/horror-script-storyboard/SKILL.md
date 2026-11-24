@@ -82,17 +82,21 @@ python3 scripts/gen_horror_voice.py --script out/<project>/SCRIPT.md \
 
 ---
 
-## 3. Auto-Locking `manifest.json` ↔ `words.json` (`align_manifest.py`)
+## 3. Auto-Locking `manifest.json` ↔ `words.json` ↔ `cues.json` (`align_manifest.py` + Spatial Gates v8.0)
+
+Start from the synchronized `manifest.draft.json`, `SCRIPT.skeleton.md`, and `cues.draft.json` exported by `horror_story.py export-blueprint` so room `anchors`, `castStates`, and `propStates` stay 100% locked to the approved 2D floorplan!
 
 ```bash
 python3 scripts/align_manifest.py src/<project>/manifest.json --words out/<project>/voice/words.json --in-place
 python3 scripts/validate_manifest.py src/<project>/manifest.json \
   --script out/<project>/SCRIPT.md \
   --words out/<project>/voice/words.json \
+  --cues out/<project>/cues.json \
   --registry LOCATION_REGISTRY.json \
   --update-registry \
   --still-out out/<project>/still_manifest.json
 ```
+*(Enforces `ANCHOR_UNDECLARED_ERROR`, `OUT_OF_BOUNDS_ERROR`, `SPATIAL_TELEPORT_ERROR`, `PROP_STATE_REGRESSION_ERROR`, and `--cues` audio-visual timing sync alongside Anti-Repetition Gates!)*
 
 ---
 

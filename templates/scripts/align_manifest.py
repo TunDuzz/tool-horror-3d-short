@@ -121,6 +121,19 @@ def align_manifest_data(manifest: dict, words: list, fps: float = 30.0, target_t
             span = max(2, min(new_b - new_a, int(ls["blendRange"][1]) - int(ls["blendRange"][0])))
             ls["blendRange"] = [new_a, min(new_b, new_a + span)]
 
+        # v8.0 Auto-resolve propStates.*.triggerFrame from triggerWord inside this beat's word window
+        for pst in (b.get("propStates") or {}).values():
+            if not isinstance(pst, dict) or not pst.get("triggerWord"):
+                continue
+            needle = norm_text(str(pst["triggerWord"]))
+            if not needle:
+                continue
+            win_s, win_e = (new_a / fps) - 0.35, (new_b / fps) + 0.35
+            for w_tok, ws, _we in norm_words:
+                if needle in w_tok and win_s <= ws <= win_e:
+                    pst["triggerFrame"] = max(new_a, min(new_b - 1, int(round(ws * fps))))
+                    break
+
         changes.append({
             "beatId": b.get("beatId"),
             "old": [old_a, old_b, old_pk],

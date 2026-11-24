@@ -98,6 +98,11 @@ export type CeilingType =
   | "openSky"
   | "vehicleCabin";
 
+export type LocationPortal = {
+  pos: V3;
+  connectsTo?: string;
+};
+
 export type LocationBlueprint = {
   id: string;
   archetype: string;
@@ -107,6 +112,10 @@ export type LocationBlueprint = {
   practicalLights: string[];
   heroProps: string[];
   signatureShadowBeat: string;
+  /** Single-source-of-truth named 3D coordinates inside this room (exported directly from story.json landmarks). */
+  anchors?: Record<string, V3>;
+  /** Optional physical portals linking this room to adjacent rooms (e.g. bedroom door -> S02:ENTRY_DOOR). */
+  portals?: Record<string, LocationPortal>;
   /** ONLY set when a multi-part series or scene explicitly revisits the exact same physical location. */
   sameLocationOf?: string;
 };
@@ -153,10 +162,26 @@ export type BeatLightState = {
   fogOverride?: BeatFogOverride;
 };
 
+export type CharacterPart = "feet" | "pelvis" | "chest" | "neck" | "head" | "eyes" | "leftHand" | "rightHand";
+
 export type CastBeatState = {
   visible: boolean;
   anchor: string;
+  /** Optional start anchor for smooth intra-beat movement interpolation (`moveFromAnchor` -> `moveToAnchor`). */
+  moveFromAnchor?: string;
+  /** Optional destination anchor at the end of this beat (verified for continuity by validate_manifest.py). */
+  moveToAnchor?: string;
+  /** Optional frame duration for movement/pose transition (e.g. `8` for an explosive jumpscare lunge; defaults to full beat length). */
+  moveFrames?: number;
   pose: PoseAction;
+  /** Optional destination pose blended smoothly across the beat via `setPoseBlend`. */
+  poseTo?: PoseAction;
+  /** Which anatomical part locks onto the anchor coordinate (defaults to "feet" on floor; use "head" under beds/peeks!). */
+  alignPart?: CharacterPart;
+  facingYaw?: number;
+  jawOpen?: number;
+  headTwitch?: number;
+  allowTeleport?: boolean;
   expr?: FaceExpr;
   lookAt?: string | V3;
   eyeGlow?: boolean;
@@ -164,8 +189,23 @@ export type CastBeatState = {
 
 export type PropBeatState = {
   visible: boolean;
+  /** Expected state entering this beat (verified by Prop State Machine Continuity Gate). */
+  fromState?: string;
   state: string;
+  /** Optional Vietnamese trigger word from SCRIPT.md; align_manifest.py auto-resolves `triggerFrame`. */
+  triggerWord?: string;
+  triggerFrame?: number;
   detail?: Record<string, string | number | boolean>;
+};
+
+export type BeatCameraSpec = {
+  posAnchor: string;
+  posOffset?: V3;
+  lookAnchor: string;
+  lookPart?: CharacterPart | "center";
+  motion?: "hold" | "dolly" | "dollyZoom" | "whipPan" | "handheld" | "dropToFloor";
+  fov?: number;
+  fovTo?: number;
 };
 
 export type ScriptBeat = {
@@ -184,6 +224,8 @@ export type ScriptBeat = {
   lightState: BeatLightState;
   castStates: Record<string, CastBeatState>;
   propStates: Record<string, PropBeatState>;
+  camera?: BeatCameraSpec;
+  audioCueIds?: string[];
   cameraIntent: string;
 };
 
