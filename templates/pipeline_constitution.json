@@ -1,0 +1,185 @@
+{
+  "version": "11.0.0",
+  "fps": 30,
+  "speech": {
+    "wordsPerSecondMin": 2.0,
+    "wordsPerSecondTarget": 2.35,
+    "wordsPerSecondMax": 2.75,
+    "minVisualBreathingRatio": 0.20,
+    "directives": [
+      "[VISUAL Xs]",
+      "[PAUSE Xs]",
+      "[DEAD SILENCE Xs]"
+    ]
+  },
+  "partDurationSec": {
+    "min": 45,
+    "max": 105,
+    "recommendedMin": 72,
+    "recommendedMax": 95
+  },
+  "captions": {
+    "enabledByDefault": true,
+    "minWords": 3,
+    "maxWords": 8,
+    "maxChars": 44,
+    "maxLines": 2,
+    "wallOfTextErrorWords": 12,
+    "headerStyleDefault": "minimal"
+  },
+  "cameraGrammar": {
+    "style": "anchored_pov_first",
+    "requireMasterEstablishingPerLocation": true,
+    "masterMinFrames": 60,
+    "forbid180AxisFlip": true,
+    "maxOtsRatio": 0.22,
+    "maxPerspectiveSwitchesPerMinute": 4,
+    "maxShotSyncDriftFrames": 4,
+    "validCameraModes": [
+      "master",
+      "pov",
+      "pov_turn",
+      "pov_walk",
+      "pov_interact",
+      "ots_same_side"
+    ],
+    "validAxisSides": [
+      "pov_center",
+      "left",
+      "right"
+    ]
+  },
+  "enums": {
+    "validLights": [
+      "warmLamp",
+      "coldMoon",
+      "fluorescent",
+      "duskFog",
+      "flashlight"
+    ],
+    "validCeilings": [
+      "aFrameThatch",
+      "aFrameTile",
+      "flatConcrete",
+      "dropCeiling",
+      "vaulted",
+      "openSky",
+      "vehicleCabin"
+    ],
+    "validRoles": [
+      "human",
+      "entity",
+      "silhouette",
+      "lurker"
+    ],
+    "validHairStyles": [
+      "shortParted",
+      "spiky",
+      "elderThin",
+      "bun",
+      "longDraped",
+      "messyFringe",
+      "bald"
+    ],
+    "validGarments": [
+      "funeralRobe",
+      "shirt",
+      "coat",
+      "hospitalGown",
+      "casualJacket",
+      "shroud"
+    ],
+    "validEyeHorror": [
+      "sanpaku",
+      "voidSockets",
+      "weepingIchor",
+      "stitched",
+      "multiEye"
+    ],
+    "validExprs": [
+      "calm",
+      "wary",
+      "uneasy",
+      "dread",
+      "terrified",
+      "deadStare",
+      "unsettlingSmile",
+      "hollow"
+    ],
+    "validDialogueModes": [
+      "directSpeech",
+      "voiceOver",
+      "silent"
+    ],
+    "validPoses": [
+      "standIdle",
+      "nervousIdle",
+      "talkCalm",
+      "talkUrgent",
+      "reachInteract",
+      "glassSlam",
+      "sitCrossLegged",
+      "sitChair",
+      "sitBenchHunched",
+      "walk",
+      "creep",
+      "peerForward",
+      "recoil",
+      "holdPhone",
+      "holdLantern",
+      "point",
+      "lunge",
+      "loomingStill",
+      "peekAroundDoor",
+      "turnHead",
+      "stalkLoom",
+      "jawUnlatch",
+      "crawler",
+      "doorwayPeek",
+      "backbendCrab",
+      "lungeCloseUp"
+    ]
+  },
+  "lightPresets": {
+    "warmLamp": {
+      "shade": [0.115, 0.090, 0.112],
+      "lift": [0.036, 0.028, 0.038],
+      "bounce": [0.058, 0.038, 0.024],
+      "fog": "#120c12",
+      "fogNear": 5.6,
+      "fogFar": 25.0
+    },
+    "coldMoon": {
+      "shade": [0.082, 0.094, 0.132],
+      "lift": [0.028, 0.034, 0.048],
+      "bounce": [0.020, 0.028, 0.046],
+      "fog": "#090d18",
+      "fogNear": 4.8,
+      "fogFar": 22.0
+    },
+    "fluorescent": {
+      "shade": [0.092, 0.118, 0.124],
+      "lift": [0.030, 0.040, 0.042],
+      "bounce": [0.022, 0.036, 0.034],
+      "fog": "#0a1214",
+      "fogNear": 4.6,
+      "fogFar": 21.0
+    },
+    "duskFog": {
+      "shade": [0.105, 0.088, 0.110],
+      "lift": [0.032, 0.026, 0.036],
+      "bounce": [0.026, 0.030, 0.046],
+      "fog": "#1a141c",
+      "fogNear": 4.5,
+      "fogFar": 24.0
+    },
+    "flashlight": {
+      "shade": [0.058, 0.062, 0.078],
+      "lift": [0.020, 0.022, 0.028],
+      "bounce": [0.014, 0.018, 0.026],
+      "fog": "#07090e",
+      "fogNear": 3.8,
+      "fogFar": 19.0
+    }
+  }
+}

@@ -1007,11 +1007,42 @@ export function createCharacter3D(cfg: CharacterConfig): Character3D {
     rightLeg.foot.rotation.set(0, 0, 0);
   };
 
+  /**
+   * v11.0 (4B) 3-Phase Cinematic Acting Envelope:
+   * Replaces robotic nonstop sine waves with natural human phrasing:
+   *   Hold (0.00..0.38) -> Subtle Anticipation dip (0.38..0.50) -> Smooth Gesture Ease (0.50..0.78) -> Micro-Settle (0.78..1.00).
+   */
+  const actingPhrase = (tSec: number, seedVal: number, period = 2.6): { env: number; secondary: number; sign: number } => {
+    const raw = (tSec + (seedVal % 11) * 0.23) / Math.max(0.6, period);
+    const cyc = Math.floor(raw);
+    const u = raw - cyc;
+    const sign = cyc % 2 === 0 ? 1 : -1;
+    let env = 0;
+    if (u < 0.38) {
+      // Grounded stillness with tiny organic drift
+      env = Math.sin((u / 0.38) * Math.PI) * 0.035;
+    } else if (u < 0.50) {
+      // Anticipation dip before moving
+      const k = (u - 0.38) / 0.12;
+      env = -0.14 * Math.sin(k * Math.PI);
+    } else if (u < 0.78) {
+      // Smooth emphatic gesture up to peak
+      const k = (u - 0.50) / 0.28;
+      env = k * k * (3 - 2 * k);
+    } else {
+      // Micro-overshoot & damped settle back to rest
+      const k = (u - 0.78) / 0.22;
+      env = (1 - k * k * (3 - 2 * k)) * (1 + 0.06 * Math.sin(k * Math.PI));
+    }
+    const secondary = Math.sin((u + 0.18) * Math.PI * 2) * 0.35;
+    return { env, secondary, sign };
+  };
+
   const setPose = (action: PoseAction, frame: number, opts: PoseEvalOpts = {}) => {
     resetPose();
     const seed = opts.seed ?? (cfg.id.charCodeAt(0) + cfg.id.length * 7);
     const t = ent?.steppedFps ? uncannyTime(frame, Math.max(1, Math.round(FPS / ent.steppedFps)), FPS) : frame / FPS;
-    const aliveBreath = ent?.breathing === false ? 0 : Math.sin(t * 2.1 + seed) * 0.022;
+    const aliveBreath = ent?.breathing === false ? 0 : Math.sin(t * 1.9 + seed) * 0.018;
 
     chest.rotation.x = aliveBreath;
     if (ent?.neckTiltDeg) {
@@ -1019,59 +1050,57 @@ export function createCharacter3D(cfg: CharacterConfig): Character3D {
     }
 
     if (action === "standIdle") {
-      // Subtle organic living weight-shift & forearm breathing so humans never look frozen like wax statues!
+      // Grounded natural stillness with subtle occasional weight shift & head micro-focus
       if (ent?.breathing !== false) {
-        const sway = Math.sin(t * 1.15 + seed) * 0.032;
-        const microHead = Math.sin(t * 0.72 + seed * 1.7) * 0.065;
+        const ph = actingPhrase(t, seed, 4.2);
+        const sway = ph.env * ph.sign * 0.026 + aliveBreath * 0.4;
         pelvis.rotation.z = sway * 0.55;
         spine.rotation.z = -sway * 0.35;
-        spine.rotation.x = 0.03 + aliveBreath;
-        head.rotation.y = microHead;
-        head.rotation.x = Math.sin(t * 0.9 + seed) * 0.03;
-        leftArm.upperArm.rotation.set(-0.08 + Math.sin(t * 1.1 + seed) * 0.03, 0, -0.10);
-        rightArm.upperArm.rotation.set(-0.10 - Math.sin(t * 1.1 + seed) * 0.03, 0, 0.10);
+        spine.rotation.x = 0.025 + aliveBreath;
+        head.rotation.y = ph.env * ph.sign * 0.065 + ph.secondary * 0.02;
+        head.rotation.x = aliveBreath * 0.8;
+        leftArm.upperArm.rotation.set(-0.07 + aliveBreath * 0.5, 0, -0.095);
+        rightArm.upperArm.rotation.set(-0.09 - aliveBreath * 0.5, 0, 0.095);
         leftArm.forearm.rotation.set(-0.22, 0, 0.04);
         rightArm.forearm.rotation.set(-0.24, 0, -0.04);
       }
     } else if (action === "nervousIdle") {
-      // Anxious fidgeting: shifting weight, hunched shoulders, glancing nervously side-to-side, tense folded hands
-      const shift = Math.sin(t * 1.8 + seed) * 0.045;
-      const glance = Math.sin(t * 1.15 + seed * 2.1) * 0.28 + Math.sin(t * 2.6 + seed) * 0.06;
+      // Hold tense posture -> quick darting eye/head check -> settle back into guarded hunch
+      const ph = actingPhrase(t, seed + 3, 2.8);
+      const glance = ph.env * ph.sign * 0.26;
       pelvis.position.y = hipY - 0.015 * hScale;
-      pelvis.rotation.z = shift;
-      spine.rotation.set(0.09 + aliveBreath * 1.4, -shift * 1.2, -shift * 0.6);
-      chest.rotation.y = glance * 0.25;
-      head.rotation.set(0.04 + Math.sin(t * 1.9 + seed) * 0.04, glance, -glance * 0.12);
+      pelvis.rotation.z = ph.secondary * 0.025;
+      spine.rotation.set(0.09 + aliveBreath * 1.3, glance * 0.22, -ph.secondary * 0.02);
+      chest.rotation.y = glance * 0.28;
+      head.rotation.set(0.04 + aliveBreath, glance, -glance * 0.10);
       leftArm.upperArm.rotation.set(-0.34, 0.14, -0.14);
-      rightArm.upperArm.rotation.set(-0.42 + Math.sin(t * 2.4 + seed) * 0.06, -0.16, 0.14);
+      rightArm.upperArm.rotation.set(-0.42 - Math.abs(ph.env) * 0.05, -0.16, 0.14);
       leftArm.forearm.rotation.set(-0.88, 0.18, 0.24);
-      rightArm.forearm.rotation.set(-0.96 + Math.cos(t * 2.4 + seed) * 0.08, -0.18, -0.24);
+      rightArm.forearm.rotation.set(-0.96 - Math.abs(ph.env) * 0.07, -0.18, -0.24);
     } else if (action === "talkCalm") {
-      // Conversational calm acting: gentle open hand gestures, natural nods & torso engagement
-      const g1 = Math.sin(t * 2.3 + seed);
-      const g2 = Math.cos(t * 1.7 + seed * 1.4);
-      spine.rotation.set(0.05 + aliveBreath, g2 * 0.05, 0);
-      head.rotation.set(0.03 + Math.sin(t * 3.1 + seed) * 0.055, g2 * 0.10, g1 * 0.04);
-      leftArm.upperArm.rotation.set(-0.32 + g2 * 0.08, 0.10, -0.14);
-      rightArm.upperArm.rotation.set(-0.56 + g1 * 0.14, -0.12, 0.16);
-      leftArm.forearm.rotation.set(-0.76 + g2 * 0.12, 0.14, 0.12);
-      rightArm.forearm.rotation.set(-0.82 - g1 * 0.16, -0.16, -0.10);
-      rightArm.hand.rotation.set(0.18 + g1 * 0.14, 0, -0.18);
+      // Calm conversational acting: 3-phase measured hand beats & subtle nods instead of nonstop waving
+      const ph = actingPhrase(t, seed + 5, 2.5);
+      const g = ph.env;
+      spine.rotation.set(0.045 + aliveBreath, ph.sign * g * 0.04, 0);
+      head.rotation.set(0.025 + g * 0.055, ph.sign * g * 0.085 + ph.secondary * 0.03, ph.sign * g * 0.025);
+      leftArm.upperArm.rotation.set(-0.30 - Math.max(0, -ph.sign * g) * 0.10, 0.10, -0.13);
+      rightArm.upperArm.rotation.set(-0.48 - Math.max(0, g) * 0.18, -0.12, 0.15);
+      leftArm.forearm.rotation.set(-0.74 - Math.max(0, -ph.sign * g) * 0.12, 0.14, 0.12);
+      rightArm.forearm.rotation.set(-0.80 - g * 0.18, -0.15, -0.10);
+      rightArm.hand.rotation.set(0.14 + g * 0.16, 0, -0.16);
     } else if (action === "talkUrgent") {
-      // Intense emphatic warning: rhythmic urgent gesturing, leaning forward, shaking/nodding head & anxious shoulder tension
-      const pulse = Math.sin(t * 4.2 + seed);
-      const wave = Math.sin(t * 2.1 + seed * 1.3);
-      const emphasize = Math.max(0, Math.sin(t * 2.8 + seed * 0.7));
+      // Urgent rule-warning acting: sharp anticipation -> decisive hand beat -> brief tense hold & settle
+      const ph = actingPhrase(t, seed + 9, 1.65);
+      const g = ph.env;
       pelvis.position.y = hipY - 0.02 * hScale;
-      spine.rotation.set(0.14 + aliveBreath * 1.6 + emphasize * 0.05, wave * 0.09, wave * 0.03);
-      chest.rotation.x = 0.06 + emphasize * 0.04;
-      head.rotation.set(-0.04 + pulse * 0.075, wave * 0.16, pulse * 0.055);
-      // Right hand emphasizes warnings urgently; left hand braces/gestures
-      rightArm.upperArm.rotation.set(-0.88 - emphasize * 0.34, -0.14 + wave * 0.12, 0.18);
-      rightArm.forearm.rotation.set(-0.78 + pulse * 0.24, -0.18, -0.12);
-      rightArm.hand.rotation.set(-0.18 + pulse * 0.20, 0, -0.16);
-      leftArm.upperArm.rotation.set(-0.48 - (1 - emphasize) * 0.18, 0.16, -0.18);
-      leftArm.forearm.rotation.set(-0.92 - wave * 0.18, 0.20, 0.18);
+      spine.rotation.set(0.13 + aliveBreath * 1.4 + Math.max(0, g) * 0.055, ph.sign * g * 0.07, 0);
+      chest.rotation.x = 0.05 + Math.max(0, g) * 0.04;
+      head.rotation.set(-0.03 + g * 0.08, ph.sign * g * 0.12 + ph.secondary * 0.04, ph.sign * g * 0.035);
+      rightArm.upperArm.rotation.set(-0.82 - g * 0.36 + ph.secondary * 0.04, -0.14 + ph.sign * g * 0.08, 0.17);
+      rightArm.forearm.rotation.set(-0.76 - g * 0.22, -0.16, -0.12);
+      rightArm.hand.rotation.set(-0.14 + g * 0.22, 0, -0.15);
+      leftArm.upperArm.rotation.set(-0.46 - Math.max(0, -g) * 0.16, 0.15, -0.16);
+      leftArm.forearm.rotation.set(-0.90 - ph.secondary * 0.10, 0.18, 0.16);
     } else if (action === "sitBenchHunched") {
       // Hunched seated silhouette on a wooden bench (head bowed, shoulders slumped, motionless eerie weight)
       pelvis.position.y = 0.44 * hScale;
@@ -1135,20 +1164,34 @@ export function createCharacter3D(cfg: CharacterConfig): Character3D {
       leftArm.forearm.rotation.set(-0.92, 0, 0.16);
       rightArm.forearm.rotation.set(-0.92, 0, -0.16);
     } else if (action === "walk" || action === "creep") {
-      const freq = action === "creep" ? 3.2 : 5.2;
-      const amp = action === "creep" ? 0.34 : 0.52;
+      // v11.0 (4B) Grounded asymmetric heel-to-toe gait with hip weight-shift & chest counter-torsion
+      const freq = action === "creep" ? 3.1 : 4.8;
+      const amp = action === "creep" ? 0.34 : 0.48;
       const ph = t * freq;
-      const s = Math.sin(ph);
-      pelvis.position.y = hipY + Math.abs(Math.cos(ph)) * 0.032 * hScale - (action === "creep" ? 0.06 * hScale : 0);
-      spine.rotation.x = action === "creep" ? 0.22 : 0.06;
-      leftLeg.thigh.rotation.x = s * amp;
-      rightLeg.thigh.rotation.x = -s * amp;
-      leftLeg.calf.rotation.x = Math.max(0, -s * amp * 1.15) + (action === "creep" ? 0.25 : 0.08);
-      rightLeg.calf.rotation.x = Math.max(0, s * amp * 1.15) + (action === "creep" ? 0.25 : 0.08);
-      leftArm.upperArm.rotation.x = -s * amp * 0.72;
-      rightArm.upperArm.rotation.x = s * amp * 0.72;
-      leftArm.forearm.rotation.x = -0.26 - Math.max(0, -s * 0.28);
-      rightArm.forearm.rotation.x = -0.26 - Math.max(0, s * 0.28);
+      const sL = Math.sin(ph);
+      const sR = Math.sin(ph + Math.PI);
+      const liftL = Math.max(0, Math.cos(ph - 0.35));
+      const liftR = Math.max(0, Math.cos(ph + Math.PI - 0.35));
+      pelvis.position.y =
+        hipY -
+        (1 - Math.abs(sL)) * 0.024 * hScale +
+        Math.max(liftL, liftR) * 0.018 * hScale -
+        (action === "creep" ? 0.06 * hScale : 0);
+      pelvis.rotation.y = -sL * 0.085;
+      pelvis.rotation.z = sL * 0.032;
+      spine.rotation.x = action === "creep" ? 0.22 : 0.065;
+      chest.rotation.y = sL * 0.075;
+      head.rotation.y = -sL * 0.035;
+      leftLeg.thigh.rotation.x = sL * amp - liftL * 0.12;
+      rightLeg.thigh.rotation.x = sR * amp - liftR * 0.12;
+      leftLeg.calf.rotation.x = liftL * amp * 1.35 + (action === "creep" ? 0.24 : 0.08);
+      rightLeg.calf.rotation.x = liftR * amp * 1.35 + (action === "creep" ? 0.24 : 0.08);
+      leftLeg.foot.rotation.x = -sL * 0.18 + liftL * 0.12;
+      rightLeg.foot.rotation.x = -sR * 0.18 + liftR * 0.12;
+      leftArm.upperArm.rotation.x = -sL * amp * 0.68;
+      rightArm.upperArm.rotation.x = -sR * amp * 0.68;
+      leftArm.forearm.rotation.x = -0.28 - Math.max(0, -sL * 0.26);
+      rightArm.forearm.rotation.x = -0.28 - Math.max(0, -sR * 0.26);
     } else if (action === "peerForward") {
       spine.rotation.x = 0.24 + aliveBreath;
       neck.rotation.x = -0.14;
@@ -1389,10 +1432,15 @@ export function createCharacter3D(cfg: CharacterConfig): Character3D {
 
     setPose(to, frame, opts);
     const pB = pelvis.position.clone();
-    pelvis.position.set(lerp(pA.x, pB.x, k), lerp(pA.y, pB.y, k), lerp(pA.z, pB.z, k));
+    const kBody = k * k * (3 - 2 * k);
+    // v11.0 (4B) Head/Eye Lead: neck & head lead pose transitions slightly ahead of heavy torso!
+    const kHead = clamp01(k * 1.32);
+    const kHeadSmooth = kHead * kHead * (3 - 2 * kHead);
+    pelvis.position.set(lerp(pA.x, pB.x, kBody), lerp(pA.y, pB.y, kBody), lerp(pA.z, pB.z, kBody));
     for (let i = 0; i < boneList.length; i++) {
       const b = boneList[i];
-      b.rotation.set(lerp(rA[i][0], b.rotation.x, k), lerp(rA[i][1], b.rotation.y, k), lerp(rA[i][2], b.rotation.z, k));
+      const w = b === head || b === neck ? kHeadSmooth : kBody;
+      b.rotation.set(lerp(rA[i][0], b.rotation.x, w), lerp(rA[i][1], b.rotation.y, w), lerp(rA[i][2], b.rotation.z, w));
     }
   };
 

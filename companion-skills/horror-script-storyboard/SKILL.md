@@ -1,15 +1,15 @@
 ---
 name: horror-script-storyboard
-description: Use when writing coherent act-level horror narration scripts (2.7-3.2 words/s with [NARRATOR | mood=...], [SPEAKER: ... | fx=...], [PAUSE], [DEAD SILENCE]), generating studio-clean neural voices via VieNeu-TTS 48kHz CPU / IndexTTS-2 Vietnamese / F5-TTS GPU packs / So-VITS-SVC 1-file VC-Pack (-na), auto-aligning manifest.json via align_manifest.py, or choreographing POV/cinematic shot plans in story.ts.
+description: Use when writing coherent act-level horror narration scripts (2.2-2.5 words/s effective with [VISUAL Xs] breathing frames, [NARRATOR | mood=...], [SPEAKER: ... | fx=...], [PAUSE], [DEAD SILENCE]), generating studio-clean neural voices via VieNeu-TTS 48kHz --speaker-lock + Whisper Forced Word Alignment (<35ms), auto-locking beats & shots[] via align_manifest.py, or directing Anchored POV-First (2A) camera plans in story.ts.
 ---
 
-# Horror Scriptwriting, Neural Voice Acting & Storyboarding v6.0 (`SCRIPT.md` → `manifest.json` → `story.ts`)
+# Horror Scriptwriting, Forced Word Alignment & Anchored POV Storyboarding v11.0 (`SCRIPT.md` → `manifest.json` → `story.ts`)
 
-## 1. Act-Level Coherent Horror Script Grammar (`SCRIPT.md`)
+## 1. Act-Level Coherent Horror Script & `[VISUAL Xs]` Breathing Grammar (`SCRIPT.md`)
 
-**NEVER fragment a 60 s script into 15–20 tiny 2-word TTS snippets and NEVER rely on artificial DSP filters to fake emotion.** Write **2–4 continuous, emotionally coherent Acts (paragraphs)** separated ONLY by `[DEAD SILENCE Xs]`, deliberate `[PAUSE Xs]`, or speaker changes — letting the neural TTS model perform natural phrasing, tension, and Vietnamese tonal flow!
+**NEVER fragment a script into 15–20 tiny 2-word TTS snippets and NEVER cram 3.5+ words/s nonstop without visual breathing room.** Write **2–4 continuous, emotionally coherent Acts** separated by **`[VISUAL Xs]`** (spatial/action breathing frames where ambient rain, wind, and Foley keep playing!), **`[DEAD SILENCE Xs]`** (`-48 dB` psychoacoustic vacuum before reveals), or speaker changes.
 
-- **Speed & Pacing:** Average **`2.7–3.2 words/s`** (~150–185 words per 60 s). Build pace contrast through **sentence rhythm & structure** (long lingering clauses in calm/dread acts vs short breathless punchy sentences in climax acts) combined with neural emotion conditioning (`VieNeu-TTS` reference clips or `IndexTTS-2` 8-D emotion vectors).
+- **Speed & Visual Frame Budget (`3A` · `pipeline_constitution.json`):** Target **`2.2–2.5 words/s`** effective (`max 2.75 w/s`), allocating **20–35% of chapter frames** (`45–105 s` per chapter, recommended `72–95 s`) to `[VISUAL Xs]` beats (`[VISUAL 2.6s]` Master Establishing opener + `[VISUAL 1.2–2.0s]` around physical prop actions like bolting doors, receiving keys, opening ledgers).
 - **Act-Level Mood Directives (`[NARRATOR | mood=...]`):**
   - `calm_omen`: trầm lắng, chắc nhịp đặt bối cảnh & điềm báo (`0.0 dB`).
   - `curious`: tò mò, dò xét, nghi hoặc (`-0.5 dB`; IndexTTS-2 vector `surprised+calm`).
@@ -43,7 +43,7 @@ description: Use when writing coherent act-level horror narration scripts (2.7-3
   [NARRATOR | mood=cold_twist]
   Và khi tôi từ từ quay đầu lại, thứ đó đã đứng sẵn sau lưng tôi từ lúc nào.
   ```
-- **No On-Screen Captions by Default:** Keep `HorrorHUD` captions opt-in via `hudFromManifest(MANIFEST)` (`GEMINI.md`).
+- **Default 4–8 Word Subtitles (`captionChunks[]`):** Subtitles are **ON by default** (`enabledByDefault: true`, `headerStyle: "minimal"` in `pipeline_constitution.json`), auto-split by `align_manifest.py` into crisp `4–8 word` (`1–2 line`) phrases locked to acoustic word timestamps (`showCaptions: false` only if explicitly requested by the user).
 
 ---
 
@@ -116,14 +116,16 @@ python3 scripts/validate_manifest.py src/<project>/manifest.json \
 
 ---
 
-## 5. Mandatory Cinematography, Hybrid POV+OTS Pacing & Clean Subtitle Rules (v10.0 `story.ts`)
+## 5. Mandatory Anchored POV-First Cinematography (`2A`) & Single-Lock `shotsFromManifest` (v11.0 `story.ts`)
 
-1. **Decouple Macro Story Beats from Cinematic Micro-Shots & Subtitles (CRITICAL — Kills Dead Cameras & Walls of Text!):**
-   - **Micro-Shot Density Law (`14–22` shots per 60 s · Avg `2.5–4.5 s`):** NEVER hold a single static camera angle for `10–20 s`! Split every macro narrative beat into `3–5` distinct `SHOTS` alternating **Hybrid POV + OTS**:
-     - **Protagonist `C01` OTS / MS / Reaction CU** (establishes WHO the main character is — never a disembodied floating ghost camera!)
-     - **Embodied 1st-Person POV** (`POV`, `POV_PROP`, `POV_DOWN`, `POV_TURN`) with **visible `PovRig3D` hands/sleeves/legs** (`idle`, `leanDesk`, `reachBolt`, `holdPaper`, `holdHandset`, `flashlight`, `shieldFace`) physically touching doors, receipts, books, and phones!
-     - **Expressive Character CU/MCU** driven by `applyManifestActors(..., { words, speakerMap })` for **real Vietnamese lip-sync (`mouthFromWords`)**, `autoBlink`, and active poses (`talkUrgent`, `talkCalm`, `nervousIdle`, `sitBenchHunched`, `glassSlam`).
-   - **Word-Timed Clean Subtitles (`4–8 words`, max `1–2` lines):** Run `align_manifest.py --words ... --in-place` to auto-generate `manifest.captionChunks[]` (`validate_manifest.py` blocks `WALL_OF_TEXT_ERROR > 12 words`). Default to `headerStyle: "minimal"` (use `camcorder` ONLY for found-footage stories!).
+1. **Single-Source Phrase-Locked Shots (`1B` — ZERO Hardcoded Shot Frames in `story.ts`!):**
+   - Declare `shots[]` inside `manifest.json` (`cameraMode`, `axisSide`, `startPhrase`, `endPhrase`, `visualBeatIndex`, `leadFrames`, `tailFrames`, `actionTriggerPhrase`).
+   - Run `align_manifest.py --words ... --in-place` to lock `beats[]`, `shots[]`, `propStates.*.triggerFrame`, and `captionChunks[]` (`4–8 words`) simultaneously with **0-frame drift**, and export `export const SHOTS = shotsFromManifest(MANIFEST);` in `story.ts`.
+2. **Anchored POV-First Cinema Grammar (`2A`, Enforced by `validate_manifest.py --strict-cinema`):**
+   - **Rule 1 — Mandatory Master Establishing Shot (`MASTER_ESTABLISHING_ERROR`):** Every location MUST open with `cameraMode: "master"` (`>= 60 frames`, `camMasterEstablish`) showing the whole room, practical light sources, hero props, and character positions with readable walls (`Zero Black Void`).
+   - **Rule 2 — 80–90% Continuous POV Chain (`camPovChain`):** Keep the viewer anchored inside the protagonist's eyes! When looking from an NPC to a ledger, stove, door bolt, or window, use **`camPovChain(waypoints, frame)`** smooth head-turns with visible `PovRig3D` hands (`2-joint fingerCurl` + `worldTarget` prop coordinates) — NEVER chop into disorienting black-void prop cutaways!
+   - **Rule 3 — Strict 180° Axis & OTS Cap (`AXIS_180_VIOLATION_ERROR`, `POV_PINGPONG_ERROR`):** Never flip 180° across the axis into the protagonist's front face during a POV sequence, never switch `left ↔ right` without re-establishing via `master`/`pov_center`, and cap `ots_same_side` to `<= 22%` of frames (`<= 4` switches/min).
+   - **Rule 4 — `dialogueMode` Discipline (`VOICEOVER_LIPSYNC_ERROR`):** Always set `dialogueMode: "voiceOver"` on `C01` during `[NARRATOR]` internal thoughts and `"directSpeech"` on speaking characters.
 2. **Zero Repeated Camera Angles:** Every shot in `SHOTS` MUST declare a valid `ShotScale` (`POV`, `POV_PROP`, `POV_TURN`, `POV_DOWN`, `POV_CU`, `WS`, `MS`, `OTS`, `MCU`, `CU`, `ECU`, `LOW`) and valid physical `LightKey` (`warmLamp | coldMoon | fluorescent | duskFog | flashlight`). Never perform static-layout filter jump-cuts (`corr > 0.88`) or hold low-motion shots `> 7.5 s` (`short_qa.py` `DEAD_CAMERA_WARNS`).
 3. **Engine Camera & Motion Archetypes (`camera.ts`):** Combine `whipPan`, `povBreath`, `camOTS`, `camArc`, `camPOV`, `camECU`, `dollyZoom`, `handheld`, `snapZoom`, `pushK`, and `rolled` (`0.06–0.095` rad Dutch tilt). Declare all fast head-snaps in `WHIP_PANS` and close prop raises in `POV_MOTIONS` for `extract_shots.py`.
 4. **Purposeful Transitions (`OVERLAYS`):**

@@ -8,9 +8,9 @@ Toàn bộ dữ liệu thế giới quan, quy tắc thực thể, tâm lý nhân
 
 | `format` | Tổng thời lượng | Số chương sản xuất (`parts`) | Thời lượng / chương | Khung hình mặc định | Trần Jumpscare toàn phim |
 |---|---|---|---|---|---|
-| **`short`** *(Mặc định phim ngắn)* | **`150s–300s`** *(2.5–5 phút)* | **`3–5` chương liền mạch** | `45–90s` *(khuyến nghị `50–65s`)* | `9:16` *(hỗ trợ `16:9`)* | `<= 4` *(tối đa `<= 2`/chương)* |
-| **`series`** *(Tập dài / Series)* | **`480s–900s`** *(8–15 phút)* | **`8–15` chương** | `45–90s` *(khuyến nghị `55–65s`)* | `16:9` *(hỗ trợ `9:16`)* | `<= round(phút × 0.65)` *(có chương thở `0` JS)* |
-| **`micro`** *(Test nhanh / Legacy)* | `45s–90s` | `1` phần | `45–90s` | `9:16` | `<= 2` |
+| **`short`** *(Mặc định phim ngắn)* | **`150s–360s`** *(2.5–6 phút)* | **`3–5` chương liền mạch** | `45–105s` *(khuyến nghị `72–90s` kèm `[VISUAL Xs]`)* | `9:16` *(hỗ trợ `16:9`)* | `<= 4` *(tối đa `<= 2`/chương)* |
+| **`series`** *(Tập dài / Series)* | **`480s–960s`** *(8–16 phút)* | **`8–15` chương** | `45–105s` *(khuyến nghị `65–90s`)* | `16:9` *(hỗ trợ `9:16`)* | `<= round(phút × 0.65)` *(có chương thở `0` JS)* |
+| **`micro`** *(Test nhanh / 1 chương)* | `45s–105s` | `1` phần | `45–105s` | `9:16` | `<= 2` |
 
 ## Cấu Trúc JSON Đầy Đủ (`schemaVersion: "3.0"`)
 
@@ -23,9 +23,9 @@ Toàn bộ dữ liệu thế giới quan, quy tắc thực thể, tâm lý nhân
     "format": "short",
     "mode": "short",
     "parts": 4,
-    "secondsPerPart": 52,
-    "targetTotalSec": 210,
-    "wordsPerSecond": 2.9,
+    "secondsPerPart": 75,
+    "targetTotalSec": 300,
+    "wordsPerSecond": 2.35,
     "aspect": "9:16",
     "seamlessStitch": true,
     "genre": "folklore",

@@ -61,7 +61,7 @@ raw = subprocess.run(["ffmpeg", "-v", "error", "-i", vid, "-vf", f"scale={W}:{H}
 F = np.frombuffer(raw, np.uint8).reshape(-1, H, W, 3)
 n = len(F)
 w_luma = np.array([0.2126, 0.7152, 0.0722], np.float32)
-stats = {k: np.empty(n, np.float32) for k in ("mean", "std", "p2", "p98", "sat")}
+stats = {k: np.empty(n, np.float32) for k in ("mean", "std", "p2", "p98", "sat", "void_frac")}
 diff = np.empty(max(0, n - 1), np.float32)
 CHUNK = 60
 for start in range(0, n, CHUNK):
@@ -75,6 +75,7 @@ for start in range(0, n, CHUNK):
     stats["p2"][start:end] = np.percentile(lum, 2, 1)
     stats["p98"][start:end] = np.percentile(lum, 98, 1)
     stats["sat"][start:end] = sat.reshape(end - start, -1).mean(1)
+    stats["void_frac"][start:end] = (lum < 0.03).mean(1)
     if end > start + 1:
         diff[start:end - 1] = np.abs(np.diff(F[start:end].astype(np.int16), axis=0)).mean(axis=(1, 2, 3))
     if end < n:
@@ -129,7 +130,8 @@ if directing_warns:
 else:
     R.append("DIRECTING_WARNS none")
 
-# v10.0 Pacing & Dead-Camera Gate: catch static 10-20s shots that slip past diff<0.02 due to grain/scanlines!
+# v11.0 Pacing & Dead-Camera Gate: catch genuinely static >8.0s shots (`med_d < 1.15`) that slip past diff<0.02 due to grain/scanlines,
+# while allowing smooth atmospheric Master Establishing / `[VISUAL Xs]` dolly pushes (`med_d >= 1.15`)!
 dead_cam_warns = []
 shot_durs_s = []
 for s in shots:
@@ -140,8 +142,8 @@ for s in shots:
     shot_durs_s.append(dur_s)
     if sb - 1 > sa:
         med_d = float(np.median(diff[sa:min(sb - 1, len(diff))]))
-        if dur_s > 7.5 and med_d < 3.0:
-            dead_cam_warns.append(f"shot {s['id']} holds {dur_s:.1f}s with low motion median_diff={med_d:.2f} (split into 2.5-4.5s micro-shots!)")
+        if dur_s > 8.0 and med_d < 1.15:
+            dead_cam_warns.append(f"shot {s['id']} holds {dur_s:.1f}s with static camera median_diff={med_d:.2f} (add camMasterEstablish/camPovChain glide!)")
 if shot_durs_s:
     avg_s = sum(shot_durs_s) / len(shot_durs_s)
     spm = len(shot_durs_s) / max(0.1, (n / 30.0) / 60.0)
@@ -150,6 +152,20 @@ if dead_cam_warns:
     R.append("DEAD_CAMERA_WARNS " + "; ".join(dead_cam_warns))
 else:
     R.append("DEAD_CAMERA_WARNS none")
+
+# v11.0 Architectural Readability Gate (`Zero Black Void`): warn if >68% of pixels in non-blackout frames collapse below luma 0.03!
+dark_void_warns = []
+for s in shots:
+    sa, sb = max(0, int(s["a"])), min(n, int(s["b"]))
+    non_blk = [f_i for f_i in range(sa, sb) if f_i not in planned_black_set]
+    if len(non_blk) >= 8:
+        med_void = float(np.median(stats["void_frac"][non_blk]))
+        if med_void > 0.68:
+            dark_void_warns.append(f"shot {s['id']} has {med_void * 100:.0f}% pitch-black void pixels (luma<0.03) — lift architectural shade/fog!")
+if dark_void_warns:
+    R.append("DARK_VOID_WARNS " + "; ".join(dark_void_warns))
+else:
+    R.append("DARK_VOID_WARNS none")
 
 R.append("\nPER SHOT  (luma mean / std / p2 / p98 / saturation mean, medians over the shot)")
 for s in shots or [{"id": 0, "a": 0, "b": n}]:

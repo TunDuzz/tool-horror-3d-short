@@ -3,12 +3,17 @@ import test from "node:test";
 import {
   alignCharacterPartTo,
   applyManifestActors,
+  camMasterEstablish,
+  camPovChain,
   createCharacterFromBlueprint,
+  createPovRig3D,
   getCharacterPartWorldPos,
   resolveLocationAnchor,
+  shotsFromManifest,
   type CharacterBlueprint,
   type SceneManifest,
 } from "../templates/engine/index.ts";
+import * as THREE from "three";
 
 test("Engine v5.1 Spatial Stage Solver locks head/eyes/feet accurately to target world positions and drives actors from manifest", () => {
   const bp: CharacterBlueprint = {
@@ -215,4 +220,100 @@ test("Engine v10.0 stage.ts drives living acting poses, Vietnamese lip-sync from
 
   elder.dispose();
   stalker.dispose();
+});
+
+test("Engine v11.0 enforces voiceOver closed mouth, shotsFromManifest, camPovChain, and 2-joint worldTarget POV hands", () => {
+  const leadBp: CharacterBlueprint = {
+    id: "C01",
+    role: "human",
+    storyDescription: "Night ferry protagonist thinking internally",
+    appearance: { height: 1.72, lowPoly: true, outlineMode: "off" },
+  };
+  const lead = createCharacterFromBlueprint(leadBp);
+  const m: SceneManifest = {
+    projectId: "v11-cinema-test",
+    title: "V11 Cinema Test",
+    totalFrames: 120,
+    aspect: "9:16",
+    locations: [
+      {
+        id: "S01",
+        archetype: "booth",
+        dimensions: [5, 5, 3],
+        ceilingType: "flatConcrete",
+        materials: { wall: "darkTimberTex", floor: "concreteFloorTex", ceiling: "corrugatedTinTex" },
+        practicalLights: ["oilLamp"],
+        heroProps: ["desk", "bolt", "ledger"],
+        signatureShadowBeat: "Warm booth",
+        anchors: { DESK: [0, 0, 0] },
+      },
+    ],
+    castBlueprints: [leadBp],
+    beats: [
+      {
+        beatId: "B1",
+        shotId: 1,
+        a: 0,
+        b: 120,
+        peakFrame: 60,
+        locationId: "S01",
+        lightState: { preset: "warmLamp", lampsOn: ["oilLamp"] },
+        castStates: {
+          C01: { visible: true, anchor: "DESK", pose: "standIdle", speakingAs: "NARRATOR", dialogueMode: "voiceOver" },
+        },
+        propStates: {},
+        cameraIntent: "Master opener",
+      },
+    ],
+    shots: [
+      { id: 1, a: 0, b: 60, scale: "WS", light: "warmLamp", cameraMode: "master", axisSide: "pov_center" },
+      { id: 2, a: 60, b: 120, scale: "POV", light: "warmLamp", cameraMode: "pov_turn", axisSide: "pov_center" },
+    ],
+  };
+
+  const derivedShots = shotsFromManifest(m);
+  assert.equal(derivedShots.length, 2);
+  assert.equal(derivedShots[0].scale, "WS");
+  assert.equal(derivedShots[1].a, 60);
+
+  // Voice-over narrator words must NOT open C01's mouth when dialogueMode === "voiceOver"
+  const narratorWords = [{ w: "Tôi", s: 0.2, e: 0.9, speaker: "NARRATOR" }];
+  applyManifestActors(m, 15, { C01: lead }, undefined, { words: narratorWords, speakerMap: { C01: ["NARRATOR", "NAM"] } });
+
+  // Master establish & continuous POV chain interpolation
+  const mCam = camMasterEstablish([1.8, 1.7, 2.2], [1.2, 1.65, 1.8], [0, 1.2, -1], [0, 1.25, -1.2], 0.5, 50);
+  assert.ok(mCam.pos[0] > 1.2 && mCam.pos[0] < 1.8);
+  const pCam = camPovChain(
+    [
+      { f: 60, pos: [0, 1.56, 0.8], look: [0, 1.48, -1.2], fov: 56 },
+      { f: 75, dur: 18, pos: [0, 1.56, 0.8], look: [1.2, 1.05, -0.6], fov: 54 },
+    ],
+    84,
+  );
+  assert.ok(pCam.look[0] > 0.3 && pCam.look[0] < 1.0, `camPovChain mid-turn look.x=${pCam.look[0]}`);
+
+  // 2-joint fingerCurl + worldTarget reach on PovRig3D
+  const pov = createPovRig3D();
+  const cam = new THREE.PerspectiveCamera(56, 9 / 16, 0.05, 50);
+  cam.position.set(0, 1.55, 0.8);
+  cam.lookAt(0, 1.40, -0.5);
+  cam.updateMatrixWorld(true);
+
+  pov.update(cam, { stance: "standing", anchor: [0, 0, 0.8], bodyYaw: 0, propMode: "leanDesk", frame: 10 });
+  const openProxRot = (pov.rightHand.getObjectByName("povRightFingers")!.children[0] as THREE.Group).rotation.x;
+
+  pov.update(cam, {
+    stance: "standing",
+    anchor: [0, 0, 0.8],
+    bodyYaw: 0,
+    propMode: "reachBolt",
+    actionProgress: 0.85,
+    worldTarget: [0.08, 1.38, 0.35],
+    reachHand: "right",
+    frame: 25,
+  });
+  const grippedProxRot = (pov.rightHand.getObjectByName("povRightFingers")!.children[0] as THREE.Group).rotation.x;
+  assert.ok(grippedProxRot < openProxRot - 0.3, `expected tighter 2-joint finger curl on grasp (${grippedProxRot} vs ${openProxRot})`);
+
+  lead.dispose();
 });

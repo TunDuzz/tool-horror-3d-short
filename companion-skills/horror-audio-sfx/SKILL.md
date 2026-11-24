@@ -1,9 +1,9 @@
 ---
 name: horror-audio-sfx
-description: Use when building studio-clean horror voice tracks (100% open-source VieNeu-TTS 48kHz CPU, IndexTTS-2 Vietnamese / F5-TTS-Vietnamese GPU packs, So-VITS-SVC 1-file VC-Pack -na), managing real CC0 & neural horror SFX assets (sfx_manager.py: Freesound CC0 Foley, TangoFlux text-to-SFX, MMAudio video-to-audio), carving TRUE -48 dB Dead Silence vacuums via mix_base.py, and mastering -15 LUFS mixes aligned to words.json.
+description: Use when building studio-clean horror voice tracks (VieNeu-TTS 48kHz --speaker-lock + faster-whisper Forced Word Alignment <35ms + [VISUAL Xs] breathing beats), managing Openverse CC0 & neural horror SFX assets (sfx_manager.py + mix_cues.py --strict), carving TRUE -48 dB Dead Silence vacuums, and mastering -15 LUFS mixes locked to words.json.
 ---
 
-# Studio-Clean Neural Horror Voice, Real Cinema SFX & TRUE Dead Silence v6.0
+# Studio-Clean Neural Horror Voice, Forced Word Alignment, Real Cinema SFX & TRUE Dead Silence v11.0
 
 Zero-distortion, act-level coherent Vietnamese horror voice + **Asset-First Real Cinema SFX** + **TRUE `-48 dB` Dead Silence** mastering at `48 kHz` stereo 24-bit WAV (`mix_base.py`, `dsp.py`, `sfx_manager.py`, `gen_horror_voice.py`).
 
@@ -32,8 +32,10 @@ Zero-distortion, act-level coherent Vietnamese horror voice + **Asset-First Real
    - **Openverse Audio API (`sfx_manager.py search-openverse` / `fetch-openverse`, ZERO API key):** Searches 5.2M real Freesound/Jamendo files strictly filtered to commercial-safe licenses (`cc0,pdm` default, optional `--allow-cc-by`, **NEVER `nc`/`nd`**), measures `onset_s`/`peak_s`/`tail_end_s`, tracks `history.jsonl --fresh` to avoid repeating sounds across videos, and auto-writes verbatim attributions to `credits.txt`.
    - **Declarative `cues.json` + `scripts/mix_cues.py --strict`:** Align hits via `align: "onset"`, whooshes via `"peak"`, reverse swells via `"end"`, anchored to `at_act`, `at_word`, or `at_dead_silence`. Always verify with `mix_report.md` and hand the user **5 concrete timestamps to check with headphones** — never claim a mix "sounds good" by feel alone!
    - Restrict procedural `horror_instruments.py` strictly to clean non-intrusive sub-bass (`sub_drone < 90 Hz`), pre-silence `reverse_suck`, and high-mid Jumpscare transient/tinnitus/VHS edges layered cleanly with real `CC0` Openverse assets.
-4. **TRUE Psychoacoustic Dead Silence (`-48 dB` Vacuum):**
-   - Pass `dead_silences=load_dead_silences(words_json)` directly into `master_mix(..., dead_silences=..., ds_floor_db=-48.0)` so BOTH music and ambient SFX drop smoothly (`22 ms / 10 ms` cosine edges) into a **`-48 dB` vacuum** across every `[DEAD SILENCE Xs]` span.
+4. **Studio Forced Word-Timestamp Alignment (`1B`, `< 35ms`) & `[VISUAL Xs]` vs `[DEAD SILENCE Xs]` (`3A`):**
+   - `gen_horror_voice.py --word-aligner auto` runs **`faster-whisper` forced word alignment** anchored via Needleman-Wunsch sequence alignment to exact `SCRIPT.md` tokens (`< 35ms` precision, with built-in `Acoustic Pause-Island` `< 80ms` fallback) — eliminating intra-paragraph pause drift so shots, lip-sync, and 4–8 word subtitles lock to true spoken audio!
+   - **`[VISUAL Xs]`** inserts `X` seconds of vocal breathing room (`visual_beats[]` in `words.json`) while keeping ambient rain, wind, and Foley alive for Master Establishing shots and physical hand interactions (`20–35%` of chapter duration).
+   - **`[DEAD SILENCE Xs]`** records `dead_silences[]` and drops **BOTH** music and ambient SFX into a **`-48 dB` psychoacoustic vacuum** right before major dread/jumpscare reveals.
 5. **Voice-First Sparse Scoring & Dynamic Range (`-15.0 LUFS`, `LRA ~5–9 LU`, `<= -1.2 dBTP`):**
    - Keep music beds below `180 Hz` or above `2.5 kHz`, duck music `-4.5..-5.5 dB` under speech, and lock one `drone_hz` + reverb IR across multi-part series.
 

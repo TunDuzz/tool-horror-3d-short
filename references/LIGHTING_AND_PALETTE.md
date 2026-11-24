@@ -1,6 +1,6 @@
-# Horror Lighting Presets, Practical Lights, BumpMap Surfaces & Fog v5.0 (`src/engine/`)
+# Horror Lighting Presets, Practical Lights, BumpMap Surfaces & Fog v11.0 (`src/engine/`)
 
-Calibrated for **Horror Engine v5.0** in `lights.ts`, `shade.ts`, `grade.ts`, `paint.ts`, `retroPsx.ts`, and `ShortPlayer.tsx`.
+Calibrated from `templates/pipeline_constitution.json` (**Zero Black Void Architectural Readability**) across `lights.ts`, `shade.ts`, `grade.ts`, `paint.ts`, `retroPsx.ts`, and `ShortPlayer.tsx`.
 
 ---
 
@@ -8,13 +8,13 @@ Calibrated for **Horror Engine v5.0** in `lights.ts`, `shade.ts`, `grade.ts`, `p
 
 Only these **5 physical horror presets** are valid (all non-physical crimson-wash presets are rejected by `validate_manifest.py` and `horror_story.py`):
 
-| Preset | Mood & Story Use Case | Lit / Shade Contrast | Rim Light | Default Fog Range (`m`) | Sky / Atmosphere |
+| Preset | Mood & Story Use Case | Lit / Shade / Lift Contrast | Rim Light | Default Fog Range (`m`) | Sky / Atmosphere |
 |---|---|---|---|---|---|
-| `warmLamp` | Rural funeral room, candle/oil-lamp interior, warm vigil table | Amber `[0.68, 0.50, 0.36]` / plum-ink `[0.068, 0.052, 0.072]` | Warm `[0.95, 0.64, 0.34]` @ `0.34` | `7.5 → 44` (`#1d151d`) | Warm interior hearth framed by velvety plum shadows |
-| `coldMoon` | Post-blackout room, late-night bedroom, door-crack moonlight | Slate-blue `[0.46, 0.56, 0.76]` / deep navy `[0.044, 0.050, 0.076]` | Cool `[0.58, 0.72, 0.96]` @ `0.44` | `6.5 → 46` (`#161b29`) | Desaturated indigo-slate night dread |
-| `fluorescent` | Hospital corridor, old apartment hall, morgue, school | Pale jade-white `[0.70, 0.84, 0.78]` / teal-ink `[0.056, 0.076, 0.082]` | Mint `[0.68, 0.92, 0.84]` @ `0.30` | `6.0 → 38` (`#142224`) | Clinical cold institutional corridor glow |
-| `duskFog` | Foggy village alley, wet night road, rural exterior | Twilight blue `[0.56, 0.66, 0.84]` / night indigo `[0.055, 0.068, 0.102]` | Silver `[0.74, 0.84, 1.00]` @ `0.38` | `5.5 → 42` (`#1f2a3e`) | Misty blue twilight cut by warm sodium streetlamp pools |
-| `flashlight` | Pitch-dark basement, cave, unlit storage room | Low slate `[0.22, 0.26, 0.34]` / near-black `[0.026, 0.030, 0.044]` | Dim `[0.46, 0.56, 0.74]` @ `0.28` | `5.0 → 32` (`#0c1018`) | Near-black interior carved primarily by `Flashlight3D` SpotLight |
+| `warmLamp` | Rural funeral room, ferry booth, candle/oil-lamp interior | Amber `[0.68, 0.50, 0.36]` / shade `[0.115, 0.090, 0.112]` / lift `[0.036, 0.028, 0.038]` | Warm `[0.95, 0.64, 0.34]` @ `0.34` | `5.6 → 25.0` (`#120c12`) | Warm interior hearth with readable timber walls & ceiling rafters |
+| `coldMoon` | Post-blackout room, late-night bedroom, door-crack moonlight | Slate-blue `[0.46, 0.56, 0.76]` / shade `[0.082, 0.094, 0.132]` / lift `[0.028, 0.034, 0.048]` | Cool `[0.58, 0.72, 0.96]` @ `0.44` | `4.8 → 22.0` (`#090d18`) | Desaturated indigo-slate night dread with clear spatial silhouettes |
+| `fluorescent` | Hospital corridor, ferry waiting hall, apartment hall, morgue | Pale jade-white `[0.70, 0.84, 0.78]` / shade `[0.092, 0.118, 0.124]` / lift `[0.030, 0.040, 0.042]` | Mint `[0.68, 0.92, 0.84]` @ `0.30` | `4.6 → 21.0` (`#0a1214`) | Clinical cold institutional corridor glow |
+| `duskFog` | Foggy village alley, wet night dock, rural exterior | Twilight blue `[0.56, 0.66, 0.84]` / shade `[0.105, 0.088, 0.110]` / lift `[0.032, 0.026, 0.036]` | Silver `[0.74, 0.84, 1.00]` @ `0.38` | `4.5 → 24.0` (`#1a141c`) | Misty blue twilight cut by warm sodium streetlamp pools |
+| `flashlight` | Dark basement, storage room carved by SpotLight cone | Low slate `[0.26, 0.30, 0.40]` / shade `[0.058, 0.062, 0.078]` / lift `[0.020, 0.022, 0.028]` | Dim `[0.46, 0.56, 0.74]` @ `0.28` | `3.8 → 19.0` (`#07090e`) | Dark interior carved by `Flashlight3D` SpotLight with faint wall readability |
 
 ### Smooth In-Shot Light Transitions & Per-Beat Creeping Fog (`getLightBlend` + `beat.fogOverride`)
 - When an oil lamp dies or a breaker trips mid-scene, declare `blendTo` and `blendRange` in `manifest.json` (`lightState`) and expose `getLightBlend(shotId, frame)` on your `ShortWorld` so `ShortPlayer` interpolates `gradeFor` + `applyLightUniforms` seamlessly.

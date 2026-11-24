@@ -1,9 +1,9 @@
 ---
 name: horror-story
-description: Use when brainstorming, adapting, or structuring a Vietnamese or English horror storyline — standalone 150-300s (2.5-5 min) short, 8-15 min (480-900s) multi-part series, or quick 45-90s micro test — through a 3-round Writer's Room workflow (World Lore & Entity 4-Stage Rules, Character Psychology & Trapped Stakes, Clue/Red-Herring/Twist Economy, Multi-Act Tension Curve SVG, 2D SVG Floorplans, Action+Dialogue Blocking, 24 quality gates, and automated multi-chapter blueprint export).
+description: Use when brainstorming, adapting, or structuring a Vietnamese or English horror storyline — standalone 150-360s (2.5-6 min) short, 8-16 min (480-960s) multi-part series, or 45-105s micro chapter — through a 3-round Writer's Room workflow governed by pipeline_constitution.json (World Lore & Entity 4-Stage Rules, Character Psychology & Trapped Stakes, Clue/Twist Economy, Tension Curve SVG, 2D SVG Floorplans, [VISUAL Xs] breathing budget at 2.35 w/s, 24 quality gates, and Anchored POV-First multi-chapter blueprint export).
 ---
 
-# Horror Story Architect v3.0 (`horror-story` · Engine v9.0 Long-Form Narrative Studio)
+# Horror Story Architect v11.0 (`horror-story` · Unified Single Constitution)
 
 Chuyên thiết kế **kịch bản cốt truyện kinh dị có chiều sâu văn học + đường cong căng thẳng + mặt bằng 2D + bảng blocking hành động & định hướng thoại** (`schemaVersion: "3.0"`) trước khi viết `SCRIPT.md` và dựng 3D.
 
@@ -16,10 +16,10 @@ Chuyên thiết kế **kịch bản cốt truyện kinh dị có chiều sâu v�
 ## Quy Trình 3 Vòng Bắt Buộc (`Lore First → Tension Curve → Action & Dialogue Blueprint`)
 
 ### Step 0 — Chốt Tham Số Định Dạng (Hỏi gọn 1 lần)
-1. **Định dạng & Thời lượng (`format`):**
-   - **`short` *(Mặc định phim ngắn độc lập)*:** **`150s–300s` (2.5–5 phút)** — viết thành **1 cốt truyện liền mạch 3–5 Hồi**, tự động chia **`3–5` Chương sản xuất** (`50–65s`/chương) dùng chung bối cảnh 3D `shared/` và ghép không lặp intro thành 1 video duy nhất (`9:16` mặc định, đổi `16:9` được).
-   - **`series` *(Tập dài / Series)*:** **`480s–900s` (8–15 phút)** — cấu trúc **4–5 Hồi**, chia **`8–15` Chương** (`55–65s`/chương, mặc định `16:9`, hỗ trợ cắt dọc `9:16`).
-   - **`micro` *(Test nhanh / Legacy)*:** `45s–90s` (`1` phần).
+1. **Định dạng & Thời lượng (`format` · chuẩn `pipeline_constitution.json`):**
+   - **`short` *(Mặc định phim ngắn độc lập)*:** **`150s–360s` (2.5–6 phút)** — viết thành **1 cốt truyện liền mạch 3–5 Hồi**, tự động chia **`3–5` Chương sản xuất** (`45–105s`/chương, khuyến nghị `72–90s` để có đủ frame thở `[VISUAL Xs]` ở tốc độ `2.35 từ/s`) dùng chung bối cảnh 3D `shared/` và ghép không lặp intro thành 1 video duy nhất (`9:16` mặc định, đổi `16:9` được).
+   - **`series` *(Tập dài / Series)*:** **`480s–960s` (8–16 phút)** — cấu trúc **4–5 Hồi**, chia **`8–15` Chương** (`60–90s`/chương, mặc định `16:9`, hỗ trợ cắt dọc `9:16`).
+   - **`micro` *(Test nhanh / 1 Chương)*:** `45s–105s` (`1` phần).
 2. **Tiểu thể loại (`genre`):** `folklore` (ma dân gian / tâm linh vùng miền), `rules` (kinh dị quy tắc / liminal), `historical` (dị văn lịch sử), `psychological` (tâm lý / tội ác / ký ức méo mó).
 3. **Góc nhìn (`pov`):** Mặc định **`first_person_survivor`** (Ngôi thứ nhất POV giàu nội tâm + chèn thoại nhân vật phụ), hỗ trợ `third_person_close`, `found_footage_tape`, `oral_folklore`.
 4. **Nguồn truyện (`adaptMode`):** `original`, `folklore`, hoặc `adapt` / `reimagine` (nếu chuyển thể truyện chữ dài `.txt`, chia tập trước bằng `horror_story.py chunk`).
@@ -94,6 +94,6 @@ python3 scripts/horror_story.py export-blueprint story.json --out out/<project>/
 ## Bàn Giao Đồng Bộ Sang Sản Xuất (`export-blueprint --all-parts`)
 
 - **`OUTLINE.json` & `CONTINUITY.init.json`:** Dùng trực tiếp cho `horror-series-pipeline` (cả phim `short` 3–5 chương lẫn `series` 8–15 chương) và `stitch_parts.py` để ghép liền thành 1 file MP4 `2.5–5 phút` hoặc `8–15 phút` với `0.000s` lệch tiếng.
-- **`p01..pNN/SCRIPT.skeleton.md`:** Đã gom Hồi theo `mood`/`[DEAD SILENCE]`, nhúng sẵn `Nội tâm (subtext)`, `Cảm giác (sensoryDetails)` và `wordBudget` từng beat để viết lời thoại Việt tự nhiên cho `VieNeu-TTS` (`Thiện Minh`).
-- **`p01..pNN/manifest.draft.json`:** Đã khóa sẵn `locations[].anchors`, `castBlueprints[]` (gồm cả nhân vật chính `C01` để quay Hybrid POV + OTS!), `headerStyle: "minimal"` mặc định, `recommendedMicroShots` (`ceil(durationSec / 3.5)` — tách mỗi beat lớn thành `3–5` góc máy `2.5–4.5s` ở `story.ts` để triệt tiêu góc quay chết!), và tự động gắn `sameLocationOf`/`sameCharacterOf` cho `p02..pNN`. Chạy `align_manifest.py` để tự động cắt phụ đề `captionChunks[]` (`4–8 từ`/cụm).
+- **`p01..pNN/SCRIPT.skeleton.md`:** Tự động mở đầu bằng `[VISUAL 2.60s]` cho **Master Establishing Shot (`2A`)**, hỗ trợ `visualBeforeSec` (`[VISUAL Xs]`) ở các beat bối cảnh/đạo cụ, gom Hồi theo `mood`/`[DEAD SILENCE]`, nhúng sẵn `subtext`, `sensoryDetails` và `wordBudget` (`2.35 từ/s`) cho `VieNeu-TTS --speaker-lock`.
+- **`p01..pNN/manifest.draft.json`:** Khóa sẵn `locations[].anchors`, `castBlueprints[]` (gồm cả `C01`), `headerStyle: "minimal"` mặc định, **khung `shots[]` chuẩn Anchored POV-First (`cameraMode: "master"` mở cảnh → `pov` / `pov_interact` → tối đa `1–2` `ots_same_side` trên trục 180°)**, và tự động gắn `sameLocationOf`/`sameCharacterOf` cho `p02..pNN`. Chạy `align_manifest.py` để khóa đồng thời `beats[] + shots[] + captionChunks[]` (`4–8 từ`/cụm).
 - **`p01..pNN/cues.draft.json`:** Đã khóa `max_jumpscares` đúng mật độ chống nhờn & đồng bộ ID với `manifest.draft.json`.

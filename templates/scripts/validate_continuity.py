@@ -6,6 +6,17 @@ import os
 import re
 import sys
 
+try:
+    from constitution import load_constitution
+except ImportError:
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    from constitution import load_constitution
+
+_CONST = load_constitution()
+_PART_DUR_CFG = _CONST.get("partDurationSec") or {}
+PART_DUR_MIN = int(_PART_DUR_CFG.get("min", 45))
+PART_DUR_MAX = int(_PART_DUR_CFG.get("max", 105))
+
 VALID_LIGHTS = {"warmLamp", "coldMoon", "fluorescent", "duskFog", "flashlight"}
 VALID_ASPECTS = {"9:16", "16:9"}
 VALID_TRANSITION_PREFIXES = ("cut", "fade", "xfade", "blackout", "fadeblack", "match_cut")
@@ -72,8 +83,8 @@ def main():
             if pid != idx + 1:
                 errors.append(f"OUTLINE.parts[{idx}].part expected {idx + 1}, got {pid!r} (must be contiguous 1..M)")
             dur = p.get("target_sec", p.get("duration_sec"))
-            if not isinstance(dur, (int, float)) or not (45 <= dur <= 90):
-                errors.append(f"Part {pid}: target_sec/duration_sec={dur!r} outside [45, 90]")
+            if not isinstance(dur, (int, float)) or not (PART_DUR_MIN <= dur <= PART_DUR_MAX):
+                errors.append(f"Part {pid}: target_sec/duration_sec={dur!r} outside [{PART_DUR_MIN}, {PART_DUR_MAX}]")
             light = p.get("light")
             if light not in VALID_LIGHTS:
                 errors.append(f"Part {pid}: light={light!r} not in {sorted(VALID_LIGHTS)}")

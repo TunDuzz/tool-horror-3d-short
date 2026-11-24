@@ -41,7 +41,7 @@ SR_VC = 44100
 SR_FINAL = 48000
 VC_PACK_PAD_SEC = 0.35
 
-PAUSE_RE = re.compile(r"(\[(?:PAUSE|DEAD\s+SILENCE)\s+(\d+(?:\.\d+)?)\s*s?\])", re.IGNORECASE)
+PAUSE_RE = re.compile(r"(\[(?:PAUSE|VISUAL|DEAD\s+SILENCE)\s+(\d+(?:\.\d+)?)\s*s?\])", re.IGNORECASE)
 DIRECTIVE_RE = re.compile(r"^\[\s*(NARRATOR|SPEAKER(?:\s*:\s*[^|\]]+)?)(?:\s*\|\s*(.+?))?\s*\]$", re.IGNORECASE)
 VIENEU_TAG_RE = re.compile(r"\[(?:thở\s+dài|hắng\s+giọng|cười)\]", re.IGNORECASE)
 CLOCK_RE = re.compile(r"\b(\d{1,2}):(\d{2})\b")
@@ -379,7 +379,12 @@ def parse_script(path: str, default_voice: str = "vi-VN-NamMinhNeural"):
             if i + 2 < len(parts):
                 tag = parts[i + 1].upper()
                 dur = max(0.05, float(parts[i + 2]))
-                kind = "dead_silence" if "DEAD" in tag else "pause"
+                if "DEAD" in tag:
+                    kind = "dead_silence"
+                elif "VISUAL" in tag:
+                    kind = "visual"
+                else:
+                    kind = "pause"
                 items.append({"kind": kind, "dur": dur})
             i += 3
 
@@ -538,36 +543,413 @@ def apply_voice_fx(x: np.ndarray, sr: int, fx: str = "dry", mood: str = "calm_om
     return _fade(y, sr, 0.008, 0.014)
 
 
+def _tok_syllable_weight(tok: str) -> float:
+    norm = norm_tok(tok)
+    if norm.isdigit():
+        expanded = normalize_vi_for_tts(norm)
+        return max(1.4, sum(max(1.1, float(len(norm_tok(x)))) for x in expanded.split()))
+    return max(1.15, float(len(norm)))
+
+
+def _punct_break_strength(tok: str) -> float:
+    if tok.endswith(("...", "…")):
+        return 3.4
+    if tok.endswith((".", "!", "?")):
+        return 2.8
+    if tok.endswith((";", ":", "—", "–")):
+        return 1.9
+    if tok.endswith(","):
+        return 1.3
+    return 0.0
+
+
 def estimate_syllable_words(display_text: str, dur_s: float, offset_s: float, speaker: str, mood: str) -> list:
     """Distribute word timestamps proportionally to Vietnamese syllable + punctuation pause weight across `dur_s`."""
     toks = [t for t in display_text.split() if t.strip()]
     if not toks:
         return []
-    weights = []
-    for t in toks:
-        base = max(1.2, float(len(norm_tok(t))))
-        if t.endswith(("...", "…")):
-            base += 3.2
-        elif t.endswith((".", "!", "?")):
-            base += 2.6
-        elif t.endswith((",", ";", ":")):
-            base += 1.4
-        weights.append(base)
+    weights = [_tok_syllable_weight(t) + _punct_break_strength(t) for t in toks]
     total_w = sum(weights)
-    usable = max(0.08, dur_s)
+    usable = max(0.06, dur_s)
     cur = offset_s
     out = []
     for tok, w in zip(toks, weights):
         wd = usable * (w / total_w)
+        speech_w = usable * (_tok_syllable_weight(tok) / total_w)
         out.append({
             "w": tok,
             "s": round(cur, 4),
-            "e": round(cur + max(0.04, wd), 4),
+            "e": round(cur + max(0.035, min(wd, speech_w * 1.15)), 4),
             "speaker": speaker,
             "mood": mood,
         })
         cur += wd
     return out
+
+
+def _detect_voiced_islands(samples: np.ndarray, sr: int, min_pause_s: float = 0.13) -> list[tuple[float, float]]:
+    """Detect real voiced waveform islands `[(start_s, end_s), ...]`, leaving pauses >= `min_pause_s` completely empty."""
+    dur_s = len(samples) / float(max(1, sr))
+    if len(samples) < max(32, int(0.08 * sr)):
+        return [(0.0, max(0.04, dur_s))]
+    hop = max(1, int(round(0.010 * sr)))  # 10 ms frame step
+    win = max(hop, int(round(0.025 * sr)))
+    n_frames = max(1, (len(samples) - win) // hop + 1)
+    sq = np.asarray(samples, dtype=np.float64) ** 2
+    csum = np.concatenate([[0.0], np.cumsum(sq)])
+    starts = np.arange(n_frames) * hop
+    ends = np.minimum(len(samples), starts + win)
+    rms = np.sqrt(np.maximum(1e-12, (csum[ends] - csum[starts]) / np.maximum(1, ends - starts)))
+    db = 20.0 * np.log10(rms)
+    peak_db = float(np.percentile(db, 95))
+    thr_db = max(-45.0, peak_db - 26.5)
+    voiced = db >= thr_db
+    if not np.any(voiced):
+        return [(0.0, max(0.04, dur_s))]
+
+    # Bridge brief consonant closures (< 60 ms = 6 frames)
+    bridge_f = 6
+    idx_v = np.flatnonzero(voiced)
+    for a_i, b_i in zip(idx_v[:-1], idx_v[1:]):
+        if 1 < (b_i - a_i) <= bridge_f:
+            voiced[a_i:b_i] = True
+
+    # Extract raw voiced runs and merge runs separated by less than min_pause_s
+    min_pause_f = max(7, int(round(min_pause_s / 0.010)))
+    islands_f: list[list[int]] = []
+    i = 0
+    while i < n_frames:
+        if not voiced[i]:
+            i += 1
+            continue
+        j = i + 1
+        while j < n_frames and voiced[j]:
+            j += 1
+        if j - i >= 3:
+            if islands_f and (i - islands_f[-1][1]) < min_pause_f:
+                islands_f[-1][1] = j
+            else:
+                islands_f.append([i, j])
+        i = j
+
+    if not islands_f:
+        return [(max(0.0, idx_v[0] * 0.010), min(dur_s, (idx_v[-1] + 2) * 0.010))]
+
+    out = []
+    for fi, fj in islands_f:
+        s0 = max(0.0, fi * 0.010 - 0.012)
+        e0 = min(dur_s, fj * 0.010 + 0.018)
+        if e0 > s0 + 0.03:
+            out.append((s0, e0))
+    return out or [(0.0, max(0.04, dur_s))]
+
+
+def align_words_acoustic_islands(
+    display_text: str,
+    samples: np.ndarray,
+    sr: int,
+    offset_s: float,
+    speaker: str,
+    mood: str,
+) -> list:
+    """Tier-2 Acoustic Pause-Island Aligner (< 80 ms): maps punctuation clauses onto real voiced waveform islands so words NEVER land inside silent pauses."""
+    toks = [t for t in display_text.split() if t.strip()]
+    dur_s = len(samples) / float(max(1, sr))
+    if not toks:
+        return []
+    islands = _detect_voiced_islands(samples, sr)
+    if len(islands) == 1:
+        is_s, is_e = islands[0]
+        return estimate_syllable_words(display_text, max(0.05, is_e - is_s), offset_s + is_s, speaker, mood)
+
+    # Candidate break indices after token k (0 <= k < len(toks) - 1)
+    n_splits = min(len(islands) - 1, len(toks) - 1)
+    if n_splits <= 0:
+        is_s, is_e = islands[0][0], islands[-1][1]
+        return estimate_syllable_words(display_text, max(0.05, is_e - is_s), offset_s + is_s, speaker, mood)
+
+    # Pick top n_splits largest acoustic gaps so minor breaths merge cleanly when there are more islands than clauses
+    if len(islands) - 1 > n_splits:
+        gaps = [(islands[g + 1][0] - islands[g][1], g) for g in range(len(islands) - 1)]
+        keep_gaps = set(g for _, g in sorted(gaps, reverse=True)[:n_splits])
+        merged = [list(islands[0])]
+        for g in range(len(islands) - 1):
+            if g in keep_gaps:
+                merged.append(list(islands[g + 1]))
+            else:
+                merged[-1][1] = islands[g + 1][1]
+        islands = [(m[0], m[1]) for m in merged]
+
+    # Dynamic programming: match `len(islands)` token groups to `islands` proportional to voiced duration + punctuation bonus!
+    island_durs = [max(0.04, b - a) for a, b in islands]
+    tot_voiced = sum(island_durs)
+    cum_voiced = np.cumsum(island_durs) / tot_voiced
+
+    tok_w = np.array([_tok_syllable_weight(t) for t in toks], dtype=np.float64)
+    cum_w = np.cumsum(tok_w) / max(1e-6, float(np.sum(tok_w)))
+    punct_b = np.array([_punct_break_strength(t) for t in toks], dtype=np.float64)
+
+    M = len(islands)
+    N = len(toks)
+    INF = 1e18
+    dp = np.full((M - 1, N - 1), INF, dtype=np.float64)
+    parent = np.full((M - 1, N - 1), -1, dtype=np.int32)
+
+    for k in range(0, N - M + 1):
+        ratio_err = abs(cum_w[k] - cum_voiced[0])
+        dp[0, k] = ratio_err * 6.0 - punct_b[k] * 0.42
+
+    for m in range(1, M - 1):
+        for k in range(m, N - (M - m) + 1):
+            best_c = INF
+            best_p = -1
+            base_cost = abs(cum_w[k] - cum_voiced[m]) * 6.0 - punct_b[k] * 0.42
+            for p in range(m - 1, k):
+                c = dp[m - 1, p] + base_cost
+                if c < best_c:
+                    best_c = c
+                    best_p = p
+            dp[m, k] = best_c
+            parent[m, k] = best_p
+
+    last_m = M - 2
+    best_k = int(np.argmin(dp[last_m]))
+    splits = [0] * (M - 1)
+    cur_k = best_k
+    for m in range(M - 2, -1, -1):
+        splits[m] = cur_k
+        cur_k = int(parent[m, cur_k])
+
+    out = []
+    start_tok = 0
+    for idx_is, (is_s, is_e) in enumerate(islands):
+        end_tok = (splits[idx_is] + 1) if idx_is < M - 1 else N
+        sub_txt = " ".join(toks[start_tok:end_tok])
+        out.extend(estimate_syllable_words(sub_txt, max(0.04, is_e - is_s), offset_s + is_s, speaker, mood))
+        start_tok = end_tok
+    return out
+
+
+_WHISPER_MODEL_CACHE = {}
+
+
+def _get_whisper_model(model_size: str = "base"):
+    if model_size not in _WHISPER_MODEL_CACHE:
+        from faster_whisper import WhisperModel
+        _WHISPER_MODEL_CACHE[model_size] = WhisperModel(model_size, device="cpu", compute_type="int8")
+    return _WHISPER_MODEL_CACHE[model_size]
+
+
+def _tok_sim(a: str, b: str) -> float:
+    if not a or not b:
+        return -0.5
+    if a == b:
+        return 3.2
+    if a in b or b in a:
+        return 1.8
+    # Strip diacritics / compare first+last char for slight ASR homophones
+    if a[0] == b[0] and len(a) >= 2 and len(b) >= 2:
+        return 0.9
+    return -1.1
+
+
+def align_words_whisper_forced(
+    display_text: str,
+    samples: np.ndarray,
+    sr: int,
+    offset_s: float,
+    speaker: str,
+    mood: str,
+    model_size: str = "base",
+) -> tuple[list, str]:
+    """Tier-1 Studio Forced Word Aligner (< 35 ms): faster-whisper word_timestamps + Needleman-Wunsch alignment onto exact SCRIPT.md tokens, with Tier-2 Acoustic Pause-Island fallback."""
+    toks = [t for t in display_text.split() if t.strip()]
+    if not toks:
+        return [], "empty"
+    dur_s = len(samples) / float(max(1, sr))
+    if dur_s < 0.15:
+        return align_words_acoustic_islands(display_text, samples, sr, offset_s, speaker, mood), "acoustic_island"
+
+    try:
+        model = _get_whisper_model(model_size)
+        wav_16k = resample_mono(samples, sr, 16000).astype(np.float32)
+        tts_prompt = normalize_vi_for_tts(display_text, keep_vieneu_tags=False)
+        segments, _ = model.transcribe(
+            wav_16k,
+            language="vi",
+            word_timestamps=True,
+            vad_filter=False,
+            condition_on_previous_text=False,
+            initial_prompt=tts_prompt[:220],
+            beam_size=2,
+        )
+        obs = []
+        for seg in segments:
+            for w in (seg.words or []):
+                wt = norm_tok(w.word)
+                if wt:
+                    s0 = max(0.0, min(dur_s - 0.02, float(w.start)))
+                    e0 = max(s0 + 0.025, min(dur_s, float(w.end)))
+                    obs.append((wt, s0, e0))
+    except Exception:
+        return align_words_acoustic_islands(display_text, samples, sr, offset_s, speaker, mood), "acoustic_island"
+
+    if len(obs) < max(1, int(len(toks) * 0.45)):
+        return align_words_acoustic_islands(display_text, samples, sr, offset_s, speaker, mood), "acoustic_island"
+
+    # Expand display tokens into spoken phonetic syllables (e.g. "13," -> [(idx, "mười"), (idx, "ba")])
+    sub_exp = []
+    for d_idx, dt in enumerate(toks):
+        spoken = normalize_vi_for_tts(dt, keep_vieneu_tags=False)
+        stoks = [norm_tok(x) for x in spoken.split() if norm_tok(x)]
+        if not stoks:
+            stoks = [norm_tok(dt) or "a"]
+        for st in stoks:
+            sub_exp.append((d_idx, st))
+
+    N = len(sub_exp)
+    M = len(obs)
+    GAP = -1.25
+    dp = np.zeros((N + 1, M + 1), dtype=np.float64)
+    bt = np.zeros((N + 1, M + 1), dtype=np.int8)  # 1=diag, 2=up(skip sub), 3=left(skip obs)
+    for i in range(1, N + 1):
+        dp[i, 0] = i * GAP
+        bt[i, 0] = 2
+    for j in range(1, M + 1):
+        dp[0, j] = j * GAP
+        bt[0, j] = 3
+
+    for i in range(1, N + 1):
+        sa = sub_exp[i - 1][1]
+        for j in range(1, M + 1):
+            c_diag = dp[i - 1, j - 1] + _tok_sim(sa, obs[j - 1][0])
+            c_up = dp[i - 1, j] + GAP
+            c_left = dp[i, j - 1] + GAP
+            if c_diag >= c_up and c_diag >= c_left:
+                dp[i, j] = c_diag
+                bt[i, j] = 1
+            elif c_up >= c_left:
+                dp[i, j] = c_up
+                bt[i, j] = 2
+            else:
+                dp[i, j] = c_left
+                bt[i, j] = 3
+
+    sub_times: list[tuple[float, float] | None] = [None] * N
+    i, j = N, M
+    while i > 0 or j > 0:
+        move = int(bt[i, j])
+        if i > 0 and j > 0 and move == 1:
+            if _tok_sim(sub_exp[i - 1][1], obs[j - 1][0]) > -0.6:
+                sub_times[i - 1] = (obs[j - 1][1], obs[j - 1][2])
+            i -= 1
+            j -= 1
+        elif i > 0 and (j == 0 or move == 2):
+            i -= 1
+        else:
+            j -= 1
+
+    # Interpolate any unmatched sub-tokens strictly inside the surrounding matched anchor window using voiced islands
+    islands = _detect_voiced_islands(samples, sr)
+    audio_s0 = islands[0][0]
+    audio_e0 = islands[-1][1]
+    k = 0
+    while k < N:
+        if sub_times[k] is not None:
+            k += 1
+            continue
+        r = k
+        while r < N and sub_times[r] is None:
+            r += 1
+        win_s = sub_times[k - 1][1] if k > 0 and sub_times[k - 1] is not None else audio_s0
+        win_e = sub_times[r][0] if r < N and sub_times[r] is not None else audio_e0
+        if win_e <= win_s + 0.03 * (r - k):
+            win_e = min(dur_s, win_s + 0.08 * (r - k))
+        # Clamp interpolation window to first/last voiced sample inside [win_s, win_e]
+        s_idx = max(0, min(len(samples) - 1, int(round(win_s * sr))))
+        e_idx = max(s_idx + 1, min(len(samples), int(round(win_e * sr))))
+        sub_seg = samples[s_idx:e_idx]
+        sub_is = _detect_voiced_islands(sub_seg, sr)
+        eff_s = win_s + sub_is[0][0]
+        eff_e = max(eff_s + 0.03 * (r - k), win_s + sub_is[-1][1])
+        span = eff_e - eff_s
+        ws = [max(1.1, float(len(sub_exp[m][1]))) for m in range(k, r)]
+        tw = sum(ws)
+        cur_t = eff_s
+        for m, w_val in zip(range(k, r), ws):
+            dt_m = span * (w_val / tw)
+            sub_times[m] = (cur_t, max(cur_t + 0.025, cur_t + dt_m))
+            cur_t += dt_m
+        k = r
+
+    # Collapse phonetic sub-tokens back to exact display tokens
+    disp_spans: list[list[float]] = [[dur_s, 0.0] for _ in range(len(toks))]
+    for m, (d_idx, _) in enumerate(sub_exp):
+        st_m, en_m = sub_times[m] or (0.0, 0.05)
+        disp_spans[d_idx][0] = min(disp_spans[d_idx][0], st_m)
+        disp_spans[d_idx][1] = max(disp_spans[d_idx][1], en_m)
+
+    out = []
+    prev_e = 0.0
+    for dt, (s0, e0) in zip(toks, disp_spans):
+        s_clean = max(prev_e, s0)
+        e_clean = max(s_clean + 0.03, e0)
+        prev_e = e_clean
+        out.append({
+            "w": dt,
+            "s": round(offset_s + s_clean, 4),
+            "e": round(offset_s + e_clean, 4),
+            "speaker": speaker,
+            "mood": mood,
+        })
+    return out, "whisper_forced"
+
+
+def align_audio_words_v11(
+    display_text: str,
+    samples: np.ndarray,
+    sr: int,
+    offset_s: float,
+    speaker: str,
+    mood: str,
+    aligner_mode: str = "auto",
+    whisper_model: str = "base",
+    cache_path: str | None = None,
+) -> tuple[list, str]:
+    """Unified v11.0 Acoustic Word Aligner (`auto` | `whisper` | `acoustic` | `proportional`)."""
+    mode = (aligner_mode or "auto").lower()
+    if mode == "proportional":
+        return estimate_syllable_words(display_text, len(samples) / float(max(1, sr)), offset_s, speaker, mood), "proportional"
+    if mode == "acoustic":
+        return align_words_acoustic_islands(display_text, samples, sr, offset_s, speaker, mood), "acoustic_island"
+
+    if cache_path and os.path.isfile(cache_path):
+        try:
+            cached = json.load(open(cache_path, encoding="utf-8"))
+            if cached.get("text") == display_text and isinstance(cached.get("words"), list) and cached["words"]:
+                shifted = [
+                    {**w, "s": round(offset_s + float(w["s"]), 4), "e": round(offset_s + float(w["e"]), 4), "speaker": speaker, "mood": mood}
+                    for w in cached["words"]
+                ]
+                return shifted, str(cached.get("mode", "whisper_forced"))
+        except Exception:
+            pass
+
+    words_zero, used_mode = align_words_whisper_forced(display_text, samples, sr, 0.0, speaker, mood, model_size=whisper_model)
+    if cache_path and words_zero and used_mode == "whisper_forced":
+        try:
+            os.makedirs(os.path.dirname(os.path.abspath(cache_path)), exist_ok=True)
+            with open(cache_path, "w", encoding="utf-8") as fp:
+                json.dump({"text": display_text, "mode": used_mode, "words": words_zero}, fp, ensure_ascii=False)
+        except Exception:
+            pass
+
+    if abs(offset_s) > 1e-6:
+        words_zero = [
+            {**w, "s": round(offset_s + float(w["s"]), 4), "e": round(offset_s + float(w["e"]), 4)}
+            for w in words_zero
+        ]
+    return words_zero, used_mode
 
 
 def align_chunk_words(display_text: str, raw_events: list, t0: float, speed: float, dur_s: float, speaker: str, mood: str) -> list:
@@ -889,8 +1271,13 @@ def synth_vieneu_chunk(item: dict, sr: int, args, cache_dir: str | None = None, 
         if abs(target_tempo - 1.0) >= 0.02:
             samples = apply_clean_tempo(samples, sr, target_tempo, tmp_dir=tmp_dir)
 
-    dur_s = len(samples) / float(sr)
-    words = estimate_syllable_words(item["text"], dur_s, 0.0, item["speaker"], item["mood"])
+    aligner_mode = getattr(args, "word_aligner", "auto")
+    whisper_model = getattr(args, "whisper_model", "base")
+    w_cache = (wav_cache + f".{whisper_model}.words_v11.json") if wav_cache else None
+    words, _ = align_audio_words_v11(
+        item["text"], samples, sr, 0.0, item["speaker"], item["mood"],
+        aligner_mode=aligner_mode, whisper_model=whisper_model, cache_path=w_cache,
+    )
     return samples, words
 
 
@@ -1049,7 +1436,7 @@ def synth_gemini_chunk(item: dict, sr: int, tmp_dir: str, idx: int, api_key: str
             os.makedirs(cache_dir, exist_ok=True)
             write_wav_mono16(wav_cache, raw_x, sr)
 
-    words = estimate_syllable_words(item["text"], len(raw_x) / float(sr), 0.0, item["speaker"], item["mood"])
+    words, _ = align_audio_words_v11(item["text"], raw_x, sr, 0.0, item["speaker"], item["mood"])
     return raw_x, words
 
 
@@ -1418,12 +1805,15 @@ def assemble_voice(items: list, args, tmp_dir: str, synth_fn=None):
     narrator_indices = [i for i in speech_indices if items[i]["is_narrator"]]
     preloaded_clips = {}
 
+    aligner_mode = getattr(args, "word_aligner", "auto")
+    whisper_model = getattr(args, "whisper_model", "base")
+
     if getattr(args, "import_acts", None):
         for a_idx, item_idx in enumerate(speech_indices, 1):
             it = items[item_idx]
             p = find_act_clip(args.import_acts, a_idx)
             clip = trim_silence(load_audio_mono(p, SR_FINAL), SR_FINAL, pad_s=0.025)
-            rel_w = estimate_syllable_words(it["text"], len(clip) / float(SR_FINAL), 0.0, it["speaker"], it["mood"])
+            rel_w, _ = align_audio_words_v11(it["text"], clip, SR_FINAL, 0.0, it["speaker"], it["mood"], aligner_mode=aligner_mode, whisper_model=whisper_model)
             preloaded_clips[item_idx] = (clip, rel_w)
     elif args.vc_pack and args.narrator_vc_wav:
         mf_path = os.path.join(args.vc_pack, "vc_pack_manifest.json")
@@ -1440,7 +1830,7 @@ def assemble_voice(items: list, args, tmp_dir: str, synth_fn=None):
             it = items[item_idx]
             p = find_act_clip(args.narrator_dir, n_idx)
             clip = trim_silence(load_audio_mono(p, SR_FINAL), SR_FINAL, pad_s=0.025)
-            rel_w = estimate_syllable_words(it["text"], len(clip) / float(SR_FINAL), 0.0, it["speaker"], it["mood"])
+            rel_w, _ = align_audio_words_v11(it["text"], clip, SR_FINAL, 0.0, it["speaker"], it["mood"], aligner_mode=aligner_mode, whisper_model=whisper_model)
             preloaded_clips[item_idx] = (clip, rel_w)
     elif getattr(args, "human_guide", None):
         raw_full = _hp(load_audio_mono(args.human_guide, SR_FINAL), 55.0, SR_FINAL, order=2)
@@ -1448,7 +1838,7 @@ def assemble_voice(items: list, args, tmp_dir: str, synth_fn=None):
         for item_idx, clip in zip(narrator_indices, chunks):
             it = items[item_idx]
             clip = trim_silence(clip, SR_FINAL, pad_s=0.025)
-            rel_w = estimate_syllable_words(it["text"], len(clip) / float(SR_FINAL), 0.0, it["speaker"], it["mood"])
+            rel_w, _ = align_audio_words_v11(it["text"], clip, SR_FINAL, 0.0, it["speaker"], it["mood"], aligner_mode=aligner_mode, whisper_model=whisper_model)
             preloaded_clips[item_idx] = (clip, rel_w)
     elif args.narrator_audio:
         raw_full = load_audio_mono(args.narrator_audio, SR_FINAL)
@@ -1456,7 +1846,7 @@ def assemble_voice(items: list, args, tmp_dir: str, synth_fn=None):
         for item_idx, clip in zip(narrator_indices, chunks):
             it = items[item_idx]
             clip = trim_silence(clip, SR_FINAL, pad_s=0.025)
-            rel_w = estimate_syllable_words(it["text"], len(clip) / float(SR_FINAL), 0.0, it["speaker"], it["mood"])
+            rel_w, _ = align_audio_words_v11(it["text"], clip, SR_FINAL, 0.0, it["speaker"], it["mood"], aligner_mode=aligner_mode, whisper_model=whisper_model)
             preloaded_clips[item_idx] = (clip, rel_w)
 
     use_local_vc = (not preloaded_clips) and (not args.no_vc) and os.path.isfile(args.vc_model)
@@ -1478,6 +1868,9 @@ def assemble_voice(items: list, args, tmp_dir: str, synth_fn=None):
     all_words = []
     sentences = []
     dead_silences = []
+    visual_beats = []
+    pause_total_s = 0.0
+    alignment_modes_used = set()
     cur_sec = 0.0
 
     if args.lead_silence > 0:
@@ -1487,13 +1880,18 @@ def assemble_voice(items: list, args, tmp_dir: str, synth_fn=None):
 
     act_num = 0
     for idx, it in enumerate(items):
-        if it["kind"] in ("pause", "dead_silence"):
+        if it["kind"] in ("pause", "visual", "dead_silence"):
             n_sil = int(round(it["dur"] * SR_FINAL))
             sil_s = cur_sec
             sil_e = cur_sec + n_sil / float(SR_FINAL)
             timeline.append(np.zeros(n_sil, dtype=np.float64))
             if it["kind"] == "dead_silence":
                 dead_silences.append({"s": round(sil_s, 4), "e": round(sil_e, 4)})
+            elif it["kind"] == "visual":
+                visual_beats.append({"s": round(sil_s, 4), "e": round(sil_e, 4), "dur": round(sil_e - sil_s, 4)})
+                pause_total_s += (sil_e - sil_s)
+            else:
+                pause_total_s += (sil_e - sil_s)
             cur_sec = sil_e
             continue
 
@@ -1514,7 +1912,13 @@ def assemble_voice(items: list, args, tmp_dir: str, synth_fn=None):
         cur_sec += len(seg) / float(SR_FINAL)
 
         if not rel_words:
-            rel_words = estimate_syllable_words(it["text"], len(raw_seg) / float(SR_FINAL), 0.0, it["speaker"], mood)
+            rel_words, u_mode = align_audio_words_v11(
+                it["text"], raw_seg, SR_FINAL, 0.0, it["speaker"], mood,
+                aligner_mode=aligner_mode, whisper_model=whisper_model,
+            )
+            alignment_modes_used.add(u_mode)
+        else:
+            alignment_modes_used.add("whisper_or_acoustic" if aligner_mode != "proportional" else "proportional")
 
         act_words = []
         for rw in rel_words:
@@ -1567,7 +1971,11 @@ def assemble_voice(items: list, args, tmp_dir: str, synth_fn=None):
     final_dur = len(full_48k) / float(SR_FINAL)
     total_frames = int(math.ceil((final_dur + 0.35) * args.fps))
     ds_total = sum(d["e"] - d["s"] for d in dead_silences)
+    vis_total = sum(v["dur"] for v in visual_beats)
     wps = round(len(all_words) / max(0.1, final_dur - ds_total), 2)
+    spoken_dur_only = max(0.1, final_dur - ds_total - pause_total_s)
+    spoken_wps = round(len(all_words) / spoken_dur_only, 2)
+    visual_ratio = round((pause_total_s + ds_total) / max(0.1, final_dur), 3)
 
     eng_choice = getattr(args, "tts_engine", "auto")
     if getattr(args, "import_acts", None):
@@ -1591,15 +1999,20 @@ def assemble_voice(items: list, args, tmp_dir: str, synth_fn=None):
 
     payload = {
         "engine": "horror-voice-v6",
+        "version": "11.0.0",
         "voice": getattr(args, "vieneu_voice", None) or args.base_voice,
         "narrator_source": src_label,
+        "alignment_mode": getattr(args, "word_aligner", "auto"),
         "dur": round(final_dur, 4),
         "fps": args.fps,
         "total_frames": total_frames,
         "words_per_sec": wps,
+        "spoken_words_per_sec": spoken_wps,
+        "visual_breathing_ratio": visual_ratio,
         "words": all_words,
         "sentences": sentences,
         "dead_silences": dead_silences,
+        "visual_beats": visual_beats,
     }
     words_json = os.path.join(args.out_dir, "words.json")
     with open(words_json, "w", encoding="utf-8") as fp:
@@ -1608,15 +2021,19 @@ def assemble_voice(items: list, args, tmp_dir: str, synth_fn=None):
     if args.words_ts:
         os.makedirs(os.path.dirname(os.path.abspath(args.words_ts)), exist_ok=True)
         with open(args.words_ts, "w", encoding="utf-8") as fp:
-            fp.write("// Auto-generated by scripts/gen_horror_voice.py (v6.0 Studio-Clean Neural Voice)\n")
+            fp.write("// Auto-generated by scripts/gen_horror_voice.py (v11.0 Studio-Clean Neural Voice + Forced Word Alignment)\n")
             fp.write(f"export const VOICE_DUR = {round(final_dur, 4)};\n")
             fp.write(f"export const TOTAL_FRAMES = {total_frames};\n")
             fp.write("export type WordTiming = { w: string; s: number; e: number; speaker?: string; mood?: string };\n")
             fp.write("export const WORDS: WordTiming[] = " + json.dumps(all_words, ensure_ascii=False) + ";\n")
 
-    print(f"VOICE OK -> {final_wav} ({final_dur:.3f}s, {total_frames}f @ {args.fps}fps, {len(all_words)} words, {wps:.2f} w/s, src={src_label})")
+    print(f"VOICE OK -> {final_wav} ({final_dur:.3f}s, {total_frames}f @ {args.fps}fps, {len(all_words)} words, {wps:.2f} w/s effective [{spoken_wps:.2f} spoken], visual_ratio={visual_ratio:.2f}, src={src_label})")
+    if wps > 2.75:
+        print(f"  [PACING WARN] Effective speech density {wps:.2f} w/s > 2.75 w/s — add [VISUAL Xs] breathing beats in SCRIPT.md!")
     for sb in sentences:
         print(f"  Act {sb['sent']:02d} [{sb['speaker']} · {sb['mood']}/{sb['fx']} · {sb['wps']:4.2f}w/s] [{sb['s']:6.2f}s..{sb['e']:6.2f}s] {sb['text'][:62]}")
+    for vb in visual_beats:
+        print(f"  VISUAL_BEAT  [{vb['s']:6.2f}s..{vb['e']:6.2f}s] ({vb['dur']:.2f}s ambient/Foley breathing)")
     for ds in dead_silences:
         print(f"  DEAD_SILENCE [{ds['s']:6.2f}s..{ds['e']:6.2f}s]")
     return final_wav, words_json, payload
@@ -1650,6 +2067,8 @@ def build_parser():
     ap.add_argument("--out-wav", default="voice.wav", help="Output WAV filename inside --out-dir")
     ap.add_argument("--tts-cache", default=None, help="Optional disk cache directory for TTS acts")
     ap.add_argument("--words-ts", default=None, help="Optional TypeScript words.ts export path")
+    ap.add_argument("--word-aligner", default="auto", choices=["auto", "whisper", "acoustic", "proportional"], help="v11.0 Word timestamp aligner: 'auto' uses faster-whisper forced alignment (<35ms) with acoustic pause-island fallback (<80ms)")
+    ap.add_argument("--whisper-model", default="base", help="faster-whisper model name for 1B forced word alignment (default: base)")
 
     # Local GPU Open-Source Acting Pack (`IndexTTS-2 Vietnamese` / `F5-TTS-Vietnamese`) & 1-File So-VITS-SVC VC-Pack
     ap.add_argument("--export-gpu-voice-pack", default=None, help="Export act-level GPU pack (IndexTTS-2 Vietnamese 8-D emotions + F5-TTS)")

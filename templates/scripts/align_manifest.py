@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
-"""Horror Engine v5.0: Automatic SceneManifest <-> words.json Beat Frame Aligner.
+"""Horror Engine v11.0: Automatic SceneManifest <-> words.json Single-Lock Aligner.
 
-Reads `manifest.json` and `words.json` (produced by `gen_horror_voice.py`), matches each beat's `spokenLine.text`
-monotonically against spoken word timestamps (supporting repeated dialogue motifs and respecting `[DEAD SILENCE]`
-gaps), and recomputes contiguous `[a, b)` ranges, safe `peakFrame`, `blendRange`, and `totalFrames` so
-`validate_manifest.py` passes with zero manual frame arithmetic.
+Locks 4 timeline layers simultaneously from one `words.json` source of truth:
+  1. `beats[]` contiguous `[a, b)` ranges, `peakFrame`, and `lightState.blendRange`
+  2. `shots[]` (`startPhrase`, `endPhrase`, `visualBeatIndex`, `leadFrames`, `tailFrames`, `actionTriggerPhrase`)
+  3. `propStates.*.triggerFrame` from `triggerWord`
+  4. `captionChunks[]` (crisp 4-8 word subtitle phrases locked to acoustic word timestamps)
 
 Usage:
   python3 scripts/align_manifest.py src/<project>/manifest.json --words out/<project>/voice/words.json --in-place
@@ -18,18 +19,39 @@ import os
 import re
 import sys
 
+try:
+    from constitution import load_constitution
+except ImportError:
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    from constitution import load_constitution
+
 
 def norm_text(s: str) -> str:
     return re.sub(r"[^\w\s]", "", s.lower(), flags=re.UNICODE).strip()
 
 
-def split_caption_phrases(text: str, max_words: int = 7, max_chars: int = 42):
+def _find_phrase_span(norm_words: list, phrase: str, cursor: int = 0):
+    """Find `(hit_idx, end_idx_inclusive, start_s, end_s)` for `phrase` starting monotonically at `cursor`."""
+    toks = [t for t in norm_text(phrase).split() if t]
+    if not toks or not norm_words:
+        return None
+    n = len(toks)
+    for idx in range(max(0, cursor), len(norm_words) - n + 1):
+        if all(norm_words[idx + k][0] == toks[k] for k in range(n)):
+            return idx, idx + n - 1, norm_words[idx][1], norm_words[idx + n - 1][2]
+    for idx in range(0, min(max(0, cursor), len(norm_words) - n + 1)):
+        if all(norm_words[idx + k][0] == toks[k] for k in range(n)):
+            return idx, idx + n - 1, norm_words[idx][1], norm_words[idx + n - 1][2]
+    return None
+
+
+def split_caption_phrases(text: str, max_words: int = 7, max_chars: int = 44):
     """Split a Vietnamese spoken paragraph into crisp 4-8 word subtitle phrases breaking at natural punctuation."""
     clean = re.sub(r"\s+", " ", text).strip()
     if not clean:
         return []
     raw_words = clean.split(" ")
-    if len(raw_words) <= max_words + 1 and len(clean) <= max_chars + 8:
+    if len(raw_words) <= max_words + 1 and len(clean) <= max_chars + 6:
         return [clean]
 
     chunks = []
@@ -60,14 +82,19 @@ def split_caption_phrases(text: str, max_words: int = 7, max_chars: int = 42):
     if len(chunks) >= 2:
         last_w = chunks[-1].split(" ")
         prev_w = chunks[-2].split(" ")
-        if len(last_w) <= 2 and len(prev_w) + len(last_w) <= max_words + 2 and len(chunks[-2]) + len(chunks[-1]) + 1 <= max_chars + 12:
+        if len(last_w) <= 2 and len(prev_w) + len(last_w) <= max_words + 1 and len(chunks[-2]) + len(chunks[-1]) + 1 <= max_chars + 10:
             chunks[-2] = f"{chunks[-2]} {chunks[-1]}"
             chunks.pop()
     return chunks
 
 
-def build_word_caption_chunks(manifest: dict, words: list, fps: float = 30.0, max_words: int = 7, max_chars: int = 42):
+def build_word_caption_chunks(manifest: dict, words: list, fps: float = 30.0, max_words: int | None = None, max_chars: int | None = None):
     """Generate exact word-timed 4-8 word captionChunks[] from aligned manifest beats & words.json."""
+    const = load_constitution()
+    cap_cfg = const.get("captions") or {}
+    eff_max_words = max_words if max_words is not None else min(7, int(cap_cfg.get("maxWords", 8)) - 1)
+    eff_max_chars = max_chars if max_chars is not None else int(cap_cfg.get("maxChars", 44))
+
     w_list = [
         (
             norm_text(str(w.get("w", w.get("word", "")))),
@@ -84,32 +111,21 @@ def build_word_caption_chunks(manifest: dict, words: list, fps: float = 30.0, ma
         if not isinstance(sl, dict) or not str(sl.get("text", "")).strip():
             continue
         ba, bb = int(b.get("a", 0)), int(b.get("b", 0))
-        phrases = split_caption_phrases(str(sl["text"]), max_words=max_words, max_chars=max_chars)
+        phrases = split_caption_phrases(str(sl["text"]), max_words=eff_max_words, max_chars=eff_max_chars)
         beat_hl = sl.get("highlight") or []
         ph_matches = []
         for ph in phrases:
-            toks = [t for t in norm_text(ph).split() if t]
-            hit_idx = -1
-            if toks and w_list:
-                for idx in range(cursor, len(w_list) - len(toks) + 1):
-                    if all(w_list[idx + k][0] == toks[k] for k in range(len(toks))):
-                        hit_idx = idx
-                        break
-                if hit_idx < 0:
-                    for idx in range(0, min(cursor, len(w_list) - len(toks) + 1)):
-                        if all(w_list[idx + k][0] == toks[k] for k in range(len(toks))):
-                            hit_idx = idx
-                            break
-            if hit_idx >= 0:
-                ca = max(ba, int(math.floor(w_list[hit_idx][1] * fps)))
-                cb = min(bb, max(ca + 8, int(math.ceil((w_list[hit_idx + len(toks) - 1][2] + 0.12) * fps))))
+            hit = _find_phrase_span(w_list, ph, cursor=cursor)
+            if hit is not None:
+                hit_idx, end_idx, s0, e0 = hit
+                ca = max(ba, int(math.floor(s0 * fps)))
+                cb = min(bb, max(ca + 8, int(math.ceil((e0 + 0.12) * fps))))
                 if hit_idx >= cursor:
-                    cursor = hit_idx + len(toks)
+                    cursor = end_idx + 1
                 ph_matches.append((ca, cb, ph))
             else:
                 ph_matches.append((None, None, ph))
 
-        # Proportional fallback only for any unmatched phrase
         span = max(1, bb - ba)
         tot_chars = max(1, sum(len(x[2]) for x in ph_matches))
         fb_cur = ba
@@ -143,12 +159,109 @@ def load_words_payload(path: str):
     with open(path, encoding="utf-8") as fp:
         raw = json.load(fp)
     if isinstance(raw, list):
-        return raw, None, []
-    return raw.get("words", []), raw.get("total_frames"), raw.get("dead_silences", [])
+        return raw, None, [], []
+    return (
+        raw.get("words", []),
+        raw.get("total_frames"),
+        raw.get("dead_silences", []),
+        raw.get("visual_beats", []),
+    )
 
 
-def align_manifest_data(manifest: dict, words: list, fps: float = 30.0, target_total_frames=None):
-    """Return `(updated_manifest, changes_list)` with contiguous beat frames locked to `words`."""
+def _align_shots_in_place(updated: dict, norm_words: list, visual_beats: list, fps: float, old_total: int):
+    """Lock `updated['shots']` contiguously across `[0..totalFrames)` using `startPhrase` / `endPhrase` / `visualBeatIndex`."""
+    shots = updated.get("shots")
+    if not isinstance(shots, list) or not shots:
+        return []
+
+    total_f = int(updated["totalFrames"])
+    n_shots = len(shots)
+    cursor = 0
+    raw_starts = [0] * n_shots
+    explicit_ends: list[int | None] = [None] * n_shots
+
+    for i, sh in enumerate(shots):
+        lead_f = int(sh.get("leadFrames", 0) or 0)
+        tail_f = int(sh.get("tailFrames", 0) or 0)
+        vb_idx = sh.get("visualBeatIndex")
+
+        if i == 0:
+            raw_starts[i] = 0
+        elif isinstance(vb_idx, int) and 0 <= vb_idx < len(visual_beats):
+            raw_starts[i] = max(1, int(round(float(visual_beats[vb_idx]["s"]) * fps)) - lead_f)
+        elif sh.get("startPhrase"):
+            hit = _find_phrase_span(norm_words, str(sh["startPhrase"]), cursor=cursor)
+            if hit is None:
+                raise ValueError(f"Shot #{sh.get('id', i + 1)} startPhrase not found in words.json: {sh['startPhrase']!r}")
+            hit_idx, _, s0, _ = hit
+            raw_starts[i] = max(1, int(round(s0 * fps)) - lead_f)
+            if hit_idx >= cursor:
+                cursor = hit_idx
+        elif explicit_ends[i - 1] is not None:
+            raw_starts[i] = int(explicit_ends[i - 1])
+        else:
+            old_a = int(sh.get("a", 0) or 0)
+            raw_starts[i] = max(1, int(round((old_a / float(max(1, old_total))) * total_f)))
+
+        if sh.get("endPhrase"):
+            ehit = _find_phrase_span(norm_words, str(sh["endPhrase"]), cursor=cursor)
+            if ehit is None:
+                raise ValueError(f"Shot #{sh.get('id', i + 1)} endPhrase not found in words.json: {sh['endPhrase']!r}")
+            _, end_idx, _, e0 = ehit
+            explicit_ends[i] = min(total_f, int(round(e0 * fps)) + tail_f)
+            if end_idx >= cursor:
+                cursor = end_idx + 1
+        elif isinstance(vb_idx, int) and 0 <= vb_idx < len(visual_beats):
+            explicit_ends[i] = min(total_f, int(round(float(visual_beats[vb_idx]["e"]) * fps)) + tail_f)
+
+    # Enforce strict monotonic contiguity [0..total_f) with >= 12 frames per shot
+    MIN_SHOT_F = 12
+    starts = [0] * n_shots
+    for i in range(1, n_shots):
+        lo = starts[i - 1] + MIN_SHOT_F
+        hi = max(lo, total_f - MIN_SHOT_F * (n_shots - i))
+        cand = raw_starts[i]
+        starts[i] = max(lo, min(hi, cand))
+
+    beats = updated.get("beats") or []
+    shot_changes = []
+    trig_cursor = 0
+    for i, sh in enumerate(shots):
+        old_a, old_b = sh.get("a"), sh.get("b")
+        na = starts[i]
+        nb = starts[i + 1] if i + 1 < n_shots else total_f
+        sh["id"] = int(sh.get("id", i + 1))
+        sh["a"] = na
+        sh["b"] = nb
+
+        mid_f = (na + nb) // 2
+        matched_beat = None
+        for b in beats:
+            if int(b["a"]) <= mid_f < int(b["b"]):
+                matched_beat = b
+                break
+        if matched_beat is None and beats:
+            matched_beat = beats[-1]
+        if matched_beat is not None:
+            if not sh.get("beatId"):
+                sh["beatId"] = matched_beat.get("beatId")
+            if not sh.get("light"):
+                sh["light"] = (matched_beat.get("lightState") or {}).get("preset", "warmLamp")
+
+        if sh.get("actionTriggerPhrase"):
+            thit = _find_phrase_span(norm_words, str(sh["actionTriggerPhrase"]), cursor=trig_cursor)
+            if thit is not None:
+                t_idx, t_end, ts0, _ = thit
+                sh["actionTriggerFrame"] = max(na, min(nb - 1, int(round(ts0 * fps))))
+                if t_idx >= trig_cursor:
+                    trig_cursor = t_end + 1
+
+        shot_changes.append({"id": sh["id"], "old": [old_a, old_b], "new": [na, nb]})
+    return shot_changes
+
+
+def align_manifest_data(manifest: dict, words: list, fps: float = 30.0, target_total_frames=None, visual_beats=None):
+    """Return `(updated_manifest, changes_list)` with contiguous beat AND shot frames locked to `words`."""
     norm_words = [
         (
             norm_text(str(w.get("w", w.get("word", "")))),
@@ -162,36 +275,28 @@ def align_manifest_data(manifest: dict, words: list, fps: float = 30.0, target_t
     if not beats:
         raise ValueError("Manifest contains no beats to align")
 
-    matched_spans = []  # (start_s, end_s) or None per beat
+    old_total = int(manifest.get("totalFrames") or 1)
+    matched_spans = []
     cursor = 0
     for b in beats:
         sl = b.get("spokenLine")
         txt = str(sl.get("text", "")).strip() if isinstance(sl, dict) else ""
-        toks = [t for t in norm_text(txt).split() if t]
-        if not toks:
+        if not norm_text(txt):
             matched_spans.append(None)
             continue
-
-        hits = []
-        for idx in range(cursor, len(norm_words) - len(toks) + 1):
-            if all(norm_words[idx + k][0] == toks[k] for k in range(len(toks))):
-                hits.append((idx, norm_words[idx][1], norm_words[idx + len(toks) - 1][2]))
-        if not hits:
-            for idx in range(0, min(cursor, len(norm_words) - len(toks) + 1)):
-                if all(norm_words[idx + k][0] == toks[k] for k in range(len(toks))):
-                    hits.append((idx, norm_words[idx][1], norm_words[idx + len(toks) - 1][2]))
-        if not hits:
+        hit = _find_phrase_span(norm_words, txt, cursor=cursor)
+        if hit is None:
             raise ValueError(f"Beat '{b.get('beatId')}' spokenLine not found in words.json: {txt!r}")
-
-        best_idx, s0, e0 = hits[0]
-        if best_idx >= cursor:
-            cursor = best_idx + len(toks)
+        hit_idx, end_idx, s0, e0 = hit
+        if hit_idx >= cursor:
+            cursor = end_idx + 1
         matched_spans.append((s0, e0))
 
     last_word_end = max((w[2] for w in norm_words), default=0.0)
-    total_f = int(target_total_frames) if target_total_frames else int(math.ceil((last_word_end + 0.35) * fps))
+    last_vis_end = max((float(v.get("e", 0.0)) for v in (visual_beats or [])), default=0.0)
+    max_end_s = max(last_word_end, last_vis_end)
+    total_f = int(target_total_frames) if target_total_frames else int(math.ceil((max_end_s + 0.35) * fps))
 
-    # Build contiguous [a, b) frame boundaries locked cleanly to each spoken beat's exact start frame
     starts = [0] * len(beats)
     for i, sp in enumerate(matched_spans):
         if i == 0:
@@ -199,12 +304,10 @@ def align_manifest_data(manifest: dict, words: list, fps: float = 30.0, target_t
         elif sp is not None:
             starts[i] = max(starts[i - 1] + 1, int(round(sp[0] * fps)))
         else:
-            # Silent / visual beat: place immediately after previous spoken end (+0.1s)
             prev_sp = matched_spans[i - 1]
             prev_end_f = int(round((prev_sp[1] + 0.10) * fps)) if prev_sp else starts[i - 1] + 15
             starts[i] = max(starts[i - 1] + 1, prev_end_f)
 
-    # Ensure final total_f covers last spoken word cleanly
     if matched_spans[-1] is not None:
         total_f = max(total_f, int(math.ceil((matched_spans[-1][1] + 0.30) * fps)), starts[-1] + 15)
     else:
@@ -221,7 +324,6 @@ def align_manifest_data(manifest: dict, words: list, fps: float = 30.0, target_t
         if new_b <= new_a:
             new_b = new_a + 1
 
-        # Preserve relative peakFrame ratio if valid, else place at 50% of active spoken span
         if isinstance(old_a, int) and isinstance(old_b, int) and isinstance(old_pk, int) and old_b > old_a:
             rel = max(0.15, min(0.85, (old_pk - old_a) / float(old_b - old_a)))
         else:
@@ -237,7 +339,6 @@ def align_manifest_data(manifest: dict, words: list, fps: float = 30.0, target_t
             span = max(2, min(new_b - new_a, int(ls["blendRange"][1]) - int(ls["blendRange"][0])))
             ls["blendRange"] = [new_a, min(new_b, new_a + span)]
 
-        # v8.0 Auto-resolve propStates.*.triggerFrame from triggerWord inside this beat's word window
         for pst in (b.get("propStates") or {}).values():
             if not isinstance(pst, dict) or not pst.get("triggerWord"):
                 continue
@@ -256,12 +357,13 @@ def align_manifest_data(manifest: dict, words: list, fps: float = 30.0, target_t
             "new": [new_a, new_b, new_pk],
         })
 
+    _align_shots_in_place(updated, norm_words, visual_beats or [], fps=fps, old_total=old_total)
     updated["captionChunks"] = build_word_caption_chunks(updated, words, fps=fps)
     return updated, changes
 
 
 def main(argv=None):
-    ap = argparse.ArgumentParser(description="Auto-align SceneManifest beat frame ranges to words.json timestamps.")
+    ap = argparse.ArgumentParser(description="Auto-align SceneManifest beats, shots, triggers, and captions to words.json.")
     ap.add_argument("manifest", help="Path to manifest.json")
     ap.add_argument("--words", required=True, help="Path to words.json")
     ap.add_argument("--fps", type=float, default=30.0, help="Timeline FPS (default 30)")
@@ -272,10 +374,12 @@ def main(argv=None):
 
     with open(args.manifest, encoding="utf-8") as fp:
         manifest = json.load(fp)
-    words, total_f, _ = load_words_payload(args.words)
-    updated, changes = align_manifest_data(manifest, words, fps=args.fps, target_total_frames=total_f)
+    words, total_f, _, visual_beats = load_words_payload(args.words)
+    updated, changes = align_manifest_data(manifest, words, fps=args.fps, target_total_frames=total_f, visual_beats=visual_beats)
 
-    print(f"ALIGNED '{updated.get('projectId')}' -> totalFrames={updated['totalFrames']} ({len(changes)} beats):")
+    n_shots = len(updated.get("shots") or [])
+    n_caps = len(updated.get("captionChunks") or [])
+    print(f"ALIGNED '{updated.get('projectId')}' -> totalFrames={updated['totalFrames']} ({len(changes)} beats, {n_shots} shots, {n_caps} captionChunks):")
     for ch in changes:
         print(f"  {ch['beatId']:24s} [{ch['old'][0]}..{ch['old'][1]} pk={ch['old'][2]}] -> [{ch['new'][0]}..{ch['new'][1]} pk={ch['new'][2]}]")
 

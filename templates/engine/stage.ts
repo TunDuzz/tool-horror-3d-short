@@ -139,18 +139,32 @@ export function applyManifestActors(
     }
 
     // Automatic Vietnamese lip-sync & natural eye blinking for living humans!
+    // v11.0 (1B): Never lip-sync an on-screen character during internal `[NARRATOR]` voice-over or `dialogueMode: "voiceOver" | "silent"`!
     const isLivingHuman = char.config.entity?.breathing !== false && !char.config.entity?.silhouetteMode;
     let mouthShape: ReturnType<typeof mouthFromWords> | undefined;
-    if (allWords.length > 0 && isLivingHuman) {
+    const dMode = cst.dialogueMode;
+    const allowLipSync =
+      dMode === "directSpeech" ||
+      (dMode === undefined && (!cst.speakingAs || normSpeakerTag(cst.speakingAs) !== "narrator"));
+    if (allWords.length > 0 && isLivingHuman && allowLipSync) {
       const tags = new Set<string>();
-      if (cst.speakingAs) tags.add(normSpeakerTag(cst.speakingAs));
-      for (const alias of actorOpts?.speakerMap?.[cid] ?? []) tags.add(normSpeakerTag(alias));
+      if (cst.speakingAs) {
+        const sp = normSpeakerTag(cst.speakingAs);
+        if (sp && sp !== "narrator") tags.add(sp);
+      } else {
+        for (const alias of actorOpts?.speakerMap?.[cid] ?? []) {
+          const na = normSpeakerTag(alias);
+          if (na && na !== "narrator") tags.add(na);
+        }
+      }
       if (tags.size > 0) {
         const matchedWords = allWords.filter((w) => tags.has(normSpeakerTag(w.speaker)));
         if (matchedWords.length > 0) {
           mouthShape = mouthFromWords(matchedWords, frame, fps, "closed");
         }
       }
+    } else if (isLivingHuman && (dMode === "voiceOver" || dMode === "silent")) {
+      mouthShape = "closed";
     }
 
     const opts = {

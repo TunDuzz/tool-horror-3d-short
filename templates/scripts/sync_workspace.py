@@ -53,6 +53,11 @@ def collect_sync_pairs(templates_root: str, target_dir: str, include_demo: bool,
         if os.path.isfile(sp):
             pairs.append((sp, os.path.join(target_dir, fname)))
 
+    # v11.0 Single-Source-of-Truth Pipeline Constitution
+    const_sp = os.path.join(templates_root, "pipeline_constitution.json")
+    if os.path.isfile(const_sp):
+        pairs.append((const_sp, os.path.join(target_dir, "pipeline_constitution.json")))
+
     # Entry files: protect custom user Root.tsx registrations unless missing or --force-root
     for fname in ("index.ts", "Root.tsx"):
         sp = os.path.join(templates_root, "project", fname)

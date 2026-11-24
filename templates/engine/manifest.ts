@@ -2,7 +2,8 @@
 // Drives world lighting, practical lamps, character poses, hero props, Phone3D screens, AND HorrorHUD captions
 // from one declarative timeline so rendered 3D frames cannot drift from the approved script.
 
-import type { LightKey, V3 } from "./camera";
+import type { LightKey, ShotBase, ShotScale, V3 } from "./camera";
+import type { PovPropMode } from "./povRig";
 
 export type HudCaption = {
   a: number;
@@ -60,6 +61,35 @@ export type HorrorHudConfig = {
 };
 
 export type CharacterRole = "human" | "entity" | "silhouette" | "lurker";
+
+export type DialogueMode = "directSpeech" | "voiceOver" | "silent";
+
+export type CameraMode = "master" | "pov" | "pov_turn" | "pov_walk" | "pov_interact" | "ots_same_side";
+export type AxisSide = "pov_center" | "left" | "right";
+
+export type ManifestShotSpec = {
+  id: number;
+  beatId?: string;
+  a: number;
+  b: number;
+  scale: ShotScale;
+  light: LightKey;
+  cameraMode: CameraMode;
+  axisSide: AxisSide;
+  /** Exact phrase anchors in words.json so align_manifest.py locks `a` and `b` with 0-frame drift! */
+  startPhrase?: string;
+  endPhrase?: string;
+  /** Optional visual breathing frame padding before startPhrase / after endPhrase. */
+  leadFrames?: number;
+  tailFrames?: number;
+  /** Optional index into words.json `visual_beats[]` (`[VISUAL Xs]` directive). */
+  visualBeatIndex?: number;
+  povMode?: PovPropMode;
+  worldTargetAnchor?: string;
+  actionTriggerPhrase?: string;
+  actionTriggerFrame?: number;
+  note?: string;
+};
 
 export type CharacterBlueprint = {
   id: string;
@@ -199,6 +229,8 @@ export type CastBeatState = {
   sweat?: boolean;
   /** Optional speaker tag(s) matching words.json `speaker` field for automatic Vietnamese lip-sync in stage.ts. */
   speakingAs?: string;
+  /** v11.0 Explicit speech acting mode: "directSpeech" drives lip-sync; "voiceOver" & "silent" keep mouth closed! */
+  dialogueMode?: DialogueMode;
   lookAt?: string | V3;
   eyeGlow?: boolean;
 };
@@ -253,6 +285,8 @@ export type SceneManifest = {
   locations: LocationBlueprint[];
   castBlueprints?: CharacterBlueprint[];
   beats: ScriptBeat[];
+  /** v11.0 Single-source-of-truth phrase-locked shot list aligned by align_manifest.py and consumed via shotsFromManifest(). */
+  shots?: ManifestShotSpec[];
   /** Word-timed 4-8 word subtitle chunks generated automatically by align_manifest.py from words.json (kills wall-of-text!). */
   captionChunks?: HudCaption[];
   header?: { title: string; subtitle?: string; badge?: string };
@@ -405,6 +439,38 @@ export const beatAt = (manifest: SceneManifest, frame: number): ScriptBeat => {
   return frame < (manifest.beats[0]?.a ?? 0)
     ? manifest.beats[0]
     : manifest.beats[manifest.beats.length - 1];
+};
+
+/** Derive `ShotBase<LightKey>[]` directly from `manifest.shots` (falling back to `manifest.beats`) — ZERO hardcoded frame numbers in story.ts! */
+export const shotsFromManifest = (manifest: SceneManifest): ShotBase<LightKey>[] => {
+  if (manifest.shots && manifest.shots.length > 0) {
+    return manifest.shots.map((s) => ({
+      id: s.id,
+      a: s.a,
+      b: s.b,
+      scale: s.scale,
+      light: s.light,
+      note: s.note,
+    }));
+  }
+  return manifest.beats.map((b, idx) => ({
+    id: b.shotId ?? idx + 1,
+    a: b.a,
+    b: b.b,
+    scale: "POV",
+    light: b.lightState.preset,
+    note: b.cameraIntent,
+  }));
+};
+
+/** Return the active `ManifestShotSpec` covering `frame` when `manifest.shots` is present. */
+export const shotSpecAt = (manifest: SceneManifest, frame: number): ManifestShotSpec | undefined => {
+  const list = manifest.shots;
+  if (!list || list.length === 0) return undefined;
+  for (const s of list) {
+    if (frame >= s.a && frame < s.b) return s;
+  }
+  return frame < list[0].a ? list[0] : list[list.length - 1];
 };
 
 /** Check whether a named practical light source is ON in the given ScriptBeat. */

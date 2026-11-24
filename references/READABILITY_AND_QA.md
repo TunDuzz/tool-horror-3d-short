@@ -1,9 +1,9 @@
-# Script↔Frame Fidelity Lock, Anti-Repetition Gates & QA Reference v5.0
+# Script↔Frame Single-Source Lock, Anchored POV Cinema Gates & QA Reference v11.0
 
-Every Horror Engine v5.0 video MUST pass **three hard verification gates** before delivery:
-1. **Pre-Render Manifest Alignment & Dual Anti-Repetition Gate** (`align_manifest.py` + `validate_manifest.py`)
-2. **Mandatory Beat-by-Beat Pre-Final Still Gate** (`render-stills.mjs --manifest` + direct `read_file` visual inspection)
-3. **Post-Render Video, Directing & TRUE Dead Silence Audio QA Gate** (`extract_shots.py` + `short_qa.py` + `ffmpeg_ebur`)
+Every Horror Engine v11.0 video MUST pass **three hard verification gates** governed by `templates/pipeline_constitution.json` before delivery:
+1. **Pre-Render Single-Lock Alignment, Cinema Grammar & Dual Anti-Repetition Gate** (`align_manifest.py` + `validate_manifest.py --strict-cinema`)
+2. **Mandatory Shot-by-Shot Pre-Final Still Gate** (`render-stills.mjs --manifest` + direct `read_file` visual inspection of 100% of shots)
+3. **Post-Render Video, Directing, Zero-Black-Void & TRUE Dead Silence Audio QA Gate** (`extract_shots.py` + `short_qa.py` + `mix_cues.py --strict`)
 
 Any single gate failure requires fixing the source (`manifest.json`, `story.ts`, `build.ts`, `world.ts`, `build_audio.py`, or `engine/`) and re-verifying before proceeding.
 
@@ -37,6 +37,13 @@ Never hardcode conflicting captions, light toggles, prop states, or timestamps a
    - `spokenLine.text` drift from `SCRIPT.md` or `words.json` timing drift `> ±0.35 s`.
    - `Phone3D` lockscreen clock contradicting HUD notification timestamp (`detail.clock !== detail.notifTime`).
    - **`ANTI_REPEAT_ERROR`** (location collision) or **`ANTI_REPEAT_ENTITY_ERROR`** (entity appearance cloning).
+   - **v11.0 Cinema & Consistency Gates (`--strict-cinema` / `manifest.shots[]`):**
+     - `MASTER_ESTABLISHING_ERROR`: First shot of each location must be `cameraMode: "master"` (`>= 60 frames`).
+     - `AXIS_180_VIOLATION_ERROR`: Forbids flipping `axisSide` directly `"left" ↔ "right"` without re-orienting via `"master"` / `"pov_center"`.
+     - `POV_PINGPONG_ERROR`: Enforces `80–90%` anchored POV (`ots_same_side <= 22%` of frames, `<= 4` switches/min).
+     - `SHOT_WORD_SYNC_ERROR`: Verifies every `shots[].startPhrase` matches `words.json` within `<= 4 frames`.
+     - `VOICEOVER_LIPSYNC_ERROR`: Blocks `speakingAs: "NARRATOR"` paired with `dialogueMode: "directSpeech"`.
+     - `WALL_OF_TEXT_ERROR`: Rejects any `captionChunks[]` entry exceeding `12` words (`4–8` words standard).
 
 ---
 

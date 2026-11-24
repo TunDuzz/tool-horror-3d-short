@@ -3,7 +3,7 @@
 // HandheldOilLamp3D with translucent glass chimney, PaperProp3D).
 
 import * as THREE from "three";
-import { FPS, clamp01, flickerAt, type V3 } from "./camera";
+import { FPS, clamp01, flickerAt, glide, lerp, smooth, type V3 } from "./camera";
 import { NOINK } from "./ink";
 import type { LocalLight, SpotLightCfg } from "./lights";
 import { attachOutlineRig, type OutlineMode } from "./outline3d";
@@ -67,6 +67,12 @@ export type PovPose = {
   actionProgress?: number;
   /** Optional 0..1 walking bob amplitude for embodied walking POV shots */
   walkBob?: number;
+  /** v11.0 (4B): Optional 0..1 finger curl override (0 = open palm, 0.52 = paper pinch, 0.84 = tight bolt/handle grip) */
+  fingerCurl?: number;
+  /** v11.0 (4B): Optional 3D world-space prop target coordinate for embodied POV hand reach & grasp! */
+  worldTarget?: V3;
+  /** Which hand reaches toward `worldTarget` (default: "right") */
+  reachHand?: "left" | "right" | "both";
   kneeYOffset?: number; // optional subtle seat-height adjustment for POV_DOWN framing
   kneeZOffset?: number; // optional forward knee placement for POV_DOWN framing
   frame: number;
@@ -600,8 +606,8 @@ export function createPovRig3D(
     foot.position.set(side * 0.11, 0.045, -0.14);
     standingMeshGroup.add(leg, foot);
   }
-  const chestHem = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.18, 0.34, 12), sleeveMat);
-  chestHem.position.set(0, 0.92, -0.02);
+  const chestHem = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.17, 0.28, 12), sleeveMat);
+  chestHem.position.set(0, 0.66, 0.06);
   standingMeshGroup.add(chestHem);
   standingMeshGroup.visible = false;
   lowerBody.add(standingMeshGroup);
@@ -637,26 +643,61 @@ export function createPovRig3D(
     palm.position.set(0, -0.012, -0.062);
     hand.add(palm);
 
-    // Sculpted 4 fingers + thumb (hidden automatically when gripping Phone3D/Flashlight3D which render custom wrapped grip fingers!)
+    // v11.0 (4B): Articulated 2-joint fingers (`proximal` + `distal` phalanges) + 2-joint thumb for organic curl & grasp!
     const fingers = new THREE.Group();
     fingers.name = side < 0 ? "povLeftFingers" : "povRightFingers";
-    const fLens = [0.032, 0.038, 0.036, 0.028];
+    const proxLens = [0.018, 0.021, 0.020, 0.016];
+    const distLens = [0.015, 0.018, 0.017, 0.013];
+    const fingerRig: Array<{ prox: THREE.Group; dist: THREE.Group; splay: number }> = [];
     for (let i = 0; i < 4; i++) {
-      const fx = (i - 1.5) * 0.0105 * -side;
-      const fg = new THREE.Mesh(new THREE.CapsuleGeometry(0.0050, fLens[i], 4, 6), skinMat);
-      fg.position.set(fx, 0.016 + fLens[i] * 0.34, -0.066);
-      fg.rotation.set(-0.32, 0, (i - 1.5) * 0.05 * side);
-      fingers.add(fg);
+      const fx = (i - 1.5) * 0.0108 * -side;
+      const splay = (i - 1.5) * 0.045 * side;
+      const proxPivot = new THREE.Group();
+      proxPivot.position.set(fx, 0.012, -0.064);
+      const proxMesh = new THREE.Mesh(new THREE.CapsuleGeometry(0.0051, proxLens[i], 4, 6), skinMat);
+      proxMesh.position.set(0, proxLens[i] * 0.5 + 0.003, 0);
+      proxPivot.add(proxMesh);
+
+      const distPivot = new THREE.Group();
+      distPivot.position.set(0, proxLens[i] + 0.005, 0);
+      const distMesh = new THREE.Mesh(new THREE.CapsuleGeometry(0.0044, distLens[i], 4, 6), skinMat);
+      distMesh.position.set(0, distLens[i] * 0.5 + 0.002, 0);
+      distPivot.add(distMesh);
+
+      proxPivot.add(distPivot);
+      fingers.add(proxPivot);
+      fingerRig.push({ prox: proxPivot, dist: distPivot, splay });
     }
-    const thumb = new THREE.Mesh(new THREE.CapsuleGeometry(0.0062, 0.026, 4, 6), skinMat);
-    thumb.position.set(-side * 0.025, 0.000, -0.058);
-    thumb.rotation.set(-0.22, side * 0.28, side * 0.54);
-    fingers.add(thumb);
+    const thumbProx = new THREE.Group();
+    thumbProx.position.set(-side * 0.023, -0.004, -0.058);
+    const thumbProxMesh = new THREE.Mesh(new THREE.CapsuleGeometry(0.0062, 0.015, 4, 6), skinMat);
+    thumbProxMesh.position.set(0, 0.009, 0);
+    thumbProx.add(thumbProxMesh);
+    const thumbDist = new THREE.Group();
+    thumbDist.position.set(0, 0.017, 0);
+    const thumbDistMesh = new THREE.Mesh(new THREE.CapsuleGeometry(0.0053, 0.013, 4, 6), skinMat);
+    thumbDistMesh.position.set(0, 0.008, 0);
+    thumbDist.add(thumbDistMesh);
+    thumbProx.add(thumbDist);
+    fingers.add(thumbProx);
+
+    const setCurl = (curl01: number) => {
+      const c = clamp01(curl01);
+      for (let i = 0; i < fingerRig.length; i++) {
+        const fr = fingerRig[i];
+        const idxSpread = 1.0 + i * 0.06;
+        fr.prox.rotation.set(-0.20 - c * 0.92 * idxSpread, 0, fr.splay * (1 - c * 0.55));
+        fr.dist.rotation.set(-0.14 - c * 1.04 * idxSpread, 0, 0);
+      }
+      thumbProx.rotation.set(-0.20 - c * 0.45, side * (0.26 + c * 0.36), side * (0.52 - c * 0.42));
+      thumbDist.rotation.set(-0.12 - c * 0.62, 0, -side * c * 0.24);
+    };
+    setCurl(0.26);
     hand.add(fingers);
 
     arm.add(forearm, cuff, wrist, hand);
     armsRoot.add(arm);
-    return { arm, hand, wrist, cuff, fingers };
+    return { arm, hand, wrist, cuff, fingers, setCurl };
   };
 
   const left = buildPovArm(-1);
@@ -692,64 +733,81 @@ export function createPovRig3D(
     right.fingers.visible = true;
     right.cuff.visible = true;
 
+    // Default natural relaxed curl (never stiff flat splints!)
+    let lCurl = pose.fingerCurl ?? 0.28;
+    let rCurl = pose.fingerCurl ?? 0.28;
+
     if (pose.propMode === "idle") {
-      // Embodied resting POV hands visible organically in lower corners of narrow 9:16 portrait frustum!
+      // Embodied resting POV hands extending forward from lower corners (negative rx tilts +Y fingers forward into -Z!)
       left.arm.visible = true;
       right.arm.visible = true;
       right.wrist.visible = true;
-      left.arm.position.set(-0.115 + swayX, -0.265 + swayY, -0.34);
-      left.arm.rotation.set(0.46, 0.34, -0.22);
-      right.arm.position.set(0.115 - swayX, -0.260 - swayY * 0.5, -0.34);
-      right.arm.rotation.set(0.46, -0.34, 0.22);
+      left.arm.position.set(-0.088 + swayX, -0.126 + swayY, -0.34);
+      left.arm.rotation.set(-0.78, 0.22, -0.16);
+      right.arm.position.set(0.088 - swayX, -0.124 - swayY * 0.5, -0.34);
+      right.arm.rotation.set(-0.78, -0.22, 0.16);
+      lCurl = pose.fingerCurl ?? 0.30;
+      rCurl = pose.fingerCurl ?? 0.30;
     } else if (pose.propMode === "leanDesk") {
-      // Both forearms & open palms resting visibly in lower foreground corners (clear of lower-fifth subtitle!)
+      // Both forearms & relaxed 2-joint hands extending forward onto desk edges (knuckles up, fingers forward into -Z)
       left.arm.visible = true;
       right.arm.visible = true;
       right.wrist.visible = true;
-      left.arm.position.set(-0.118 + swayX * 0.6, -0.175 + swayY * 0.6, -0.32);
-      left.arm.rotation.set(0.68, 0.34, -0.22);
-      right.arm.position.set(0.118 - swayX * 0.6, -0.172 + swayY * 0.5, -0.32);
-      right.arm.rotation.set(0.68, -0.34, 0.22);
+      left.arm.position.set(-0.082 + swayX * 0.6, -0.106 + swayY * 0.6, -0.35);
+      left.arm.rotation.set(-0.96, 0.20, -0.14);
+      right.arm.position.set(0.082 - swayX * 0.6, -0.104 + swayY * 0.5, -0.35);
+      right.arm.rotation.set(-0.96, -0.20, 0.14);
+      lCurl = pose.fingerCurl ?? 0.26;
+      rCurl = pose.fingerCurl ?? 0.26;
     } else if (pose.propMode === "reachBolt") {
-      // Right hand reaching forward-center to slide a wooden/iron bolt or turn a door handle, left bracing at lower-left
-      const pushZ = -0.32 - act * 0.13;
-      const slideX = 0.085 - act * 0.065;
+      // 3-phase forward reach -> tight 2-joint grasp -> horizontal bolt slide
+      const reachEnv = act < 0.35 ? glide(act / 0.35) : 1.0;
+      const slideEnv = act < 0.35 ? 0.0 : glide((act - 0.35) / 0.65);
+      const pushZ = -0.34 - reachEnv * 0.12;
+      const slideX = 0.076 - slideEnv * 0.076;
       left.arm.visible = true;
       right.arm.visible = true;
       right.wrist.visible = true;
-      left.arm.position.set(-0.12 + swayX, -0.265 + swayY, -0.34);
-      left.arm.rotation.set(0.55, 0.28, -0.16);
-      right.arm.position.set(slideX + swayX * 0.5, -0.125 + act * 0.055 + swayY * 0.5, pushZ);
-      right.arm.rotation.set(0.82 - act * 0.20, -0.28, 0.18 - act * 0.24);
+      left.arm.position.set(-0.092 + swayX, -0.132 + swayY, -0.35);
+      left.arm.rotation.set(-0.82, 0.22, -0.14);
+      right.arm.position.set(slideX + swayX * 0.35, -0.086 + reachEnv * 0.064 + swayY * 0.4, pushZ);
+      right.arm.rotation.set(-0.94 - reachEnv * 0.10, -0.16 + slideEnv * 0.16, 0.12 - slideEnv * 0.22);
+      lCurl = pose.fingerCurl ?? 0.38;
+      rCurl = pose.fingerCurl ?? (0.30 + smooth(clamp01((act - 0.18) / 0.28)) * 0.56);
     } else if (pose.propMode === "holdPaper") {
-      // Two-handed holding damp receipt/ticket cleanly gripping BOTH left & right edges in lower-center foreground
+      // Two-handed pinching damp receipt/ticket cleanly on left & right edges in lower-center foreground
+      const liftEnv = glide(act);
       left.arm.visible = true;
       right.arm.visible = true;
       right.wrist.visible = true;
-      left.arm.position.set(-0.072 + swayX * 0.6, -0.135 + act * 0.04 + swayY, -0.325);
+      left.arm.position.set(-0.072 + swayX * 0.5, -0.142 + liftEnv * 0.048 + swayY * 0.7, -0.325);
       left.arm.rotation.set(0.36, 0.32, -0.18);
-      right.arm.position.set(0.072 + swayX * 0.6, -0.132 + act * 0.04 + swayY, -0.325);
+      right.arm.position.set(0.072 + swayX * 0.5, -0.138 + liftEnv * 0.048 + swayY * 0.7, -0.325);
       right.arm.rotation.set(0.36, -0.32, 0.18);
+      lCurl = pose.fingerCurl ?? 0.56;
+      rCurl = pose.fingerCurl ?? 0.56;
     } else if (pose.propMode === "holdHandset") {
-      // Left hand trembling while raising an antique handset toward ear edge; right hand gripping nervously at lower-right
       const trem = Math.sin(t * 24) * 0.004;
       left.arm.visible = true;
       right.arm.visible = true;
       right.wrist.visible = true;
-      left.arm.position.set(-0.095 + trem, -0.145 + act * 0.08 + swayY, -0.31);
+      left.arm.position.set(-0.095 + trem, -0.145 + glide(act) * 0.08 + swayY, -0.31);
       left.arm.rotation.set(0.28, 0.42, -0.36);
       right.arm.position.set(0.115 - swayX, -0.255 + swayY, -0.34);
       right.arm.rotation.set(0.50, -0.30, 0.18);
+      lCurl = pose.fingerCurl ?? 0.78;
+      rCurl = pose.fingerCurl ?? 0.42;
     } else if (pose.propMode === "shieldFace") {
-      // Panic defensive recoil: both hands thrown up toward upper-center edges!
       const jolt = Math.sin(t * 32) * 0.008;
       left.arm.visible = true;
       right.arm.visible = true;
       right.wrist.visible = true;
-      left.arm.position.set(-0.088 + jolt, -0.095 + act * 0.06, -0.27);
+      left.arm.position.set(-0.088 + jolt, -0.095 + glide(act) * 0.06, -0.27);
       left.arm.rotation.set(0.18, 0.38, -0.34);
-      right.arm.position.set(0.088 - jolt, -0.090 + act * 0.06, -0.27);
+      right.arm.position.set(0.088 - jolt, -0.090 + glide(act) * 0.06, -0.27);
       right.arm.rotation.set(0.18, -0.38, 0.34);
+      lCurl = pose.fingerCurl ?? 0.12;
+      rCurl = pose.fingerCurl ?? 0.12;
     } else if (pose.propMode === "phone") {
       // Raised centered-right smartphone framing clearly above lower-third subtitles with zero wrist/bezel clipping
       const k = Math.max(0.001, rRaise);
@@ -788,6 +846,46 @@ export function createPovRig3D(
       right.arm.position.set(0.24 + swayX, -0.44 + rRaise * 0.24 + swayY, -0.28 - rRaise * 0.08);
       right.arm.rotation.set(0.18 - rRaise * 0.22, -0.26, 0.12);
     }
+    // v11.0 (4B): Project optional 3D `worldTarget` into camera space so reaching hand(s) lock onto real world props!
+    if (pose.worldTarget) {
+      armsRoot.updateMatrixWorld(true);
+      const localT = armsRoot.worldToLocal(new THREE.Vector3(pose.worldTarget[0], pose.worldTarget[1], pose.worldTarget[2]));
+      const reachK = glide(act);
+      const tx = Math.max(-0.14, Math.min(0.14, localT.x));
+      const ty = Math.max(-0.14, Math.min(0.06, localT.y + 0.03));
+      const tz = Math.max(-0.50, Math.min(-0.32, localT.z + 0.07));
+      const which = pose.reachHand ?? "right";
+      if (which === "right" || which === "both") {
+        right.arm.visible = true;
+        right.wrist.visible = true;
+        const offX = which === "both" ? 0.052 : 0;
+        right.arm.position.set(
+          lerp(right.arm.position.x, tx + offX, reachK),
+          lerp(right.arm.position.y, ty, reachK),
+          lerp(right.arm.position.z, tz, reachK),
+        );
+        const yawAim = Math.max(-0.36, Math.min(0.28, -tx * 1.2));
+        const pitchAim = Math.max(-1.16, Math.min(-0.74, -0.96 + ty * 0.65));
+        right.arm.rotation.set(lerp(right.arm.rotation.x, pitchAim, reachK), lerp(right.arm.rotation.y, yawAim, reachK), right.arm.rotation.z);
+        if (pose.fingerCurl === undefined) rCurl = lerp(0.32, 0.82, smooth(clamp01((act - 0.22) / 0.45)));
+      }
+      if (which === "left" || which === "both") {
+        left.arm.visible = true;
+        const offX = which === "both" ? -0.052 : 0;
+        left.arm.position.set(
+          lerp(left.arm.position.x, tx + offX, reachK),
+          lerp(left.arm.position.y, ty, reachK),
+          lerp(left.arm.position.z, tz, reachK),
+        );
+        const yawAim = Math.max(-0.28, Math.min(0.36, -tx * 1.2));
+        const pitchAim = Math.max(-1.16, Math.min(-0.74, -0.96 + ty * 0.65));
+        left.arm.rotation.set(lerp(left.arm.rotation.x, pitchAim, reachK), lerp(left.arm.rotation.y, yawAim, reachK), left.arm.rotation.z);
+        if (pose.fingerCurl === undefined) lCurl = lerp(0.32, 0.82, smooth(clamp01((act - 0.22) / 0.45)));
+      }
+    }
+
+    left.setCurl(lCurl);
+    right.setCurl(rCurl);
   };
 
   return { group, lowerBody, armsRoot, leftHand: left.hand, rightHand: right.hand, update };

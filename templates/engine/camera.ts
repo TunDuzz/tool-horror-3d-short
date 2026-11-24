@@ -300,6 +300,69 @@ export const camArc = (
 export const camPOV = (eyePos: V3, lookPos: V3, f: number, swayAmp = 0.012, fov = 56): ShotCam =>
   povBreath({ pos: eyePos, look: lookPos, fov }, f, swayAmp, 0.13, 31);
 
+export type PovWaypoint = {
+  f: number;
+  /** Transition frames from previous waypoint into this waypoint (default 18 frames ≈ 0.6s natural head turn). */
+  dur?: number;
+  pos: V3;
+  look: V3;
+  fov?: number;
+  swayAmp?: number;
+  rollOffset?: number;
+};
+
+/**
+ * v11.0 Master Establishing Shot (`2A`): smooth architectural glide revealing room geography,
+ * practical light sources, exits, and character spatial relationship before entering anchored POV.
+ */
+export const camMasterEstablish = (
+  posA: V3,
+  posB: V3,
+  lookA: V3,
+  lookB: V3,
+  u: number,
+  fov = 50,
+): ShotCam => {
+  const k = glide(u);
+  return {
+    pos: [lerp(posA[0], posB[0], k), lerp(posA[1], posB[1], k), lerp(posA[2], posB[2], k)],
+    look: [lerp(lookA[0], lookB[0], k), lerp(lookA[1], lookB[1], k), lerp(lookA[2], lookB[2], k)],
+    fov,
+    roll: 0,
+  };
+};
+
+/**
+ * v11.0 Continuous Anchored POV Chain (`2A`): deterministic 1st-person head-turn & eyeline-scan chain
+ * across `waypoints`, adding subtle organic neck-bank roll during turns + living POV breathing sway.
+ */
+export const camPovChain = (waypoints: PovWaypoint[], f: number, seed = 31): ShotCam => {
+  if (!waypoints.length) return { pos: [0, 1.56, 0], look: [0, 1.50, -2], fov: 56, roll: 0 };
+  let pos: V3 = [...waypoints[0].pos] as V3;
+  let look: V3 = [...waypoints[0].look] as V3;
+  let fov = waypoints[0].fov ?? 56;
+  let sway = waypoints[0].swayAmp ?? 0.011;
+  let roll = waypoints[0].rollOffset ?? 0;
+
+  for (let i = 1; i < waypoints.length; i++) {
+    const wp = waypoints[i];
+    if (f < wp.f) break;
+    const dur = Math.max(1, wp.dur ?? 18);
+    const u = clamp01((f - wp.f) / dur);
+    const k = glide(u);
+    const prevLookX = look[0];
+    pos = [lerp(pos[0], wp.pos[0], k), lerp(pos[1], wp.pos[1], k), lerp(pos[2], wp.pos[2], k)];
+    look = [lerp(look[0], wp.look[0], k), lerp(look[1], wp.look[1], k), lerp(look[2], wp.look[2], k)];
+    fov = lerp(fov, wp.fov ?? fov, k);
+    sway = lerp(sway, wp.swayAmp ?? sway, k);
+    const bankSign = wp.look[0] >= prevLookX ? -1 : 1;
+    const turnBank = u > 0 && u < 1 ? Math.sin(u * Math.PI) * 0.018 * bankSign : 0;
+    roll = lerp(roll, wp.rollOffset ?? 0, k) + turnBank;
+  }
+
+  return povBreath({ pos, look, fov, roll }, f, sway, 0.13, seed);
+};
+
 /** Tight dread close-up / ECU with continuous slow push-in toward `targetPos`. */
 export const camECU = (targetPos: V3, offset: V3, f: number, f0: number, pushRate = 0.002, fov = 36): ShotCam =>
   dolly([targetPos[0] + offset[0], targetPos[1] + offset[1], targetPos[2] + offset[2]], targetPos, pushK(f, f0, pushRate), { fov });

@@ -25,59 +25,41 @@ import os
 import re
 import sys
 
-VALID_LIGHTS = {"warmLamp", "coldMoon", "fluorescent", "duskFog", "flashlight"}
-VALID_CEILINGS = {
-    "aFrameThatch",
-    "aFrameTile",
-    "flatConcrete",
-    "dropCeiling",
-    "vaulted",
-    "openSky",
-    "vehicleCabin",
-}
-VALID_POSES = {
-    "standIdle",
-    "nervousIdle",
-    "talkCalm",
-    "talkUrgent",
-    "reachInteract",
-    "glassSlam",
-    "sitCrossLegged",
-    "sitChair",
-    "sitBenchHunched",
-    "walk",
-    "creep",
-    "peerForward",
-    "recoil",
-    "holdPhone",
-    "holdLantern",
-    "point",
-    "lunge",
-    "loomingStill",
-    "peekAroundDoor",
-    "turnHead",
-    "stalkLoom",
-    "jawUnlatch",
-    "crawler",
-    "doorwayPeek",
-    "backbendCrab",
-    "lungeCloseUp",
-}
-VALID_ROLES = {"human", "entity", "silhouette", "lurker"}
-VALID_HAIR_STYLES = {"shortParted", "spiky", "elderThin", "bun", "longDraped", "messyFringe", "bald"}
-VALID_GARMENTS = {"funeralRobe", "shirt", "coat", "hospitalGown", "casualJacket", "shroud"}
-VALID_EYE_HORROR = {"sanpaku", "voidSockets", "weepingIchor", "stitched", "multiEye"}
-VALID_EXPRS = {
-    "calm",
-    "wary",
-    "uneasy",
-    "dread",
-    "terrified",
-    "deadStare",
-    "unsettlingSmile",
-    "hollow",
-}
-FPS = 30.0
+try:
+    from constitution import load_constitution
+except ImportError:
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    from constitution import load_constitution
+
+_CONST = load_constitution()
+_ENUMS = _CONST.get("enums") or {}
+_CAM_G = _CONST.get("cameraGrammar") or {}
+_CAP_G = _CONST.get("captions") or {}
+
+VALID_LIGHTS = set(_ENUMS.get("validLights") or ["warmLamp", "coldMoon", "fluorescent", "duskFog", "flashlight"])
+VALID_CEILINGS = set(_ENUMS.get("validCeilings") or [
+    "aFrameThatch", "aFrameTile", "flatConcrete", "dropCeiling", "vaulted", "openSky", "vehicleCabin",
+])
+VALID_POSES = set(_ENUMS.get("validPoses") or [
+    "standIdle", "nervousIdle", "talkCalm", "talkUrgent", "reachInteract", "glassSlam",
+    "sitCrossLegged", "sitChair", "sitBenchHunched", "walk", "creep", "peerForward", "recoil",
+    "holdPhone", "holdLantern", "point", "lunge", "loomingStill", "peekAroundDoor",
+    "turnHead", "stalkLoom", "jawUnlatch", "crawler", "doorwayPeek", "backbendCrab", "lungeCloseUp",
+])
+VALID_ROLES = set(_ENUMS.get("validRoles") or ["human", "entity", "silhouette", "lurker"])
+VALID_HAIR_STYLES = set(_ENUMS.get("validHairStyles") or ["shortParted", "spiky", "elderThin", "bun", "longDraped", "messyFringe", "bald"])
+VALID_GARMENTS = set(_ENUMS.get("validGarments") or ["funeralRobe", "shirt", "coat", "hospitalGown", "casualJacket", "shroud"])
+VALID_EYE_HORROR = set(_ENUMS.get("validEyeHorror") or ["sanpaku", "voidSockets", "weepingIchor", "stitched", "multiEye"])
+VALID_EXPRS = set(_ENUMS.get("validExprs") or ["calm", "wary", "uneasy", "dread", "terrified", "deadStare", "unsettlingSmile", "hollow"])
+VALID_DIALOGUE_MODES = set(_ENUMS.get("validDialogueModes") or ["directSpeech", "voiceOver", "silent"])
+VALID_CAMERA_MODES = set(_CAM_G.get("validCameraModes") or ["master", "pov", "pov_turn", "pov_walk", "pov_interact", "ots_same_side"])
+VALID_AXIS_SIDES = set(_CAM_G.get("validAxisSides") or ["pov_center", "left", "right"])
+MASTER_MIN_FRAMES = int(_CAM_G.get("masterMinFrames", 60))
+MAX_OTS_RATIO = float(_CAM_G.get("maxOtsRatio", 0.22))
+MAX_SWITCHES_PER_MIN = float(_CAM_G.get("maxPerspectiveSwitchesPerMinute", 4))
+MAX_SHOT_DRIFT_FRAMES = int(_CAM_G.get("maxShotSyncDriftFrames", 4))
+WALL_OF_TEXT_WORDS = int(_CAP_G.get("wallOfTextErrorWords", 12))
+FPS = float(_CONST.get("fps", 30))
 
 
 def norm_text(s: str) -> str:
@@ -174,6 +156,7 @@ def main():
     ap.add_argument("--registry", help="Optional LOCATION_REGISTRY.json for cross-video anti-repetition check")
     ap.add_argument("--update-registry", action="store_true", help="Register validated locations into --registry on pass")
     ap.add_argument("--still-out", help="Output path for generated still_manifest.json")
+    ap.add_argument("--strict-cinema", action="store_true", help="Enforce v11.0 Anchored POV-First cinema gates (`shots[]`, Master Establishing, 180-axis)")
     args = ap.parse_args()
 
     with open(args.manifest, encoding="utf-8") as fp:
@@ -347,10 +330,17 @@ def main():
             errors.append(f"SCRIPT.md '{args.script}' is empty")
 
     words_data = []
+    visual_beats_data = []
+    dead_silences_data = []
     if args.words:
         with open(args.words, encoding="utf-8") as fp:
             raw_w = json.load(fp)
-            words_data = raw_w if isinstance(raw_w, list) else raw_w.get("words", [])
+            if isinstance(raw_w, list):
+                words_data = raw_w
+            else:
+                words_data = raw_w.get("words", [])
+                visual_beats_data = raw_w.get("visual_beats", [])
+                dead_silences_data = raw_w.get("dead_silences", [])
     norm_words = [
         (
             norm_text(str(w.get("w", w.get("word", "")))),
@@ -432,6 +422,13 @@ def main():
             expr = cst.get("expr")
             if expr is not None and expr not in VALID_EXPRS:
                 errors.append(f"Beat '{bid}' cast '{cid}' invalid expr={expr!r}")
+            d_mode = cst.get("dialogueMode")
+            if d_mode is not None and d_mode not in VALID_DIALOGUE_MODES:
+                errors.append(f"Beat '{bid}' cast '{cid}' invalid dialogueMode={d_mode!r}")
+            if str(cst.get("speakingAs") or "").strip().upper() == "NARRATOR" and d_mode == "directSpeech":
+                errors.append(
+                    f"VOICEOVER_LIPSYNC_ERROR: Beat '{bid}' cast '{cid}' has speakingAs='NARRATOR' with dialogueMode='directSpeech' (use dialogueMode='voiceOver' so internal narration never flaps mouth!)"
+                )
 
             # v8.0 Anchor resolution & Spatial Anti-Teleport Continuity Gate
             a_base = str(cst.get("anchor") or "").strip()
@@ -526,7 +523,14 @@ def main():
                         best_idx, matched_start, matched_end = min(matches, key=lambda m: abs(m[1] - beat_start_s))
                         if best_idx >= word_cursor:
                             word_cursor = best_idx + len(toks)
-                        max_start_drift = 0.60 if a == 0 else 0.35
+                        # Account for intentional [VISUAL Xs] or [DEAD SILENCE Xs] breathing spans preceding speech inside this beat!
+                        vis_pad = 0.0
+                        for sp_blk in (visual_beats_data or []) + (dead_silences_data or []):
+                            bs0 = float(sp_blk.get("s", 0.0))
+                            be0 = float(sp_blk.get("e", 0.0))
+                            ov = max(0.0, min(be0, matched_start + 0.05) - max(bs0, beat_start_s - 0.05))
+                            vis_pad += ov
+                        max_start_drift = (0.65 if a == 0 else 0.40) + vis_pad
                         if abs(matched_start - beat_start_s) > max_start_drift:
                             errors.append(
                                 f"Beat '{bid}' timing drift: beat starts at {beat_start_s:.2f}s vs words.json {matched_start:.2f}s (> {max_start_drift:.2f}s)"
@@ -557,10 +561,131 @@ def main():
         for ci, cc in enumerate(caption_chunks):
             txt_c = str(cc.get("text", "")).strip()
             w_cnt = len(txt_c.split())
-            if w_cnt > 12:
+            if w_cnt > WALL_OF_TEXT_WORDS:
                 errors.append(
-                    f"WALL_OF_TEXT_ERROR: captionChunks[{ci}] has {w_cnt} words (>12): {txt_c!r}. Re-run align_manifest.py to split into 4-8 word cinema subtitles."
+                    f"WALL_OF_TEXT_ERROR: captionChunks[{ci}] has {w_cnt} words (>{WALL_OF_TEXT_WORDS}): {txt_c!r}. Re-run align_manifest.py to split into 4-8 word cinema subtitles."
                 )
+
+    # 2c. v11.0 Anchored POV-First Cinema Grammar & Phrase-Locked Shot Gates (`shots[]`)
+    raw_shots = manifest.get("shots")
+    if args.strict_cinema and (not isinstance(raw_shots, list) or not raw_shots):
+        errors.append("MASTER_ESTABLISHING_ERROR: --strict-cinema requires non-empty `manifest.shots[]`")
+    if isinstance(raw_shots, list) and raw_shots:
+        sorted_shots = sorted(raw_shots, key=lambda s: int(s.get("a", 0)))
+        sh_cur = 0
+        seen_loc_first_shot = set()
+        last_axis_by_loc = {}
+        ots_frames = 0
+        persp_switches = 0
+        prev_persp = None
+        sh_word_cursor = 0
+        shot_still_entries = []
+        POV_MODES_SET = {"pov", "pov_turn", "pov_walk", "pov_interact"}
+
+        for sh in sorted_shots:
+            sid = sh.get("id", "?")
+            sa, sb = sh.get("a"), sh.get("b")
+            if not isinstance(sa, int) or not isinstance(sb, int) or sa >= sb:
+                errors.append(f"Shot #{sid} has invalid frame range [{sa}, {sb})")
+                continue
+            if sa != sh_cur:
+                errors.append(f"Shot #{sid} contiguity error: starts at {sa}, expected {sh_cur}")
+            sh_cur = sb
+
+            s_light = sh.get("light")
+            if s_light not in VALID_LIGHTS:
+                errors.append(f"Shot #{sid} invalid light={s_light!r}")
+            cmode = sh.get("cameraMode")
+            if cmode not in VALID_CAMERA_MODES:
+                errors.append(f"Shot #{sid} invalid cameraMode={cmode!r} (allowed: {sorted(VALID_CAMERA_MODES)})")
+            aside = sh.get("axisSide")
+            if aside not in VALID_AXIS_SIDES:
+                errors.append(f"Shot #{sid} invalid axisSide={aside!r} (allowed: {sorted(VALID_AXIS_SIDES)})")
+
+            mid_f = (sa + sb) // 2
+            cov_beat = next((b for b in sorted_beats if int(b["a"]) <= mid_f < int(b["b"])), sorted_beats[-1] if sorted_beats else {})
+            s_loc = cov_beat.get("locationId", "S01")
+
+            # Gate 1: Master Establishing Shot on first visit to each location
+            if s_loc not in seen_loc_first_shot:
+                seen_loc_first_shot.add(s_loc)
+                min_m = min(MASTER_MIN_FRAMES, max(24, (total_frames or 180) // 4))
+                if cmode != "master" or (sb - sa) < min_m:
+                    errors.append(
+                        f"MASTER_ESTABLISHING_ERROR: First shot (#{sid}) in location '{s_loc}' must be cameraMode='master' (>= {min_m}f) to establish room geography, got cameraMode={cmode!r} ({sb - sa}f)"
+                    )
+
+            # Gate 2: Strict 180-Degree Axis Rule
+            prev_ax = last_axis_by_loc.get(s_loc)
+            if prev_ax in ("left", "right") and aside in ("left", "right") and prev_ax != aside:
+                errors.append(
+                    f"AXIS_180_VIOLATION_ERROR: Shot #{sid} in '{s_loc}' flips 180-degree axis directly from '{prev_ax}' to '{aside}' without re-orienting via 'master' or 'pov_center'"
+                )
+            last_axis_by_loc[s_loc] = aside
+
+            # Gate 3: POV Continuity vs OTS Ping-Pong Cap
+            if cmode == "ots_same_side":
+                ots_frames += (sb - sa)
+            cur_persp = "pov" if cmode in POV_MODES_SET else ("ots" if cmode == "ots_same_side" else "master")
+            if prev_persp in ("pov", "ots") and cur_persp in ("pov", "ots") and cur_persp != prev_persp:
+                persp_switches += 1
+            if cur_persp != "master":
+                prev_persp = cur_persp
+
+            # Gate 4: Phrase-Locked Shot Sync against words.json (<= 4 frames drift)
+            s_phrase = str(sh.get("startPhrase") or "").strip()
+            if s_phrase and norm_words and sa > 0:
+                ptoks = [t for t in norm_text(s_phrase).split() if t]
+                if ptoks:
+                    phit = None
+                    for idx_w in range(sh_word_cursor, len(norm_words) - len(ptoks) + 1):
+                        if all(norm_words[idx_w + k][0] == ptoks[k] for k in range(len(ptoks))):
+                            phit = (idx_w, norm_words[idx_w][1])
+                            break
+                    if phit is None:
+                        for idx_w in range(0, min(sh_word_cursor, len(norm_words) - len(ptoks) + 1)):
+                            if all(norm_words[idx_w + k][0] == ptoks[k] for k in range(len(ptoks))):
+                                phit = (idx_w, norm_words[idx_w][1])
+                                break
+                    if phit is None:
+                        errors.append(f"SHOT_WORD_SYNC_ERROR: Shot #{sid} startPhrase={s_phrase!r} not found in words.json")
+                    else:
+                        if phit[0] >= sh_word_cursor:
+                            sh_word_cursor = phit[0] + 1
+                        lead_f = int(sh.get("leadFrames", 0) or 0)
+                        exp_a = int(round(phit[1] * FPS)) - lead_f
+                        if abs(sa - exp_a) > MAX_SHOT_DRIFT_FRAMES:
+                            errors.append(
+                                f"SHOT_WORD_SYNC_ERROR: Shot #{sid} starts at f{sa} vs phrase {s_phrase!r} at f{exp_a} (drift {abs(sa - exp_a)}f > {MAX_SHOT_DRIFT_FRAMES}f). Run align_manifest.py!"
+                            )
+
+            shot_still_entries.append({
+                "beatId": sh.get("beatId") or cov_beat.get("beatId"),
+                "shotId": sid,
+                "peakFrame": mid_f,
+                "range": [sa, sb],
+                "locationId": s_loc,
+                "cameraMode": cmode,
+                "cameraIntent": sh.get("note") or cov_beat.get("cameraIntent", ""),
+                "lightState": {"preset": s_light, "lampsOn": (cov_beat.get("lightState") or {}).get("lampsOn", [])},
+            })
+
+        if total_frames and sh_cur != total_frames:
+            errors.append(f"Shots contiguity error: shots end at {sh_cur} != totalFrames {total_frames}")
+        if total_frames and total_frames >= 300:
+            ots_ratio = ots_frames / float(total_frames)
+            if ots_ratio > MAX_OTS_RATIO + 0.03:
+                errors.append(
+                    f"POV_PINGPONG_ERROR: ots_same_side occupies {ots_ratio * 100:.1f}% of frames (> {(MAX_OTS_RATIO + 0.03) * 100:.0f}% cap — keep 80-90% anchored POV!)"
+                )
+            mins = max(0.5, (total_frames / FPS) / 60.0)
+            sw_rate = persp_switches / mins
+            if sw_rate > MAX_SWITCHES_PER_MIN + 1.5:
+                errors.append(
+                    f"POV_PINGPONG_ERROR: {persp_switches} POV<->OTS switches ({sw_rate:.1f}/min > {MAX_SWITCHES_PER_MIN + 1.5:.1f}/min cap — use camPovChain smooth head turns instead of ping-pong cuts!)"
+                )
+        if shot_still_entries:
+            still_entries = shot_still_entries
 
     if total_frames and cursor < total_frames:
         errors.append(f"Timeline gap at end of manifest: beats end at {cursor} < totalFrames {total_frames}")

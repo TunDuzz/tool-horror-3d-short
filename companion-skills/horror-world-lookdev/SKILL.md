@@ -1,9 +1,9 @@
 ---
 name: horror-world-lookdev
-description: Use when designing unique non-repeating 3D horror environments (LocationBlueprint), story-driven characters & supernatural entities (CharacterBlueprint + createCharacterFromBlueprint), PSX VHS/CRT or semi-realistic render styles, 5-pillar Maximum Dread horror staging (peripheral lurkers, decay props, opt-in body horror, 3-stage lunge escalation, VHS camcorder HUD), 1st-person POV rigs & diegetic 3D props (povRig.ts), or atmospheric 3D FX (fx3d.ts) in Three.js + Remotion Engine v5.0.
+description: Use when designing unique non-repeating 3D horror environments (LocationBlueprint + Zero Black Void architectural lights), story-driven characters & entities (CharacterBlueprint + 3-phase acting curves + dialogueMode), Anchored POV-First camera blocking (camMasterEstablish + camPovChain), 2-joint fingerCurl + worldTarget POV rigs (povRig.ts), or PSX VHS/CRT & 5-pillar Maximum Dread FX in Three.js + Remotion Engine v11.0.
 ---
 
-# Horror World, Story-Driven Cast & Maximum Dread Look-Dev v5.0
+# Horror World, Story-Driven Cast, 3-Phase Acting & Embodied POV Look-Dev v11.0
 
 All project environments, custom textures, `CharacterBlueprint` configs, and story-specific props stay strictly inside `shorts-project/src/<project>/` (or `src/<episode>/shared/`) — never put story-specific code into `src/engine/` (`GEMINI.md`).
 
@@ -74,13 +74,13 @@ Deploy any subset of these 5 dread tools when a story's tone and beats call for 
 ## 5. Neutral Modular Architecture, 1st-Person POV Rig & Practical Lighting
 
 - **Modular Builders (`build.ts`):** `addWallWithOpening`, `addDoubleDoorWithCracks` (`doorCtrl.setMoonlight(moonOn, feetShadow)`), `addAFrameRoof`, `addCorridorBay`, `addStairFlight`, `addGlassOilLamp3D`, `addIncenseBurner3D`, `addFluorescentTube3D`, `addStreetLamp3D`, `addSimpleTable`, `addWoodenBedFrame`, `addExitSign3D`, `addPipeRun3D`, `addWallSwitch3D`, `addAltarOfferingPlate3D`.
-- **1st-Person POV Rig (`povRig.ts`) & Hybrid Protagonist (`C01` 3D Rig — v10.0):**
-  - **ALWAYS build protagonist `C01` as a full `Character3D`** (via `castBlueprints[]`) so `story.ts` can freely cut to **OTS (Over-The-Shoulder)**, **MS**, and **CU reaction shots** — establishing unmistakable main-character identity! Hide `C01` cleanly ONLY on 1st-person POV shots and show `PovRig3D` instead.
-  - **NEVER tie `pov.group.visible` solely to `handheldFlashlight`!** Keep `createPovRig3D` embodied on POV shots using interactive modes (`idle`, `leanDesk`, `reachBolt`, `holdPaper`, `holdHandset`, `shieldFace`, `phone`, `flashlight`, `lamp`, `paper`) with sculpted articulated fingers, cuffs, `actionProgress`, and `walkBob` so hands physically bolt doors, lift handsets, hold tickets/receipts, and brace in terror!
-- **Hero Prop Craft & 3-Layer Depth Rule (ZERO Bare 1-Box Props!):**
-  - Never stare at a bare 1-box cube for a hero prop (e.g. coal stove, rotary phone, hanging raincoat, lantern). Construct multi-part silhouettes with material contrast (metal rim + clay liner + ash holes, contoured Bakelite phone body + rotary finger-wheel + curved double-cup handset + coiled cord, draped folds) AND frame shots with **Foreground (POV hands / doorframe / desk edge / OTS shoulder) + Midground (actor/prop) + Background (practical light / rain window / dark depth)**!
-- **Spatial Stage Solver & Living Acting (`stage.ts` + `rig3d.ts` — v10.0):**
-  - Never hardcode `if (frame >= ...)` coordinate guesses inside `world.ts`! Drive all actors via **`applyManifestActors(MANIFEST, frame, actors, extraAnchors, { words, speakerMap, blackouts })`**, wiring `words.json` for automatic **Vietnamese vowel lip-sync (`mouthFromWords`)**, natural `autoBlink`, living acting poses (`talkUrgent`, `talkCalm`, `nervousIdle`, `sitBenchHunched`, `reachInteract`, `glassSlam`), and discrete **`motionMode: "blinkStep"`** blackout flicker advances!
+- **Anchored POV-First (`2A`) & 2-Joint `worldTarget` POV Rig (`4B` · `povRig.ts`):**
+  - **Open every location with `camMasterEstablish`** (`cameraMode: "master"`, `>= 60 frames`) showing both protagonist `C01` and the room's full architectural depth (`Zero Black Void` — walls, rafters, doors, and hero props clearly readable under `lights.ts`).
+  - **Stay 80–90% in Continuous Anchored POV (`camPovChain`)** with `C01` hidden and `PovRig3D` active (`idle`, `leanDesk`, `reachBolt`, `holdPaper`, `holdHandset`, `shieldFace`, `phone`, `flashlight`), using **2-joint `fingerCurl` (`0..1`) + `worldTarget: V3`** so POV hands visibly reach toward and grip real 3D prop coordinates (`bolt`, `receipt`, `ledger`) instead of floating in empty air! Use at most `1–2` `ots_same_side` shots on a strict 180° axis.
+- **Hero Prop Craft & 3-Layer Depth Rule (ZERO Bare 1-Box Props & ZERO Black Void Cutaways!):**
+  - Construct multi-part hero props with distinct materials, and NEVER isolate a prop in a `#050408` black void — turn the POV camera smoothly (`camPovChain`) toward the prop in its real lit corner of the room!
+- **Spatial Stage Solver, 3-Phase Acting & `dialogueMode` (`stage.ts` + `rig3d.ts` — v11.0):**
+  - Drive all actors via **`applyManifestActors(MANIFEST, frame, actors, extraAnchors, { words, speakerMap, blackouts })`**. Always set `dialogueMode: "voiceOver"` on `C01` during `[NARRATOR]` internal monologue (`VOICEOVER_LIPSYNC_ERROR` forbids mouth-flapping on voice-over!) and `dialogueMode: "directSpeech"` on speaking characters. `rig3d.ts` automatically applies 3-phase `Hold → Anticipation → Ease → Settle` gestures, `Head/Eye Lead` on pose blends, and grounded asymmetric gait on `walk`/`creep`.
 - **Practical Lights & Whip-Pan Motion Blur:** Update `applyLightUniforms`, `setLocalLights` (up to 6 practical `PointLight`s), and `setSpotLight` in BOTH `world.update()` and `world.syncLighting()`. Implement `getLightBlend(...)` for smooth lamp-death shifts and `getMotionVelocity(...)` delegating to `evalShotMotion(...)` for deterministic 13-tap `WhipMotionBlurEffect`.
 
 See [LIGHTING_AND_PALETTE.md](./references/LIGHTING_AND_PALETTE.md) and [HORROR_STYLE_BIBLE.md](../../references/HORROR_STYLE_BIBLE.md) for calibrated values and verified v5.0 benchmark stills.

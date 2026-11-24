@@ -1,11 +1,11 @@
 ---
 name: horror-series-pipeline
-description: Use when producing a seamless 150-300s (2.5-5 min) standalone horror short (3-5 chapters, 9:16 default) or an 8-15 minute (480-900s) multi-part horror series (8-15 chapters, 16:9 default) split into 45-90s renderable chapters (p01..pNN) with constant context budget, shared 3D locations & ANCHORS, story-driven CharacterBlueprints, CONTINUITY.json handoff, and zero-drift stitch_parts.py assembly.
+description: Use when producing a seamless 150-360s (2.5-6 min) standalone horror short (3-5 chapters, 9:16 default) or an 8-16 minute (480-960s) multi-part horror series (8-15 chapters, 16:9 default) split into 45-105s renderable chapters (p01..pNN) governed by pipeline_constitution.json, Anchored POV-First (2A), Whisper Forced Word Alignment (1B), [VISUAL Xs] breathing frames (3A), shared 3D locations & ANCHORS, CONTINUITY.json handoff, and zero-drift stitch_parts.py assembly.
 ---
 
-# Horror Multi-Chapter Pipeline v9.0 (`150–300s` Seamless Shorts & `8–15 Min` Series)
+# Horror Multi-Chapter Pipeline v11.0 (`150–360s` Seamless Shorts & `8–16 Min` Series)
 
-Solving context window overflow, background repetition & 3D coordinate hallucination on both **2.5–5 min standalone shorts (`3–5` chapters, stitched seamlessly with zero recap)** and **8–15 min feature episodes (`8–15` chapters)**: **build the shared Engine v5.1 3D locations (`LocationBlueprint`) and story-driven cast (`CharacterBlueprint`) ONCE, lock every spot behind named `ANCHORS` from `horror-story` v3.0 (`export-blueprint --all-parts`), author and render each `45–90s` Chapter in an isolated ~350–500 line budget, and hand off state strictly through `CONTINUITY.json`.**
+Solving context window overflow, background repetition & 3D coordinate hallucination on both **2.5–6 min standalone shorts (`3–5` chapters, stitched seamlessly with zero recap)** and **8–16 min feature episodes (`8–15` chapters)**: **build the shared Engine v11.0 3D locations (`LocationBlueprint`) and story-driven cast (`CharacterBlueprint`) ONCE, lock every spot behind named `ANCHORS` from `horror-story` (`export-blueprint --all-parts`), author and render each `45–105s` Chapter (`72–95s` recommended with `[VISUAL Xs]` breathing frames) in an isolated ~350–500 line budget, and hand off state strictly through `CONTINUITY.json`.**
 
 ## 3-Tier Directory Architecture (`shorts-project/src/<episode>/`)
 
@@ -52,8 +52,8 @@ shorts-project/src/<episode>/
 ### Phase 1: Series Bible, 8–10 Part Expressive Scripts & Per-Part Voice
 1. Author `story.json` via `horror-story` and export `bible/OUTLINE.json` (`horror_story.py export-outline`).
 2. Lock `aspect` (`"9:16"` or `"16:9"`), global `audio_drone_hz`, `renderStyle` (`"psxHorror"` default or `"semiReal"` / `"painterly"` / `"comic"`), and per-Part `transition_out` (`"cut"`, `"blackout:0.25"`, `"fade:0.25"`).
-3. Write `out/<episode>/p01/SCRIPT.md` .. `p10/SCRIPT.md` (140–185 words each using `[NARRATOR | mood=...]`, `[SPEAKER: ... | fx=...]`, `[PAUSE]`, `[DEAD SILENCE]` and mini-cliffhangers).
-4. Generate expressive `voice.wav` + `words.json` per Part via `scripts/gen_horror_voice.py` (1-file So-VITS-SVC VC-Pack `-na` workflow or `--no-vc`).
+3. Write `out/<episode>/p01/SCRIPT.md` .. `pNN/SCRIPT.md` (`2.2–2.5 words/s` effective with `[VISUAL 2.6s]` Master Establishing opener + `[VISUAL 1.2–2.0s]` prop interaction breathers, `[NARRATOR | mood=...]`, `[SPEAKER: ... | fx=...]`, `[DEAD SILENCE]` and mini-cliffhangers).
+4. Generate studio-clean 48 kHz `voice.wav` + Whisper forced-aligned `words.json` (`<35ms`) per Part via `scripts/gen_horror_voice.py --tts-engine vieneu --speaker-lock --word-aligner auto --no-vc` (optional GPU acting pack / VC-Pack supported).
 
 ### Phase 2: Build & Lock `shared/` (One-Time World & Cast Approval)
 1. Author `shared/locations.ts`, `shared/castBlueprints.ts`, `shared/build.ts`, `shared/worldBase.ts` following `horror-world-lookdev` v5.0 (story-driven `LocationBlueprint`s with BumpMap surfaces, `CharacterBlueprint`s via `createCharacterFromBlueprint`, real `setLocalLights` / `setSpotLight`).
@@ -62,11 +62,11 @@ shorts-project/src/<episode>/
 ### Phase 3: Rolling Per-Part Production (`p01` → `pNN`)
 For each Part `N`:
 1. Run `python3 scripts/validate_continuity.py src/<episode> --part N`.
-2. Draft `parts/pNN/manifest.json`, lock beat frames automatically via `align_manifest.py`, and pass `validate_manifest.py --script ... --words ... --registry LOCATION_REGISTRY.json --update-registry --still-out ...`.
-3. Author `parts/pNN/{story.ts, world.ts, index.tsx}` obeying the **No-Repeat-Angle Rule** and **Script↔Frame Manifest Lock**, and register `<Ep_PNN />` in `src/Root.tsx`.
-4. Run the **Beat-by-Beat Pre-Final Still Gate** on `<Ep_PNN />` (`render-stills.mjs --manifest` + 100% viewed via `read_file`).
-5. Synthesize `out/<episode>/pNN/audio/mix.wav` locked to `CONTINUITY.json` `audio_bridge.drone_hz` and passing `dead_silences=load_dead_silences(words_json)` into `master_mix(...)` for TRUE `-48 dB` Dead Silence!
-6. Render `<Ep_PNN />` via `render-video.mjs` (`--scale 1`, `1.25`, or `1.5`; NEVER `1.3333`), mux audio (`-map 0:v:0 -map 1:a:0`), and run `extract_shots.py` + `short_qa.py` confirming `DIRECTING_WARNS none` → `out/<episode>/pNN/final.mp4`.
+2. Draft `parts/pNN/manifest.json` (`beats[]` + `shots[]`), lock frames & captions automatically via `align_manifest.py`, and pass `validate_manifest.py --script ... --words ... --cues ... --strict-cinema --registry LOCATION_REGISTRY.json --update-registry --still-out ...`.
+3. Author `parts/pNN/{story.ts, world.ts, index.tsx}` using `SHOTS = shotsFromManifest(MANIFEST)`, `camMasterEstablish` + `camPovChain` (`Anchored POV-First 2A`), `dialogueMode` (`voiceOver` vs `directSpeech`), and 2-joint `worldTarget` POV hands (`4B`), then register `<Ep_PNN />` in `src/Root.tsx`.
+4. Run the **Shot-by-Shot Pre-Final Still Gate** on `<Ep_PNN />` (`render-stills.mjs --manifest` + 100% viewed via `read_file`).
+5. Mix `out/<episode>/pNN/audio/mix.wav` via `scripts/mix_cues.py --cues ... --out ... --strict` locked to `CONTINUITY.json` `audio_bridge` with Openverse CC0 Foley and TRUE `-48 dB` Dead Silence!
+6. Render `<Ep_PNN />` via `render-video.mjs` (`--scale 1`, `1.25`, or `1.5`; NEVER `1.3333`), mux audio (`-map 0:v:0 -map 1:a:0`), and run `extract_shots.py` + `short_qa.py` confirming `DIRECTING_WARNS none`, `DEAD_CAMERA_WARNS none`, and `DARK_VOID_WARNS none` → `out/<episode>/pNN/final.mp4`.
 7. Update `bible/CONTINUITY.json` (`completed_part: N`, final character anchors/props, plot reveals, end camera/transition, audio bridge).
 8. Clean stale bundles in `REMOTION_TMP`.
 

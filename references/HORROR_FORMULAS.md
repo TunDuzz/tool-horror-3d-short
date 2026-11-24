@@ -56,9 +56,11 @@ All formulas below use Horror Engine v5.0's **5 physical lighting presets** (`wa
 
 ---
 
-## Series Arc Formula: Tập Dài 8–10 Phút (Chia 8–10 Part × ~1 Phút)
+## Series Arc Formula: Phim Ngắn `2.5–5 Phút` (`3–5` Chương) & Tập Dài `8–15 Phút` (`8–15` Chương)
 
-Đừng viết lan man—mỗi Part `~60 s` phải hoạt động được cả khi xem **riêng lẻ trên Shorts** lẫn khi **nối liền trên YouTube**:
+Xem chi tiết **Công thức Nhịp vàng 2.5–5 phút** và **Đường cong Răng cưa 8–15 phút (Sawtooth Dread Curve)** trong `companion-skills/horror-story/references/STORYTELLING_CRAFT.md`.
+- Với **Phim ngắn liền mạch (`short`, `150–300s`, `3–5` chương, `seamlessStitch: true`)**: KHÔNG lặp câu mở đầu/recap ở đầu P02..P05; mỗi chương nối thẳng nhịp hành động & trạng thái đạo cụ sang chương sau để ghép thành 1 phim liên tục bằng `stitch_parts.py`.
+- Với **Series dài (`series`, `8–15 phút`, `8–15` chương)**: Hỗ trợ cả chế độ ghép liền YouTube `16:9` lẫn xuất từng chương `~60s` độc lập:
 
 | Part | Vai trò trong Tập | Mục tiêu & Mini-Cliffhanger cuối phút |
 |---|---|---|

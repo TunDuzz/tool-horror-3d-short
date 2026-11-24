@@ -1,14 +1,15 @@
 ---
 name: horror-3d-short
-description: Use when creating a horror story video — standalone 150-300s (2.5-5 min) short (9:16 default), 8-15 min (480-900s) multi-part series (16:9 default), or quick 45-90s micro test — in Horror Engine v5.1/v9.0 (PSX Low-Poly VHS/CRT default 1A+2A+3A, story-driven CharacterBlueprints, 5-pillar Maximum Dread kit, non-repeating LocationBlueprints, 24-gate Horror Story Architect v3.0 with Tension Curve & 2D SVG Floorplans, stage.ts anatomical solver, VieNeu-TTS 48kHz single-voice lock, Openverse CC0 multi-style Jumpscare mix, and TRUE -48 dB Dead Silence).
+description: Use when creating a horror story video — standalone 150-360s (2.5-6 min) short (9:16 default), 8-16 min (480-960s) multi-part series (16:9 default), or 45-105s micro chapter — in Horror Engine v11.0 (Single-Source pipeline_constitution.json, Anchored POV-First cinema grammar 2A with Master Establishing + strict 180-axis + Zero Black Void lights, Whisper Forced Word Alignment <35ms 1B + shotsFromManifest, [VISUAL Xs] breathing frames 3A at 2.2-2.5 w/s, 3-phase acting + 2-joint worldTarget POV hands 4B, VieNeu-TTS 48kHz --speaker-lock, Openverse CC0 mix_cues.py --strict, and TRUE -48 dB Dead Silence).
 ---
 
-# Horror 3D Story Video v5.0 (`PSX Low-Poly VHS/CRT & Maximum Dread POV`, Three.js + Remotion)
+# Horror 3D Story Video v11.0 (`Anchored POV-First · Studio Sync · Single Constitution`, Three.js + Remotion)
 
+- **Single Source of Truth (`5B`):** `templates/pipeline_constitution.json` (synced to `shorts-project/pipeline_constitution.json` — governs all 6 skills, Python scripts, and TypeScript engine modules).
 - **Workspace:** `shorts-project/` (30 fps; `9:16` `1080×1920` or `16:9` `1920×1080`; integer-dimension multipliers `--scale 1`, `1.25`, or `1.5`).
-- **Neutral Horror Engine v5.0:** `shorts-project/src/engine/` (**20 modules** imported via `../engine`).
-- **Procedural Horror Audio DSP:** `shorts-project/audio/` (`dsp.py`, `horror_instruments.py` with **27 stereo SFX**, `mix_base.py` with **TRUE `-48 dB` Dead Silence**).
-- **Automation & QA Scripts:** `shorts-project/scripts/` (`sync_workspace.py`, `horror_story.py`, `gen_horror_voice.py`, `align_manifest.py`, `validate_manifest.py`, `render-stills.mjs`, `render-video.mjs`, `extract_shots.py`, `short_qa.py`, `stitch_parts.py`, `validate_continuity.py`).
+- **Neutral Horror Engine v11.0:** `shorts-project/src/engine/` (**20 modules** imported via `../engine`).
+- **Studio Horror Audio & SFX:** `shorts-project/audio/` + `scripts/{gen_horror_voice.py, sfx_manager.py, mix_cues.py}` (`VieNeu-TTS --speaker-lock` + `faster-whisper` `<35ms` forced word alignment + Openverse CC0 Foley + `TRUE -48 dB` Dead Silence).
+- **Automation & QA Scripts:** `shorts-project/scripts/` (`sync_workspace.py`, `constitution.py`, `horror_story.py`, `gen_horror_voice.py`, `align_manifest.py`, `validate_manifest.py`, `render-stills.mjs`, `render-video.mjs`, `extract_shots.py`, `short_qa.py`, `stitch_parts.py`, `validate_continuity.py`).
 
 ## Companion Skills (Activate as Needed)
 
@@ -29,11 +30,12 @@ description: Use when creating a horror story video — standalone 150-300s (2.5
    - `manifest.json` + exported `MANIFEST` in `story.ts` are the **single source of truth** for `locations[].anchors`, `castBlueprints`, beats, spoken lines, practical lamps (`lampsOn`), per-beat `fogOverride`, cast poses/trajectories (`moveFromAnchor -> moveToAnchor`, `alignPart`), prop state machines (`fromState -> state`, `triggerWord -> triggerFrame`), and `HorrorHUD`.
    - Drive actors in `world.ts` via **`stage.ts`** (`applyManifestActors`, `alignCharacterPartTo`, `getCharacterPartWorldPos`) instead of manual `if (frame >= ...)` coordinate guesses.
    - Run `align_manifest.py` → `validate_manifest.py --script ... --words ... --cues ... --registry ...` (catching out-of-bounds anchors, intra-room teleports, prop state regressions & audio drift!) before rendering, AND inspect **100% of beat stills** (`render-stills.mjs --manifest`) via `read_file`.
-4. **Cinematic Hybrid POV + OTS Pacing, Clean Word-Timed HUD & Living Acting (v10.0):**
-   - **Zero Dead Cameras (`14–22` Micro-Shots / 60 s, Avg `2.5–4.5 s`):** NEVER map 1 long 15–20 s narrative paragraph to 1 static camera angle! Break every macro story beat into `3–5` motivated micro-shots alternating **POV (with visible embodied hands/legs)** ↔ **OTS/MS featuring protagonist `C01`** ↔ **CU expressive reaction/dialogue** ↔ **ECU prop insert with POV hand interaction** ↔ **Reverse/Low**. `short_qa.py` enforces `DEAD_CAMERA_WARNS` on static shots `> 7.5 s`.
-   - **Protagonist Embodiment (`C01` 3D Rig + Always-Alive `PovRig3D`):** ALWAYS declare the protagonist `C01` as a full `CharacterBlueprint` in `castBlueprints[]` (used in OTS/MS/reaction shots, auto-hidden in 1st-person POV shots), AND drive `PovRig3D` actively with `idle` / `leanDesk` / `reachBolt` / `holdPaper` / `holdHandset` / `flashlight` / `shieldFace` — NEVER tie `pov.group.visible` solely to the flashlight!
-   - **Living Acting & Lip-Sync (`stage.ts` + `rig3d.ts`):** Always pass `words.json` + `speakerMap` into `applyManifestActors(MANIFEST, frame, actors, extraAnchors, { words, speakerMap, blackouts })` for automatic **Vietnamese vowel lip-sync (`mouthFromWords`)**, natural `autoBlink`, living acting poses (`talkUrgent`, `talkCalm`, `nervousIdle`, `sitBenchHunched`, `reachInteract`, `glassSlam`), and `motionMode: "blinkStep"` flicker advances.
-   - **Clean Minimal HUD & 4–8 Word Subtitles:** `align_manifest.py` automatically emits `captionChunks[]` (`4–8 words`, `1–2` short lines locked to `words.json` — ZERO 6-line wall-of-text paragraphs!). Keep `headerStyle: "minimal"` by default and enable `camcorder` HUD ONLY for authentic found-footage stories.
+4. **Anchored POV-First Cinema Grammar (`2A`), Phrase-Locked Shots (`1B`), Visual Breathing (`3A`) & 3-Phase Acting (`4B`):**
+   - **Mandatory Master Establishing Shot (`MASTER_ESTABLISHING_ERROR`):** Every location MUST open with `cameraMode: "master"` (`>= 60 frames`, `camMasterEstablish`) revealing full room architecture, light sources, hero props, and spatial layout with **Zero Black Void** (`lights.ts` lifted `shade/lift` + `fogNear/fogFar`).
+   - **80–90% Continuous Anchored POV + Strict 180° Axis (`AXIS_180_VIOLATION_ERROR`, `POV_PINGPONG_ERROR`):** Stay anchored inside the protagonist's eyes using `camPovChain()` smooth head-turn/eyeline scans (never cut to floating props in a black void; never flip 180° into the protagonist's front face!). Use at most `1–2` `ots_same_side` shots (`<= 22%` of frames) strictly at major act transitions.
+   - **Phrase-Locked `manifest.shots[]` & `shotsFromManifest(MANIFEST)` (`SHOT_WORD_SYNC_ERROR`):** NEVER hardcode raw shot frame numbers in `story.ts`! Declare `shots[]` (`startPhrase`, `endPhrase`, `visualBeatIndex`, `actionTriggerPhrase`) in `manifest.json`, lock via `align_manifest.py`, and export `SHOTS = shotsFromManifest(MANIFEST)` in `story.ts`.
+   - **3-Phase Acting, `dialogueMode` & 2-Joint `worldTarget` POV Hands:** Set `dialogueMode: "voiceOver"` on `C01` during `[NARRATOR]` internal monologue (`VOICEOVER_LIPSYNC_ERROR` blocks mouth-flapping on voice-over!) and `"directSpeech"` on speaking NPCs. Drive `PovRig3D` with 2-joint `fingerCurl` and `worldTarget` 3D prop coordinates so hands genuinely reach and grasp bolts, receipts, and ledgers.
+   - **Default 4–8 Word Subtitles & Minimal HUD:** `align_manifest.py` emits word-timed `captionChunks[]` (`4–8 words`, `1–2 lines`, `enabledByDefault: true`, `headerStyle: "minimal"`).
 5. **Render Style (`psxHorror` Default `1A+2A+3A`) & 5 Maximum Dread Opt-In Pillars:**
    - Default `renderStyle="psxHorror"` pairs angular low-poly PS1 vertex-snapped geometry, PBR BumpMaps + SSAO, 360×640 Bayer-dithered VHS/CRT post-processing, and `outlineMode: "off"` — switchable cleanly to `"semiReal"`, `"painterly"`, or `"comic"` per story.
    - Keep all characters, entities, and POV rigs on `NOINK` (layer 3) and zero 2D billboard cards or cute chibi heads. Deploy any of the 5 Maximum Dread opt-in pillars (`addCornerLurker3D`, `addSwarmingFlies3D` + Folk/Viscera dressing `addBloodHandprintDecal3D`/`addIchorPoolDecal3D`/`addTalismanPaper3D`/`addOtherworldGrimeDecal3D`/`addHauntedPortrait3D`, opt-in `bodyHorror`, 3-stage `doorwayPeek → stalkLoom → lungeCloseUp` + `jacobsLadderTwitch` / `torchMalfunction`, `camcorder` HUD + `fogOverride` + `RetroPsxEffect.dreadLevel`) ONLY when fitting the story.
@@ -45,73 +47,46 @@ description: Use when creating a horror story video — standalone 150-300s (2.5
    - Generate clean 48 kHz Vietnamese narration via **`VieNeu-TTS v3 Turbo`** (`--tts-engine vieneu`, ONNX CPU + 3–8s emotional voice cloning `--ref-audio`/`--emotion-refs` + native `[thở dài]`/`[hắng giọng]`), OR export a GPU acting pack (`--export-gpu-voice-pack` for **`dinhthuan/index-tts-2-vietnamese`** 8-D emotion vectors / **`F5-TTS-Vietnamese`** → `--import-acts`), OR pass clean guide audio through 1-file **So-VITS-SVC (`-na`)**.
    - Prefer real recorded CC0 Foley (`sfx_manager.py fetch-freesound` / `import-local`) or GPU neural SFX (`sfx_manager.py export-sfx-pack` for **`declare-lab/TangoFlux`** & **`hkchengrex/MMAudio`**) loaded via `mix_base.load_sfx_asset(...)`, and always pass `dead_silences=load_dead_silences(words_json)` into `master_mix(...)` for TRUE `-48 dB` vacuum!
 
-## End-to-End 11-Step Pipeline (Engine v5.0)
+## End-to-End 11-Step Pipeline (Engine v11.0 — Unified Single Constitution)
 
-1. **Sync Workspace & Choose Aspect / Render Style / Blueprints:**
-   - Sync templates safely in 1 command (never touches existing `src/<story>/` folders):
-     ```bash
-     python3 templates/scripts/sync_workspace.py --target shorts-project --include-demo
-     ```
-   - Confirm `9:16` (`1080×1920`) or `16:9` (`1920×1080`), `renderStyle` (`"psxHorror"` default), unique `LocationBlueprint`(s), and story-driven `CharacterBlueprint`(s).
-2. **Expressive Multi-Speaker Script (`2.7–3.2 words/s`, 55–75 s):**
-   - Author `out/<project>/SCRIPT.md` with `[NARRATOR | mood=calm_omen|tense|whisper|dread|panic|cold_twist|ghost_entity]`, `[SPEAKER: NAME | voice=... | mood=... | fx=dry|room|phone|ghost]`, `[PAUSE Xs]`, `[DEAD SILENCE Xs]`, and mid-sentence `...` hesitations.
-3. **Expressive Voice & Word Timings (1-File So-VITS-SVC VC-Pack or `--no-vc`):**
-   - **2-Machine So-VITS-SVC Narrator Workflow (Recommended):**
-     ```bash
-     # Step 1 (This PC): Export 1 expressive narrator guide WAV + -na helper scripts
-     python3 scripts/gen_horror_voice.py --script out/<project>/SCRIPT.md --export-vc-pack out/<project>/vc_pack
-     # Step 2 (SVC PC): Run run_svc_win.bat / run_svc_unix.sh (-na preserves F0 intonation!) -> narrator_svc_out.wav
-     # Step 3 (This PC): Exact 1:1 re-assembly + character dialogue + breaths + mood EQ -> voice.wav + words.json
-     python3 scripts/gen_horror_voice.py --script out/<project>/SCRIPT.md \
-       --vc-pack out/<project>/vc_pack \
-       --narrator-vc-wav out/<project>/vc_pack/narrator_svc_out.wav \
-       --out-dir out/<project>/voice
-     ```
-   - *Quick preview / no SVC:* `python3 scripts/gen_horror_voice.py --script out/<project>/SCRIPT.md --out-dir out/<project>/voice --no-vc`
-4. **Author `manifest.json`, Auto-Align Frames & Validate Anti-Repetition Gates:**
-   - Create `shorts-project/src/<project>/manifest.json` with `locations[]`, `castBlueprints[]`, and `beats[]`.
-   - Auto-lock frames to `words.json` and validate both location & entity registries:
-     ```bash
-     python3 scripts/align_manifest.py src/<project>/manifest.json --words out/<project>/voice/words.json --in-place
-     python3 scripts/validate_manifest.py src/<project>/manifest.json \
-       --script out/<project>/SCRIPT.md \
-       --words out/<project>/voice/words.json \
-       --registry LOCATION_REGISTRY.json \
-       --update-registry \
-       --still-out out/<project>/still_manifest.json
-     ```
+1. **Sync Workspace & Verify `pipeline_constitution.json`:**
+   ```bash
+   python3 templates/scripts/sync_workspace.py --target shorts-project --include-demo
+   ```
+2. **Coherent Script With `[VISUAL Xs]` Breathing Budget (`2.2–2.5 words/s`, `45–105 s`/chapter):**
+   - Author `SCRIPT.md` starting with `[VISUAL 2.6s]` (Master Establishing room breather) + `4–6` `[VISUAL 1.2–2.0s]` beats around physical prop interactions (ambient rain/Foley keep playing!), `[DEAD SILENCE Xs]` (`-48 dB` vacuum before reveals), `[NARRATOR | mood=...]`, and `[SPEAKER: NAME | mood=... | fx=room|phone|ghost]`.
+3. **Studio-Clean Neural Voice + Whisper Forced Word Alignment (`1B`, `< 35ms`):**
+   ```bash
+   python3 scripts/gen_horror_voice.py --script out/<project>/SCRIPT.md \
+     --tts-engine vieneu --speaker-lock --word-aligner auto \
+     --out-dir out/<project>/voice --no-vc
+   ```
+   *(Optional GPU IndexTTS-2/F5-TTS `--export-gpu-voice-pack` or So-VITS-SVC `--export-vc-pack` remain supported as auxiliary workflows.)*
+4. **Author `manifest.json` (`beats[]` + `shots[]`), Single-Lock & Cinema Validation:**
+   ```bash
+   python3 scripts/align_manifest.py src/<project>/manifest.json --words out/<project>/voice/words.json --in-place
+   python3 scripts/validate_manifest.py src/<project>/manifest.json \
+     --script out/<project>/SCRIPT.md \
+     --words out/<project>/voice/words.json \
+     --cues out/<project>/cues.json \
+     --strict-cinema \
+     --registry LOCATION_REGISTRY.json \
+     --update-registry \
+     --still-out out/<project>/still_manifest.json
+   ```
 5. **Scaffold `story.ts`, `build.ts`, `world.ts`, `index.tsx` & Register in `src/Root.tsx`:**
-   - `story.ts`: Export `MANIFEST`, `SHOTS` (each with valid `LightKey` + `ShotScale`), `WHIP_PANS`, `POV_MOTIONS`, `CAMS`, `OVERLAYS` (`dipBlack`, `blackout`, `lightning`, `aberration`, `flicker`, `vignettePulse`), `KICKS`, `DOF`.
-   - `build.ts`: Build each unique `LocationBlueprint` into an isolated `THREE.Group` using neutral modular kits (`build.ts` + `fx3d.ts`) and 11 Albedo+BumpMap surface pairs in `paint.ts`.
-   - `world.ts`: Construct actors via `createCharacterFromBlueprint(bp)`, drive `beatAt(MANIFEST, frame)` for location visibility, `beat.fogOverride`, cast poses (`doorwayPeek`/`stalkLoom`/`lungeCloseUp`), `PovRig3D` + diegetic props (`Phone3D`, `Flashlight3D`), and up to 6 `PointLight`s + 1 `SpotLight`.
-6. **Mount `<ShortPlayer />` (`index.tsx`) & Typecheck:**
-   - Mount `<ShortPlayer renderStyle="psxHorror" shots={SHOTS} overlays={OVERLAYS} dof={DOF} hud={hudFromManifest(MANIFEST)} background="#06060b" createWorld={...} />`.
-   - Run `npm run typecheck` (`tsc --noEmit`) — must exit `0`.
-7. **Procedural Horror Audio & TRUE Dead Silence (`out/<project>/audio/`):**
-   - Lock picture timing first, build stems using `dsp.py` + 27 stereo SFX in `horror_instruments.py` (including `vhs_static_burst`, `flashlight_click_sputter`, `neck_crack_wet`, `fly_buzz_loop`), and master with `master_mix(voice, music, sfx, dead_silences=load_dead_silences(words_json), target_lufs=-15.0, ceil_db=-1.2)`.
-8. **Mandatory Beat-by-Beat Pre-Final Still Gate (`--manifest`):**
-   - Render 100% of manifest peak frames at scale `1` + Whip-Pan midpoint frames:
-     ```bash
-     REMOTION_TMP=/tmp/remotion-tmp node scripts/render-stills.mjs <CompId> out/<project>/stills/b_ --manifest out/<project>/still_manifest.json 1
-     REMOTION_TMP=/tmp/remotion-tmp node scripts/render-stills.mjs <CompId> out/<project>/stills/whip_ <whip_frames> 1
-     ```
-     *(On Windows PowerShell use `$env:REMOTION_TMP="D:/remotion-tmp"`.)*
-   - **Open and visually inspect EVERY `.jpg` directly using `read_file`** against [READABILITY_AND_QA.md](./references/READABILITY_AND_QA.md).
-9. **Final Render (Hardware GPU Auto-Detected) & Audio Mux:**
-   - Optional fast draft (`--draft`, `scale 0.5`): `node scripts/render-video.mjs <CompId> out/<project>/draft.mp4 --draft`
-   - Final Full HD (`--scale 1`) or QHD (`--scale 1.25` or `1.5`; NEVER `1.3333`) with automatic Linux NVIDIA `angle-egl` GPU detection + `swangle` fallback:
-     ```bash
-     REMOTION_TMP=/tmp/remotion-tmp node scripts/render-video.mjs <CompId> out/<project>/video.mp4 --scale 1 --crf 16 --concurrency 2
-     ffmpeg -y -i out/<project>/video.mp4 -i out/<project>/audio/mix.wav -c:v copy -c:a aac -b:a 192k -map 0:v:0 -map 1:a:0 out/<project>/final.mp4
-     ```
-10. **Post-Render Automated QA Gate:**
-    ```bash
-    python3 scripts/extract_shots.py src/<project>/story.ts out/<project>/shots.json
-    python3 scripts/short_qa.py out/<project>/final.mp4 out/<project>/qa out/<project>/shots.json
-    ```
-    Confirm `0` unplanned black/white frames, `0` frozen spans `>= 12 f`, `0` unplanned `pops`, `DIRECTING_WARNS none`, zero dark readability warnings, and inspect `out/<project>/qa/sheet_*.jpg` via `read_file`.
-11. **Deliver & Clean Temp Disk:**
-    - Present `out/<project>/final.mp4` (or stitched `episode_full.mp4`) and delete stale `/tmp/remotion-tmp/remotion-webpack-bundle-*` and `puppeteer_dev_chrome_profile-*` folders.
+   - `story.ts`: Export `MANIFEST`, `SHOTS = shotsFromManifest(MANIFEST)` (ZERO manual shot frame numbers!), `camMasterEstablish` on Shot 1, `camPovChain` for continuous POV head-turns, max `1–2` `ots_same_side` cuts.
+   - `world.ts`: Drive actors via `applyManifestActors` (`dialogueMode: "voiceOver"` on `C01` vs `"directSpeech"` on speaking NPCs) and `PovRig3D` with 2-joint `fingerCurl` + `worldTarget` prop coordinates.
+6. **Mount `<ShortPlayer />` (`index.tsx`) & Typecheck (`npx tsc --noEmit` -> Exit 0).**
+7. **Declarative Openverse CC0 Foley & Mastering (`cues.json` + `mix_cues.py --strict`):**
+   ```bash
+   python3 scripts/mix_cues.py --cues out/<project>/cues.json --out out/<project>/audio/mix.wav --strict
+   ```
+8. **Mandatory Shot-by-Shot Pre-Final Still Gate (`--manifest`, 100% shots inspected via `read_file`).**
+9. **Final Render (`--scale 1`, `1.25`, or `1.5`) & Audio Mux.**
+10. **Post-Render Automated QA Gate (`extract_shots.py` + `short_qa.py`):**
+    Confirm `DIRECTING_WARNS none`, `DEAD_CAMERA_WARNS none`, `DARK_VOID_WARNS none`, `0` unplanned black/white/frozen/pops, and `-15.0 LUFS`.
+11. **Deliver & Clean Temp Disk.**
 
 ## Style & Technical References
 

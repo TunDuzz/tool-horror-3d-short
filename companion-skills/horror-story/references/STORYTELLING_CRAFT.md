@@ -72,10 +72,11 @@ Phim dài 8–15 phút **TUYỆT ĐỐI KHÔNG** duy trì âm lượng và độ
 
 ---
 
-## 5. Cầu Nối Chuyển Hóa `story.json` v3.0 → `SCRIPT.md` Giàu Nhạc Tính Tiếng Việt
+## 5. Cầu Nối Chuyển Hóa `story.json` → `SCRIPT.md` Giàu Nhạc Tính & Nhịp Thở `[VISUAL Xs]` (v11.0)
 
-Mỗi `actionBeat` trong v3.0 mang sẵn **3 nguyên liệu văn học**: `subtext` (nội tâm), `sensoryDetails` (cảm giác) và `spokenBeat` (`speaker`, `intent`, `keyPhrase`, `mood`, `wordBudget`). Khi viết `SCRIPT.md`:
-- **Gom thành từng Hồi văn xuôi mạch lạc (`2–4` đoạn mỗi chương)** thay vì băm vụn từng câu rời — để `VieNeu-TTS` khóa giọng `Thiện Minh` thể hiện trọn vẹn hơi thở, nhịp lắng và cao trào!
+Mỗi `actionBeat` mang sẵn **3 nguyên liệu văn học**: `subtext` (nội tâm), `sensoryDetails` (cảm giác) và `spokenBeat` (`speaker`, `intent`, `keyPhrase`, `mood`, `wordBudget` tính theo chuẩn **`2.35 từ/giây`**). Khi viết `SCRIPT.md`:
+- **Bắt buộc dành `20–35%` thời lượng chương cho nhịp thở thị giác `[VISUAL Xs]` (`3A`):** Mở đầu mỗi bối cảnh bằng `[VISUAL 2.6s]` cho **Master Establishing Shot (`2A`)** và chèn `[VISUAL 1.2–2.0s]` ở các khoảnh khắc bước đi, nhận đồ, gài chốt cửa, lật sổ (tiếng mưa/môi trường/Foley vẫn chảy tự nhiên — khác với `[DEAD SILENCE Xs]` cắt chân không `-48 dB`).
+- **Gom thành từng Hồi văn xuôi mạch lạc (`2–4` đoạn mỗi chương)** thay vì băm vụn từng câu rời — để `VieNeu-TTS --speaker-lock` kết hợp bộ căn chỉnh từ âm học Whisper (`< 35ms`) thể hiện trọn vẹn hơi thở và khóa cứng 100% khung hình!
 - **Tạo tương phản độ dài câu:** Câu dài có nhịp ngắt `,` và `...` cho đoạn `calm_omen` / `dread` / `whisper`; câu ngắn sắc gọn `4–8` từ cho đoạn `fear` / `panic`!
-- **Giữ nguyên các từ khóa neo (`triggerWord`):** Đảm bảo từ khóa trong `spokenBeat.keyPhrase` xuất hiện đúng trong lời đọc để `align_manifest.py` khóa chính xác từng hành động 3D và SFX!
-- **Tận dụng thoại phụ đối đáp tự nhiên:** Xen kẽ `[SPEAKER: ... | mood=... | fx=room|phone|ghost]` đúng hồ sơ `voiceProfile` của từng nhân vật phụ để thế giới trong phim sống động như phim điện ảnh thật.
+- **Giữ nguyên các từ khóa neo (`triggerWord` / `startPhrase`):** Đảm bảo từ khóa trong `spokenBeat.keyPhrase` xuất hiện đúng trong lời đọc để `align_manifest.py` khóa chính xác `shots[]`, hành động 3D và SFX!
+- **Tận dụng thoại phụ đối đáp tự nhiên:** Xen kẽ `[SPEAKER: ... | mood=... | fx=room|phone|ghost]` đúng hồ sơ `voiceProfile` của từng nhân vật phụ (`dialogueMode: "directSpeech"`), trong khi lời dẫn nội tâm `[NARRATOR]` giữ `dialogueMode: "voiceOver"` (không nhép môi sai).

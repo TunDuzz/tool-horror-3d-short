@@ -23,7 +23,7 @@ VALID_ROLE_TYPES = {"human", "entity", "silhouette", "lurker"}
 VALID_JUMPSCARE_STYLES = {"cinema_stab", "entity_shriek", "metal_dread", "vhs_psx_glitch"}
 VALID_LANDMARK_KINDS = {"stance", "prop", "portal", "window", "entity", "lurker", "camera", "zone"}
 VALID_FORMATS = {"micro", "short", "series"}
-FORMAT_DURATION_BOUNDS = {"micro": (45, 90), "short": (150, 300), "series": (480, 900)}
+FORMAT_DURATION_BOUNDS = {"micro": (45, 105), "short": (150, 360), "series": (480, 960)}
 VALID_POVS = {"first_person_survivor", "third_person_close", "found_footage_tape", "oral_folklore"}
 VALID_CLUE_KINDS = {"foreshadow", "physical_clue", "red_herring", "truth_piece"}
 VALID_PACING_TYPES = {"setup", "slow_burn", "investigation", "false_relief", "escalation", "twist_reveal", "climax_chase", "aftermath"}
@@ -164,23 +164,23 @@ def cmd_seed(args):
 
     if fmt == "micro":
         n_parts = max(1, req_parts or 1)
-        total_sec = int(req_total or 60)
-        sec = max(45, min(90, int(round(total_sec / n_parts))))
+        total_sec = int(req_total or 75)
+        sec = max(45, min(105, int(round(total_sec / n_parts))))
         mode = "standalone"
         default_aspect = "9:16"
     elif fmt == "short":
-        total_sec = int(req_total or (req_parts * 55 if req_parts else 210))
-        total_sec = max(150, min(300, total_sec))
+        total_sec = int(req_total or (req_parts * 72 if req_parts else 210))
+        total_sec = max(150, min(360, total_sec))
         n_parts = max(3, min(5, req_parts or max(3, min(5, round(total_sec / 55)))))
-        sec = max(45, min(90, int(round(total_sec / n_parts))))
+        sec = max(45, min(105, int(round(total_sec / n_parts))))
         total_sec = sec * n_parts
         mode = "short"
         default_aspect = "9:16"
     else:
-        total_sec = int(req_total or (req_parts * 60 if req_parts else 600))
-        total_sec = max(480, min(900, total_sec))
+        total_sec = int(req_total or (req_parts * 72 if req_parts else 600))
+        total_sec = max(480, min(960, total_sec))
         n_parts = max(8, min(15, req_parts or max(8, min(15, round(total_sec / 60)))))
-        sec = max(45, min(90, int(round(total_sec / n_parts))))
+        sec = max(45, min(105, int(round(total_sec / n_parts))))
         total_sec = sec * n_parts
         mode = "series"
         default_aspect = "16:9"
@@ -231,7 +231,7 @@ def cmd_seed(args):
         "parts": n_parts,
         "secondsPerPart": sec,
         "targetTotalSec": total_sec,
-        "wordsPerSecond": 2.9,
+        "wordsPerSecond": 2.35,
         "aspect": aspect,
         "seamlessStitch": n_parts > 1,
         "genre": args.genre,
@@ -1109,7 +1109,7 @@ def evaluate_gates(doc, stage="full", strict_spatial=False, strict_story=False):
             global_actor_last = {}
             total_js = 0
             zero_js_parts = 0
-            wps_cfg = float(params.get("wordsPerSecond") or 2.9)
+            wps_cfg = float(params.get("wordsPerSecond") or 2.35)
             for p in parts:
                 pid = p.get("part")
                 abeats = p.get("actionBeats") or []
@@ -1978,6 +1978,8 @@ def _export_single_part_blueprint(doc, part, out_dir, base_project_id, aspect, b
         "",
     ]
     if abeats:
+        script_lines.append("<!-- v11.0 Master Establishing Breathing Frame (2A + 3A): thiết lập trọn vẹn kiến trúc phòng trước khi thoại -->")
+        script_lines.append("[VISUAL 2.60s]")
         cur_header = None
         for ab in abeats:
             sb = ab.get("spokenBeat") or {}
@@ -1986,6 +1988,8 @@ def _export_single_part_blueprint(doc, part, out_dir, base_project_id, aspect, b
             if ab.get("deadSilenceBeforeSec"):
                 script_lines.append(f"[DEAD SILENCE {float(ab['deadSilenceBeforeSec']):.2f}s]")
                 cur_header = None
+            elif ab.get("visualBeforeSec"):
+                script_lines.append(f"[VISUAL {float(ab['visualBeforeSec']):.2f}s]")
             elif ab.get("pauseBeforeSec"):
                 script_lines.append(f"[PAUSE {float(ab['pauseBeforeSec']):.2f}s]")
             hdr = f"[NARRATOR | mood={mood}]" if speaker.upper() == "NARRATOR" else f"[SPEAKER: {speaker} | mood={mood}]"
@@ -2157,15 +2161,117 @@ def _export_single_part_blueprint(doc, part, out_dir, base_project_id, aspect, b
         })
 
     pov_mode = str((doc.get("params") or {}).get("pov") or "first_person_survivor")
+    total_f_draft = cur_f if cur_f > 0 else int(round(float(part.get("target_sec") or 75) * fps))
+    starter_shots = []
+    if m_beats:
+        seen_starter_locs = set()
+        sh_id = 1
+        for idx_mb, mb in enumerate(m_beats):
+            ba_f = int(mb["a"])
+            bb_f = int(mb["b"]) if idx_mb < len(m_beats) - 1 else total_f_draft
+            if bb_f <= ba_f:
+                continue
+            loc_id = mb.get("locationId", "S01")
+            if loc_id not in seen_starter_locs:
+                seen_starter_locs.add(loc_id)
+                span_b = bb_f - ba_f
+                if span_b >= 135:
+                    m_end = ba_f + max(66, min(105, span_b // 2))
+                    starter_shots.append({
+                        "id": sh_id,
+                        "beatId": mb["beatId"],
+                        "a": ba_f,
+                        "b": m_end,
+                        "scale": "WS",
+                        "light": mb["lightState"]["preset"],
+                        "cameraMode": "master",
+                        "axisSide": "pov_center",
+                        **({"visualBeatIndex": 0} if ba_f == 0 else {}),
+                        "note": f"Master Establishing Shot ({loc_id}) — readable room geography & practical lamps",
+                    })
+                    sh_id += 1
+                    starter_shots.append({
+                        "id": sh_id,
+                        "beatId": mb["beatId"],
+                        "a": m_end,
+                        "b": bb_f,
+                        "scale": "POV",
+                        "light": mb["lightState"]["preset"],
+                        "cameraMode": "pov",
+                        "axisSide": "pov_center",
+                        "povMode": "idle",
+                        "note": mb.get("cameraIntent", f"Anchored POV beat {mb['beatId']}"),
+                    })
+                    sh_id += 1
+                else:
+                    starter_shots.append({
+                        "id": sh_id,
+                        "beatId": mb["beatId"],
+                        "a": ba_f,
+                        "b": bb_f,
+                        "scale": "WS",
+                        "light": mb["lightState"]["preset"],
+                        "cameraMode": "master",
+                        "axisSide": "pov_center",
+                        **({"visualBeatIndex": 0} if ba_f == 0 else {}),
+                        "note": f"Master Establishing Shot ({loc_id}) — {mb.get('cameraIntent', '')}",
+                    })
+                    sh_id += 1
+            else:
+                use_ots = (idx_mb == 2 and (bb_f - ba_f) >= 120)
+                if use_ots:
+                    ots_len = min(90, max(45, (bb_f - ba_f) // 3))
+                    ots_end = ba_f + ots_len
+                    starter_shots.append({
+                        "id": sh_id,
+                        "beatId": mb["beatId"],
+                        "a": ba_f,
+                        "b": ots_end,
+                        "scale": "OTS",
+                        "light": mb["lightState"]["preset"],
+                        "cameraMode": "ots_same_side",
+                        "axisSide": "right",
+                        "note": f"Brief same-side OTS transition ({mb['beatId']})",
+                    })
+                    sh_id += 1
+                    starter_shots.append({
+                        "id": sh_id,
+                        "beatId": mb["beatId"],
+                        "a": ots_end,
+                        "b": bb_f,
+                        "scale": "POV",
+                        "light": mb["lightState"]["preset"],
+                        "cameraMode": "pov",
+                        "axisSide": "pov_center",
+                        "povMode": "idle",
+                        "note": mb.get("cameraIntent", f"Anchored POV beat {mb['beatId']}"),
+                    })
+                    sh_id += 1
+                else:
+                    starter_shots.append({
+                        "id": sh_id,
+                        "beatId": mb["beatId"],
+                        "a": ba_f,
+                        "b": bb_f,
+                        "scale": "POV",
+                        "light": mb["lightState"]["preset"],
+                        "cameraMode": "pov",
+                        "axisSide": "pov_center",
+                        "povMode": "idle",
+                        "note": mb.get("cameraIntent", f"Anchored POV beat {mb['beatId']}"),
+                    })
+                    sh_id += 1
+
     manifest_draft = {
         "projectId": project_id,
         "title": f"{doc.get('title', project_id)} — Chương {part_no}" if len(parts) > 1 else doc.get("title", project_id),
-        "totalFrames": cur_f if cur_f > 0 else int(round(float(part.get("target_sec") or 60) * fps)),
+        "totalFrames": total_f_draft,
         "aspect": aspect,
         "headerStyle": "camcorder" if pov_mode == "found_footage_tape" else "minimal",
         "locations": loc_blueprints,
         "castBlueprints": cast_blueprints,
         "beats": m_beats,
+        **({"shots": starter_shots} if starter_shots else {}),
     }
     cues_draft = {
         "voice": "voice/voice.wav",
