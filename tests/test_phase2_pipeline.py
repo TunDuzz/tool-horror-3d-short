@@ -1110,6 +1110,76 @@ class TestPhase2Pipeline(unittest.TestCase):
             ):
                 self.assertIn(expected_gate, bad_ids, f"Missing expected gate failure: {expected_gate} (got {bad_ids})")
 
+    def test_v10_word_caption_chunks_and_wall_of_text_gate(self):
+        """v10.0 align_manifest.py emits crisp 4-8 word captionChunks and validate_manifest.py rejects walls of text."""
+        import align_manifest as am
+
+        long_line = (
+            "Tháng mười mùa nước nổi năm 1999, mưa đổ rát mái tôn trên bến phà cũ ven sông Hậu. "
+            "Tôi tên Nam, nhận trực đêm đầu tiên chỉ để kiếm đủ tiền ứng mổ mắt cho mẹ sáng mai."
+        )
+        words = [{"w": w, "s": round(i * 0.28, 3), "e": round(i * 0.28 + 0.24, 3), "speaker": "NARRATOR"} for i, w in enumerate(long_line.split())]
+        manifest = {
+            "projectId": "v10-align-test",
+            "title": "V10 Align Test",
+            "totalFrames": 420,
+            "aspect": "9:16",
+            "headerStyle": "minimal",
+            "locations": [
+                {
+                    "id": "S01",
+                    "archetype": "woodenTicketBooth",
+                    "dimensions": [5.0, 5.4, 3.2],
+                    "ceilingType": "flatConcrete",
+                    "materials": {"wall": "darkTimberTex", "floor": "concreteFloorTex", "ceiling": "concreteCeilingTex"},
+                    "practicalLights": ["oilLamp"],
+                    "heroProps": ["desk", "door", "phone"],
+                    "signatureShadowBeat": "Stormy booth",
+                    "anchors": {"DESK": [0.0, 0.0, 0.5]},
+                }
+            ],
+            "castBlueprints": [
+                {"id": "C02", "role": "human", "storyDescription": "Elder ferryman", "appearance": {"height": 1.66}}
+            ],
+            "beats": [
+                {
+                    "beatId": "B1",
+                    "shotId": 1,
+                    "a": 0,
+                    "b": 420,
+                    "peakFrame": 210,
+                    "locationId": "S01",
+                    "spokenLine": {"speaker": "NAM", "text": long_line, "highlight": ["1999", "mổ mắt cho mẹ"]},
+                    "lightState": {"preset": "warmLamp", "lampsOn": ["oilLamp"]},
+                    "castStates": {"C02": {"visible": True, "anchor": "DESK", "pose": "talkUrgent", "expr": "dread"}},
+                    "propStates": {},
+                    "cameraIntent": "Test v10 chunking",
+                }
+            ],
+        }
+        updated, _ = am.align_manifest_data(manifest, words, fps=30.0)
+        chunks = updated.get("captionChunks") or []
+        self.assertGreaterEqual(len(chunks), 5)
+        for ch in chunks:
+            self.assertLessEqual(len(ch["text"].split()), 10, f"chunk too long: {ch}")
+
+        with tempfile.TemporaryDirectory() as tmp:
+            man_ok = os.path.join(tmp, "ok.json")
+            man_bad = os.path.join(tmp, "bad.json")
+            with open(man_ok, "w", encoding="utf-8") as fp:
+                json.dump(updated, fp, ensure_ascii=False)
+            bad = json.loads(json.dumps(updated))
+            bad["captionChunks"] = [{"a": 0, "b": 300, "text": long_line}]
+            with open(man_bad, "w", encoding="utf-8") as fp:
+                json.dump(bad, fp, ensure_ascii=False)
+
+            val_script = os.path.join(SCRIPTS_DIR, "validate_manifest.py")
+            p_ok = subprocess.run([sys.executable, val_script, man_ok], capture_output=True, text=True)
+            self.assertEqual(p_ok.returncode, 0, p_ok.stdout + p_ok.stderr)
+            p_bad = subprocess.run([sys.executable, val_script, man_bad], capture_output=True, text=True)
+            self.assertNotEqual(p_bad.returncode, 0)
+            self.assertIn("WALL_OF_TEXT_ERROR", p_bad.stdout + p_bad.stderr)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -133,3 +133,86 @@ test("Engine v5.1 Spatial Stage Solver locks head/eyes/feet accurately to target
 
   ent.dispose();
 });
+
+test("Engine v10.0 stage.ts drives living acting poses, Vietnamese lip-sync from words.json, and blinkStep blackout advances", () => {
+  const humanBp: CharacterBlueprint = {
+    id: "C02",
+    role: "human",
+    storyDescription: "Anxious ferry elder speaking 3 survival rules",
+    appearance: { height: 1.66, lowPoly: true, outlineMode: "off" },
+  };
+  const entityBp: CharacterBlueprint = {
+    id: "C03",
+    role: "entity",
+    storyDescription: "Stalker stepping closer only on fluorescent blackouts",
+    appearance: { height: 1.88, lowPoly: true, outlineMode: "off", entity: { breathing: false } },
+  };
+  const elder = createCharacterFromBlueprint(humanBp);
+  const stalker = createCharacterFromBlueprint(entityBp);
+
+  const m: SceneManifest = {
+    projectId: "v10-acting-test",
+    title: "V10 Acting Test",
+    totalFrames: 120,
+    aspect: "9:16",
+    locations: [
+      {
+        id: "S01",
+        archetype: "booth",
+        dimensions: [5, 5, 3],
+        ceilingType: "flatConcrete",
+        materials: { wall: "darkTimberTex", floor: "concreteFloorTex", ceiling: "concreteCeilingTex" },
+        practicalLights: ["oilLamp"],
+        heroProps: ["desk", "door", "phone"],
+        signatureShadowBeat: "Oil lamp shadows",
+        anchors: { A: [0, 0, -2], B: [0, 0, 0] },
+      },
+    ],
+    castBlueprints: [humanBp, entityBp],
+    beats: [
+      {
+        beatId: "B1",
+        shotId: 1,
+        a: 0,
+        b: 120,
+        peakFrame: 60,
+        locationId: "S01",
+        lightState: { preset: "warmLamp", lampsOn: ["oilLamp"] },
+        castStates: {
+          C02: { visible: true, anchor: "A", pose: "talkUrgent", expr: "dread", speakingAs: "CHÚ TƯ", ageLines: true, sweat: true },
+          C03: { visible: true, anchor: "A", moveFromAnchor: "A", moveToAnchor: "B", motionMode: "blinkStep", pose: "sitBenchHunched" },
+        },
+        propStates: {},
+        cameraIntent: "Test lip-sync and blinkStep",
+      },
+    ],
+  };
+
+  const words = [{ w: "Cháu", s: 0.4, e: 0.8, speaker: "CHÚ TƯ" }];
+  const blackouts: Array<[number, number]> = [
+    [30, 36],
+    [70, 76],
+  ];
+
+  // Before first blackout: stalker stays frozen at A (z = -2)
+  applyManifestActors(m, 18, { C02: elder, C03: stalker }, undefined, { words, blackouts });
+  assert.ok(Math.abs(stalker.group.position.z - -2) < 0.01, `expected z=-2 before blackout, got ${stalker.group.position.z}`);
+
+  // After 1st blackout (f40): stalker stepped halfway to z = -1!
+  applyManifestActors(m, 40, { C02: elder, C03: stalker }, undefined, { words, blackouts });
+  assert.ok(Math.abs(stalker.group.position.z - -1) < 0.01, `expected z=-1 after 1st blackout, got ${stalker.group.position.z}`);
+
+  // After 2nd blackout (f80): stalker reached B (z = 0)!
+  applyManifestActors(m, 80, { C02: elder, C03: stalker }, undefined, { words, blackouts });
+  assert.ok(Math.abs(stalker.group.position.z - 0) < 0.01, `expected z=0 after 2nd blackout, got ${stalker.group.position.z}`);
+
+  // Confirm talkUrgent moves elder's arm dynamically across frames
+  applyManifestActors(m, 10, { C02: elder }, undefined, { words });
+  const armA = elder.sockets.rightUpperArm.rotation.x;
+  applyManifestActors(m, 25, { C02: elder }, undefined, { words });
+  const armB = elder.sockets.rightUpperArm.rotation.x;
+  assert.notEqual(armA, armB, "talkUrgent pose must animate arm gestures dynamically across frames");
+
+  elder.dispose();
+  stalker.dispose();
+});

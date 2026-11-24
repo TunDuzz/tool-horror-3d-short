@@ -233,7 +233,7 @@ function buildCurvedFacePatchGeo(rx: number, ry: number, rz: number): THREE.Buff
   const azMax = 0.88;
   const elMin = -0.64;
   const elMax = 0.46;
-  const pad = 1.028;
+  const pad = 1.055;
 
   for (let iv = 0; iv <= segV; iv++) {
     const v = iv / segV;
@@ -352,29 +352,23 @@ function buildHairMeshes(
   if (style === "bald" && !hairCurtain) return created;
 
   // Base sculpted hair cap tilted BACKWARD so front hairline sits high on forehead (NEVER covers eyes!)
-  const cap = new THREE.SphereGeometry(1, 18, 12, 0, Math.PI * 2, 0, Math.PI * 0.48);
-  add(cap, [0, ry * 0.14, -rz * 0.08], [-0.46, 0, 0], [rx * 1.07, ry * 1.02, rz * 1.09], "hairCap");
+  const cap = new THREE.SphereGeometry(1, 18, 12, 0, Math.PI * 2, 0, Math.PI * 0.56);
+  add(cap, [0, ry * 0.14, -rz * 0.08], [-0.42, 0, 0], [rx * 1.08, ry * 1.04, rz * 1.10], "hairCap");
 
-  // Rear nape coverage strictly behind the ears (-Z)
-  const backNape = new THREE.CylinderGeometry(rx * 0.96, rx * 0.80, ry * 0.78, 12, 1, false, Math.PI * 0.56, Math.PI * 0.88);
-  add(backNape, [0, -ry * 0.14, -rz * 0.10], [0.06, 0, 0], [1.02, 1, 0.94], "hairNape");
+  // Full rear cranial & nape hair coverage strictly behind the ears (-Z: Three.js SphereGeometry phi=PI..2*PI covers +X -> -Z -> -X!)
+  const backSkull = new THREE.SphereGeometry(1, 16, 12, Math.PI * 1.04, Math.PI * 0.92, Math.PI * 0.14, Math.PI * 0.72);
+  add(backSkull, [0, ry * 0.04, -rz * 0.06], [0, 0, 0], [rx * 1.07, ry * 1.04, rz * 1.09], "hairBackSkull");
+  const backNape = new THREE.CylinderGeometry(rx * 0.98, rx * 0.78, ry * 0.88, 12, 1, false, Math.PI * 0.54, Math.PI * 0.92);
+  add(backNape, [0, -ry * 0.18, -rz * 0.12], [0.06, 0, 0], [1.03, 1, 0.96], "hairNape");
 
   if (style === "shortParted" || style === "elderThin") {
-    // Swept sculpted layered hair volume hugging the cranium, forehead & temples (zero spiky thorns poking out!)
-    add(new THREE.SphereGeometry(1, 16, 12), [-rx * 0.22, ry * 0.78, rz * 0.22], [0.16, 0.14, 0.18], [rx * 0.76, ry * 0.30, rz * 0.56], "hairFringeL");
-    add(new THREE.SphereGeometry(1, 16, 12), [rx * 0.42, ry * 0.74, rz * 0.16], [0.14, -0.18, -0.22], [rx * 0.58, ry * 0.28, rz * 0.50], "hairFringeR");
-    // Overlapping swept side & crown hair layers hugging skull curvature
-    const locks: Array<[V3, V3, V3]> = [
-      [[-rx * 0.58, ry * 0.64, rz * 0.32], [0.95, 0.25, 0.72], [0.036, 0.095, 0.020]],
-      [[rx * 0.58, ry * 0.64, rz * 0.32], [0.95, -0.25, -0.72], [0.036, 0.095, 0.020]],
-      [[-rx * 0.82, ry * 0.34, rz * 0.06], [1.45, 0.18, 1.25], [0.032, 0.092, 0.022]],
-      [[rx * 0.82, ry * 0.34, rz * 0.06], [1.45, -0.18, -1.25], [0.032, 0.092, 0.022]],
-      [[-rx * 0.48, ry * 0.72, -rz * 0.28], [-1.05, 0.16, 0.42], [0.042, 0.105, 0.026]],
-      [[rx * 0.48, ry * 0.72, -rz * 0.28], [-1.05, -0.16, -0.42], [0.042, 0.105, 0.026]],
-    ];
-    locks.forEach(([p, r, s], i) => add(new THREE.ConeGeometry(1, 1, 6), p, r, s, `hairLock_${i}`));
+    // Swept sculpted layered hair volume hugging the cranium, forehead & temples cleanly (zero poking side horns!)
+    add(new THREE.SphereGeometry(1, 16, 12), [-rx * 0.22, ry * 0.78, rz * 0.20], [0.16, 0.14, 0.18], [rx * 0.76, ry * 0.30, rz * 0.54], "hairFringeL");
+    add(new THREE.SphereGeometry(1, 16, 12), [rx * 0.42, ry * 0.74, rz * 0.14], [0.14, -0.18, -0.22], [rx * 0.58, ry * 0.28, rz * 0.48], "hairFringeR");
+    // Rounded temple-hugging side hair pads + sculpted crown volume (zero sharp protruding cones!)
     for (const s of [-1, 1]) {
-      add(new THREE.BoxGeometry(0.016, ry * 0.54, 0.030), [s * rx * 0.96, ry * 0.16, rz * 0.10], [0, 0, s * 0.08], [1, 1, 1], s < 0 ? "sideburnL" : "sideburnR");
+      add(new THREE.SphereGeometry(1, 10, 8), [s * rx * 0.84, ry * 0.36, -rz * 0.06], [0, 0, s * 0.12], [rx * 0.26, ry * 0.44, rz * 0.54], s < 0 ? "hairTempleL" : "hairTempleR");
+      add(new THREE.BoxGeometry(0.014, ry * 0.42, 0.026), [s * rx * 0.94, ry * 0.14, rz * 0.04], [0, 0, s * 0.06], [1, 1, 1], s < 0 ? "sideburnL" : "sideburnR");
     }
   } else if (style === "spiky") {
     const tufts: [V3, V3, V3][] = [
@@ -1024,7 +1018,98 @@ export function createCharacter3D(cfg: CharacterConfig): Character3D {
       neck.rotation.z = THREE.MathUtils.degToRad(ent.neckTiltDeg);
     }
 
-    if (action === "sitCrossLegged") {
+    if (action === "standIdle") {
+      // Subtle organic living weight-shift & forearm breathing so humans never look frozen like wax statues!
+      if (ent?.breathing !== false) {
+        const sway = Math.sin(t * 1.15 + seed) * 0.032;
+        const microHead = Math.sin(t * 0.72 + seed * 1.7) * 0.065;
+        pelvis.rotation.z = sway * 0.55;
+        spine.rotation.z = -sway * 0.35;
+        spine.rotation.x = 0.03 + aliveBreath;
+        head.rotation.y = microHead;
+        head.rotation.x = Math.sin(t * 0.9 + seed) * 0.03;
+        leftArm.upperArm.rotation.set(-0.08 + Math.sin(t * 1.1 + seed) * 0.03, 0, -0.10);
+        rightArm.upperArm.rotation.set(-0.10 - Math.sin(t * 1.1 + seed) * 0.03, 0, 0.10);
+        leftArm.forearm.rotation.set(-0.22, 0, 0.04);
+        rightArm.forearm.rotation.set(-0.24, 0, -0.04);
+      }
+    } else if (action === "nervousIdle") {
+      // Anxious fidgeting: shifting weight, hunched shoulders, glancing nervously side-to-side, tense folded hands
+      const shift = Math.sin(t * 1.8 + seed) * 0.045;
+      const glance = Math.sin(t * 1.15 + seed * 2.1) * 0.28 + Math.sin(t * 2.6 + seed) * 0.06;
+      pelvis.position.y = hipY - 0.015 * hScale;
+      pelvis.rotation.z = shift;
+      spine.rotation.set(0.09 + aliveBreath * 1.4, -shift * 1.2, -shift * 0.6);
+      chest.rotation.y = glance * 0.25;
+      head.rotation.set(0.04 + Math.sin(t * 1.9 + seed) * 0.04, glance, -glance * 0.12);
+      leftArm.upperArm.rotation.set(-0.34, 0.14, -0.14);
+      rightArm.upperArm.rotation.set(-0.42 + Math.sin(t * 2.4 + seed) * 0.06, -0.16, 0.14);
+      leftArm.forearm.rotation.set(-0.88, 0.18, 0.24);
+      rightArm.forearm.rotation.set(-0.96 + Math.cos(t * 2.4 + seed) * 0.08, -0.18, -0.24);
+    } else if (action === "talkCalm") {
+      // Conversational calm acting: gentle open hand gestures, natural nods & torso engagement
+      const g1 = Math.sin(t * 2.3 + seed);
+      const g2 = Math.cos(t * 1.7 + seed * 1.4);
+      spine.rotation.set(0.05 + aliveBreath, g2 * 0.05, 0);
+      head.rotation.set(0.03 + Math.sin(t * 3.1 + seed) * 0.055, g2 * 0.10, g1 * 0.04);
+      leftArm.upperArm.rotation.set(-0.32 + g2 * 0.08, 0.10, -0.14);
+      rightArm.upperArm.rotation.set(-0.56 + g1 * 0.14, -0.12, 0.16);
+      leftArm.forearm.rotation.set(-0.76 + g2 * 0.12, 0.14, 0.12);
+      rightArm.forearm.rotation.set(-0.82 - g1 * 0.16, -0.16, -0.10);
+      rightArm.hand.rotation.set(0.18 + g1 * 0.14, 0, -0.18);
+    } else if (action === "talkUrgent") {
+      // Intense emphatic warning: rhythmic urgent gesturing, leaning forward, shaking/nodding head & anxious shoulder tension
+      const pulse = Math.sin(t * 4.2 + seed);
+      const wave = Math.sin(t * 2.1 + seed * 1.3);
+      const emphasize = Math.max(0, Math.sin(t * 2.8 + seed * 0.7));
+      pelvis.position.y = hipY - 0.02 * hScale;
+      spine.rotation.set(0.14 + aliveBreath * 1.6 + emphasize * 0.05, wave * 0.09, wave * 0.03);
+      chest.rotation.x = 0.06 + emphasize * 0.04;
+      head.rotation.set(-0.04 + pulse * 0.075, wave * 0.16, pulse * 0.055);
+      // Right hand emphasizes warnings urgently; left hand braces/gestures
+      rightArm.upperArm.rotation.set(-0.88 - emphasize * 0.34, -0.14 + wave * 0.12, 0.18);
+      rightArm.forearm.rotation.set(-0.78 + pulse * 0.24, -0.18, -0.12);
+      rightArm.hand.rotation.set(-0.18 + pulse * 0.20, 0, -0.16);
+      leftArm.upperArm.rotation.set(-0.48 - (1 - emphasize) * 0.18, 0.16, -0.18);
+      leftArm.forearm.rotation.set(-0.92 - wave * 0.18, 0.20, 0.18);
+    } else if (action === "sitBenchHunched") {
+      // Hunched seated silhouette on a wooden bench (head bowed, shoulders slumped, motionless eerie weight)
+      pelvis.position.y = 0.44 * hScale;
+      spine.rotation.x = 0.26 + aliveBreath * 0.5;
+      chest.rotation.x = 0.14;
+      neck.rotation.x = 0.16;
+      head.rotation.x = 0.14;
+      leftLeg.thigh.rotation.set(-1.46, 0.10, 0);
+      rightLeg.thigh.rotation.set(-1.46, -0.10, 0);
+      leftLeg.calf.rotation.set(1.48, 0, 0);
+      rightLeg.calf.rotation.set(1.48, 0, 0);
+      leftArm.upperArm.rotation.set(-0.28, 0.06, -0.12);
+      rightArm.upperArm.rotation.set(-0.28, -0.06, 0.12);
+      leftArm.forearm.rotation.set(-0.86, 0.12, 0.16);
+      rightArm.forearm.rotation.set(-0.86, -0.12, -0.16);
+    } else if (action === "reachInteract") {
+      // Reaching forward with right hand to slide a bolt, hand over keys, or grip a handle
+      const reachOsc = Math.sin(t * 2.5 + seed) * 0.04;
+      spine.rotation.set(0.14 + aliveBreath, -0.12, 0);
+      head.rotation.set(0.06, 0.08, 0);
+      rightArm.upperArm.rotation.set(-1.18 + reachOsc, -0.14, 0.10);
+      rightArm.forearm.rotation.set(-0.34 - reachOsc, 0, -0.08);
+      rightArm.hand.rotation.set(-0.22, 0, 0);
+      leftArm.upperArm.rotation.set(-0.22, 0.08, -0.12);
+      leftArm.forearm.rotation.set(-0.48, 0, 0.10);
+    } else if (action === "glassSlam") {
+      // Sudden aggressive palm/claw slap pressed flat against a vertical window glass plane
+      const tremble = Math.sin(t * 26.0 + seed) * 0.025;
+      pelvis.position.y = hipY - 0.04 * hScale;
+      spine.rotation.set(0.24, 0, 0);
+      neck.rotation.set(-0.18, 0, 0);
+      leftArm.upperArm.rotation.set(-1.46 + tremble, 0.12, -0.16);
+      rightArm.upperArm.rotation.set(-1.52 - tremble, -0.12, 0.18);
+      leftArm.forearm.rotation.set(-0.20, 0, 0.10);
+      rightArm.forearm.rotation.set(-0.18, 0, -0.10);
+      leftArm.hand.rotation.set(-1.28, 0, -0.08);
+      rightArm.hand.rotation.set(-1.32, 0, 0.08);
+    } else if (action === "sitCrossLegged") {
       pelvis.position.y = 0.14 * hScale;
       spine.rotation.x = 0.08 + aliveBreath * 0.6;
       leftLeg.thigh.rotation.set(-1.38, 0.42, -0.14);
@@ -1087,8 +1172,13 @@ export function createCharacter3D(cfg: CharacterConfig): Character3D {
       rightArm.forearm.rotation.set(-0.85, 0, 0);
       leftArm.upperArm.rotation.set(-0.12, 0, -0.08);
     } else if (action === "point") {
-      rightArm.upperArm.rotation.set(-1.35, -0.12, 0.08);
-      rightArm.forearm.rotation.set(-0.12, 0, 0);
+      const urg = ent?.breathing !== false ? Math.sin(t * 3.8 + seed) : 0;
+      spine.rotation.set(0.08 + aliveBreath, -0.10 + urg * 0.04, 0);
+      head.rotation.set(-0.02 + urg * 0.04, urg * 0.06, 0);
+      rightArm.upperArm.rotation.set(-1.32 + urg * 0.09, -0.12, 0.08);
+      rightArm.forearm.rotation.set(-0.14 - urg * 0.06, 0, 0);
+      leftArm.upperArm.rotation.set(-0.26, 0.10, -0.12);
+      leftArm.forearm.rotation.set(-0.68, 0.12, 0.14);
     } else if (action === "lunge") {
       pelvis.position.y = hipY - 0.08 * hScale;
       spine.rotation.x = 0.34;

@@ -48,8 +48,12 @@ export type HudCamcorderConfig = {
 
 export type HorrorHudConfig = {
   header?: { title: string; subtitle?: string; badge?: string };
+  /** Clean minimal HUD by default; set "camcorder" ONLY for true found-footage stories, or "none" for zero top chrome. */
+  headerStyle?: "minimal" | "camcorder" | "none";
   camcorder?: HudCamcorderConfig;
   captions?: HudCaption[];
+  /** Optional toggle to disable captions cleanly while preserving manifest.beats[].spokenLine for alignment. */
+  showCaptions?: boolean;
   notifications?: HudNotification[];
   timeSkips?: HudTimeSkip[];
   choiceCard?: HudChoiceCard;
@@ -123,7 +127,13 @@ export type LocationBlueprint = {
 export type PoseAction =
   | "sitCrossLegged"
   | "sitChair"
+  | "sitBenchHunched"
   | "standIdle"
+  | "nervousIdle"
+  | "talkCalm"
+  | "talkUrgent"
+  | "reachInteract"
+  | "glassSlam"
   | "walk"
   | "creep"
   | "turnHead"
@@ -173,6 +183,8 @@ export type CastBeatState = {
   moveToAnchor?: string;
   /** Optional frame duration for movement/pose transition (e.g. `8` for an explosive jumpscare lunge; defaults to full beat length). */
   moveFrames?: number;
+  /** "smooth" (default continuous lerp) or "blinkStep" (freezes while lit and snaps forward only inside blackout windows!). */
+  motionMode?: "smooth" | "blinkStep";
   pose: PoseAction;
   /** Optional destination pose blended smoothly across the beat via `setPoseBlend`. */
   poseTo?: PoseAction;
@@ -183,6 +195,10 @@ export type CastBeatState = {
   headTwitch?: number;
   allowTeleport?: boolean;
   expr?: FaceExpr;
+  ageLines?: boolean;
+  sweat?: boolean;
+  /** Optional speaker tag(s) matching words.json `speaker` field for automatic Vietnamese lip-sync in stage.ts. */
+  speakingAs?: string;
   lookAt?: string | V3;
   eyeGlow?: boolean;
 };
@@ -237,11 +253,149 @@ export type SceneManifest = {
   locations: LocationBlueprint[];
   castBlueprints?: CharacterBlueprint[];
   beats: ScriptBeat[];
+  /** Word-timed 4-8 word subtitle chunks generated automatically by align_manifest.py from words.json (kills wall-of-text!). */
+  captionChunks?: HudCaption[];
   header?: { title: string; subtitle?: string; badge?: string };
+  headerStyle?: "minimal" | "camcorder" | "none";
   camcorder?: HudCamcorderConfig;
   timeSkips?: HudTimeSkip[];
   choiceCard?: HudChoiceCard;
 };
+
+export type RawWordTiming = {
+  w?: string;
+  word?: string;
+  s?: number;
+  start?: number;
+  e?: number;
+  end?: number;
+  speaker?: string;
+};
+
+/** Split a long sentence/paragraph into crisp 4-8 word cinema subtitle phrases breaking cleanly at punctuation. */
+export function splitCaptionTextIntoChunks(text: string, maxWords = 7, maxChars = 42): string[] {
+  const clean = text.replace(/\s+/g, " ").trim();
+  if (!clean) return [];
+  const rawWords = clean.split(" ");
+  if (rawWords.length <= maxWords + 2 && clean.length <= maxChars + 10) return [clean];
+
+  const chunks: string[] = [];
+  let cur: string[] = [];
+  let curChars = 0;
+
+  const flush = () => {
+    if (cur.length) {
+      chunks.push(cur.join(" "));
+      cur = [];
+      curChars = 0;
+    }
+  };
+
+  for (let i = 0; i < rawWords.length; i++) {
+    const w = rawWords[i];
+    const nextChars = curChars + (cur.length ? 1 : 0) + w.length;
+    const hardPunct = /[.!?…]$/.test(w) || /\.\.\.$/.test(w);
+    const softPunct = /[,;:—–]$/.test(w);
+
+    if (cur.length > 0 && (cur.length >= maxWords || nextChars > maxChars)) {
+      flush();
+    }
+    cur.push(w);
+    curChars += (cur.length > 1 ? 1 : 0) + w.length;
+
+    if (hardPunct && cur.length >= 2) {
+      flush();
+    } else if (softPunct && (cur.length >= 4 || curChars >= Math.round(maxChars * 0.65))) {
+      flush();
+    }
+  }
+  flush();
+
+  // Merge tiny 1-2 word orphan trailing chunk into previous chunk if it stays compact
+  if (chunks.length >= 2) {
+    const last = chunks[chunks.length - 1];
+    const prev = chunks[chunks.length - 2];
+    if (last.split(" ").length <= 2 && prev.split(" ").length + last.split(" ").length <= maxWords + 2 && prev.length + last.length + 1 <= maxChars + 12) {
+      chunks[chunks.length - 2] = `${prev} ${last}`;
+      chunks.pop();
+    }
+  }
+  return chunks;
+}
+
+/** Build crisp word-timed 4-8 word HudCaption[] directly from words.json timestamps and SceneManifest beats. */
+export function buildWordCaptionsFromWords(
+  words: RawWordTiming[],
+  manifest: SceneManifest,
+  opts: { fps?: number; maxWords?: number; maxChars?: number } = {},
+): HudCaption[] {
+  const fps = opts.fps ?? 30;
+  const maxWords = opts.maxWords ?? 7;
+  const maxChars = opts.maxChars ?? 42;
+  const out: HudCaption[] = [];
+  const norm = (s: string) => s.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, "").trim();
+
+  const wList = words
+    .map((x) => ({
+      raw: String(x.w ?? x.word ?? "").trim(),
+      norm: norm(String(x.w ?? x.word ?? "")),
+      s: Number(x.s ?? x.start ?? 0),
+      e: Number(x.e ?? x.end ?? 0),
+    }))
+    .filter((x) => x.raw.length > 0);
+
+  let cursor = 0;
+  for (const b of manifest.beats) {
+    const sl = b.spokenLine;
+    if (!sl || !sl.text.trim()) continue;
+    const phrases = splitCaptionTextIntoChunks(sl.text, maxWords, maxChars);
+    const beatHl = sl.highlight ?? [];
+
+    for (const ph of phrases) {
+      const toks = ph.split(/\s+/).map(norm).filter(Boolean);
+      let hitIdx = -1;
+      if (toks.length && wList.length) {
+        for (let idx = cursor; idx <= wList.length - toks.length; idx++) {
+          let ok = true;
+          for (let k = 0; k < toks.length; k++) {
+            if (wList[idx + k].norm !== toks[k]) {
+              ok = false;
+              break;
+            }
+          }
+          if (ok) {
+            hitIdx = idx;
+            break;
+          }
+        }
+      }
+      if (hitIdx >= 0) {
+        const a = Math.max(b.a, Math.floor(wList[hitIdx].s * fps));
+        const endW = wList[hitIdx + toks.length - 1];
+        const bb = Math.min(b.b, Math.max(a + 8, Math.ceil((endW.e + 0.12) * fps)));
+        cursor = hitIdx + toks.length;
+        const phLower = ph.toLowerCase();
+        const hl = beatHl.filter((h) => h && phLower.includes(h.toLowerCase()));
+        out.push({
+          a,
+          b: bb,
+          speaker: sl.speaker,
+          speakerColor: sl.speakerColor,
+          text: ph,
+          ...(hl.length ? { highlight: hl } : {}),
+        });
+      }
+    }
+  }
+
+  // Eliminate tiny overlaps between consecutive chunks
+  for (let i = 1; i < out.length; i++) {
+    if (out[i].a < out[i - 1].b) {
+      out[i - 1].b = Math.max(out[i - 1].a + 4, out[i].a);
+    }
+  }
+  return out;
+}
 
 /** Return the active ScriptBeat covering `frame` (clamps cleanly to first/last beat). */
 export const beatAt = (manifest: SceneManifest, frame: number): ScriptBeat => {
@@ -264,21 +418,54 @@ export const propStateOf = (beat: ScriptBeat, propId: string): PropBeatState | u
 /**
  * Derive HorrorHUD configuration directly from SceneManifest so captions and Phone3D notification cards
  * are guaranteed 100% synchronized with the 3D scene and approved script.
+ * v10.0: Prefers word-timed `manifest.captionChunks` (4-8 words / 1-2 short lines) and automatically
+ * chunks overly long legacy `spokenLine.text` blocks so a wall of text can NEVER bury the 3D frame!
  */
-export const hudFromManifest = (manifest: SceneManifest): HorrorHudConfig => {
+export const hudFromManifest = (
+  manifest: SceneManifest,
+  opts: { showCaptions?: boolean; maxWordsPerChunk?: number; maxCharsPerChunk?: number } = {},
+): HorrorHudConfig => {
+  const showCaptions = opts.showCaptions ?? true;
+  const maxWords = opts.maxWordsPerChunk ?? 7;
+  const maxChars = opts.maxCharsPerChunk ?? 42;
   const captions: HudCaption[] = [];
   const notifications: HudNotification[] = [];
 
+  if (showCaptions && manifest.captionChunks && manifest.captionChunks.length > 0) {
+    captions.push(...manifest.captionChunks);
+  }
+
   for (const b of manifest.beats) {
-    if (b.spokenLine && b.spokenLine.text.trim()) {
-      captions.push({
-        a: b.a,
-        b: b.b,
-        speaker: b.spokenLine.speaker,
-        speakerColor: b.spokenLine.speakerColor,
-        text: b.spokenLine.text,
-        highlight: b.spokenLine.highlight,
-      });
+    if (showCaptions && (!manifest.captionChunks || manifest.captionChunks.length === 0) && b.spokenLine && b.spokenLine.text.trim()) {
+      const phrases = splitCaptionTextIntoChunks(b.spokenLine.text, maxWords, maxChars);
+      if (phrases.length <= 1) {
+        captions.push({
+          a: b.a,
+          b: b.b,
+          speaker: b.spokenLine.speaker,
+          speakerColor: b.spokenLine.speakerColor,
+          text: b.spokenLine.text,
+          highlight: b.spokenLine.highlight,
+        });
+      } else {
+        const totalChars = Math.max(1, phrases.reduce((acc, s) => acc + s.length, 0));
+        const span = Math.max(1, b.b - b.a);
+        let curA = b.a;
+        phrases.forEach((ph, idx) => {
+          const nextB = idx === phrases.length - 1 ? b.b : Math.min(b.b, curA + Math.max(12, Math.round((ph.length / totalChars) * span)));
+          const phLower = ph.toLowerCase();
+          const hl = (b.spokenLine?.highlight ?? []).filter((h) => h && phLower.includes(h.toLowerCase()));
+          captions.push({
+            a: curA,
+            b: Math.max(curA + 1, nextB),
+            speaker: b.spokenLine?.speaker,
+            speakerColor: b.spokenLine?.speakerColor,
+            text: ph,
+            ...(hl.length ? { highlight: hl } : {}),
+          });
+          curA = nextB;
+        });
+      }
     }
     const phone = b.propStates.phone;
     if (phone && phone.visible && phone.detail && typeof phone.detail.notifBody === "string" && phone.detail.notifBody.trim()) {
@@ -295,8 +482,10 @@ export const hudFromManifest = (manifest: SceneManifest): HorrorHudConfig => {
 
   return {
     header: manifest.header,
+    headerStyle: manifest.headerStyle ?? (manifest.camcorder?.enabled ? "camcorder" : "minimal"),
     camcorder: manifest.camcorder,
     captions,
+    showCaptions,
     notifications,
     timeSkips: manifest.timeSkips ?? [],
     choiceCard: manifest.choiceCard,

@@ -23,6 +23,122 @@ def norm_text(s: str) -> str:
     return re.sub(r"[^\w\s]", "", s.lower(), flags=re.UNICODE).strip()
 
 
+def split_caption_phrases(text: str, max_words: int = 7, max_chars: int = 42):
+    """Split a Vietnamese spoken paragraph into crisp 4-8 word subtitle phrases breaking at natural punctuation."""
+    clean = re.sub(r"\s+", " ", text).strip()
+    if not clean:
+        return []
+    raw_words = clean.split(" ")
+    if len(raw_words) <= max_words + 1 and len(clean) <= max_chars + 8:
+        return [clean]
+
+    chunks = []
+    cur = []
+    cur_chars = 0
+
+    def flush():
+        nonlocal cur, cur_chars
+        if cur:
+            chunks.append(" ".join(cur))
+            cur = []
+            cur_chars = 0
+
+    for w in raw_words:
+        next_chars = cur_chars + (1 if cur else 0) + len(w)
+        hard_punct = bool(re.search(r"[.!?…]$", w)) or w.endswith("...")
+        soft_punct = bool(re.search(r"[,;:—–]$", w))
+        if cur and (len(cur) >= max_words or next_chars > max_chars):
+            flush()
+        cur.append(w)
+        cur_chars += (1 if len(cur) > 1 else 0) + len(w)
+        if hard_punct and len(cur) >= 2:
+            flush()
+        elif soft_punct and (len(cur) >= 4 or cur_chars >= int(max_chars * 0.65)):
+            flush()
+    flush()
+
+    if len(chunks) >= 2:
+        last_w = chunks[-1].split(" ")
+        prev_w = chunks[-2].split(" ")
+        if len(last_w) <= 2 and len(prev_w) + len(last_w) <= max_words + 2 and len(chunks[-2]) + len(chunks[-1]) + 1 <= max_chars + 12:
+            chunks[-2] = f"{chunks[-2]} {chunks[-1]}"
+            chunks.pop()
+    return chunks
+
+
+def build_word_caption_chunks(manifest: dict, words: list, fps: float = 30.0, max_words: int = 7, max_chars: int = 42):
+    """Generate exact word-timed 4-8 word captionChunks[] from aligned manifest beats & words.json."""
+    w_list = [
+        (
+            norm_text(str(w.get("w", w.get("word", "")))),
+            float(w.get("s", w.get("start", 0.0))),
+            float(w.get("e", w.get("end", 0.0))),
+        )
+        for w in words
+        if str(w.get("w", w.get("word", ""))).strip()
+    ]
+    out = []
+    cursor = 0
+    for b in manifest.get("beats") or []:
+        sl = b.get("spokenLine")
+        if not isinstance(sl, dict) or not str(sl.get("text", "")).strip():
+            continue
+        ba, bb = int(b.get("a", 0)), int(b.get("b", 0))
+        phrases = split_caption_phrases(str(sl["text"]), max_words=max_words, max_chars=max_chars)
+        beat_hl = sl.get("highlight") or []
+        ph_matches = []
+        for ph in phrases:
+            toks = [t for t in norm_text(ph).split() if t]
+            hit_idx = -1
+            if toks and w_list:
+                for idx in range(cursor, len(w_list) - len(toks) + 1):
+                    if all(w_list[idx + k][0] == toks[k] for k in range(len(toks))):
+                        hit_idx = idx
+                        break
+                if hit_idx < 0:
+                    for idx in range(0, min(cursor, len(w_list) - len(toks) + 1)):
+                        if all(w_list[idx + k][0] == toks[k] for k in range(len(toks))):
+                            hit_idx = idx
+                            break
+            if hit_idx >= 0:
+                ca = max(ba, int(math.floor(w_list[hit_idx][1] * fps)))
+                cb = min(bb, max(ca + 8, int(math.ceil((w_list[hit_idx + len(toks) - 1][2] + 0.12) * fps))))
+                if hit_idx >= cursor:
+                    cursor = hit_idx + len(toks)
+                ph_matches.append((ca, cb, ph))
+            else:
+                ph_matches.append((None, None, ph))
+
+        # Proportional fallback only for any unmatched phrase
+        span = max(1, bb - ba)
+        tot_chars = max(1, sum(len(x[2]) for x in ph_matches))
+        fb_cur = ba
+        for idx_p, (ca, cb, ph) in enumerate(ph_matches):
+            if ca is None or cb is None:
+                ca = fb_cur
+                cb = bb if idx_p == len(ph_matches) - 1 else min(bb, ca + max(12, int(round(len(ph) / tot_chars * span))))
+            fb_cur = cb
+            ph_l = ph.lower()
+            hl = [h for h in beat_hl if h and str(h).lower() in ph_l]
+            entry = {
+                "a": int(ca),
+                "b": max(int(ca) + 1, int(cb)),
+                "text": ph,
+            }
+            if sl.get("speaker"):
+                entry["speaker"] = sl["speaker"]
+            if sl.get("speakerColor"):
+                entry["speakerColor"] = sl["speakerColor"]
+            if hl:
+                entry["highlight"] = hl
+            out.append(entry)
+
+    for i in range(1, len(out)):
+        if out[i]["a"] < out[i - 1]["b"]:
+            out[i - 1]["b"] = max(out[i - 1]["a"] + 4, out[i]["a"])
+    return out
+
+
 def load_words_payload(path: str):
     with open(path, encoding="utf-8") as fp:
         raw = json.load(fp)
@@ -140,6 +256,7 @@ def align_manifest_data(manifest: dict, words: list, fps: float = 30.0, target_t
             "new": [new_a, new_b, new_pk],
         })
 
+    updated["captionChunks"] = build_word_caption_chunks(updated, words, fps=fps)
     return updated, changes
 
 

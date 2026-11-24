@@ -151,3 +151,19 @@ test("v3.5 atmospheric grounding & dressing helpers (ContactShadow, LampHalo, We
   b.build(pipeGroup, false);
   assert.ok(pipeGroup.children.length >= 1);
 });
+
+test("Engine v10.0 PovRig3D renders visible embodied interactive hands in idle, leanDesk, reachBolt, holdPaper, holdHandset, and shieldFace modes", () => {
+  const pov = createPovRig3D({ sleeveCol: "#2b3842", pantsCol: "#16181e" });
+  const cam = new THREE.PerspectiveCamera(56, 9 / 16, 0.08, 100);
+  cam.position.set(0, 1.4, 1.0);
+  cam.lookAt(0, 1.2, -1.0);
+  cam.updateMatrixWorld(true);
+
+  for (const mode of ["idle", "leanDesk", "reachBolt", "holdPaper", "holdHandset", "shieldFace"] as const) {
+    pov.update(cam, { stance: "standing", anchor: [0, 0, 1.0], bodyYaw: 0, propMode: mode, actionProgress: 0.75, walkBob: 0.4, frame: 45 });
+    const leftArm = pov.armsRoot.getObjectByName("povLeftArm");
+    const rightArm = pov.armsRoot.getObjectByName("povRightArm");
+    assert.ok(leftArm?.visible, `povLeftArm must be visible in mode '${mode}'`);
+    assert.ok(rightArm?.visible, `povRightArm must be visible in mode '${mode}'`);
+  }
+});

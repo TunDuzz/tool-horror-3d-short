@@ -3,7 +3,13 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import path from "node:path";
 
-import { hudFromManifest, type HorrorHudConfig, type SceneManifest } from "../templates/engine/manifest.ts";
+import {
+  buildWordCaptionsFromWords,
+  hudFromManifest,
+  splitCaptionTextIntoChunks,
+  type HorrorHudConfig,
+  type SceneManifest,
+} from "../templates/engine/manifest.ts";
 import { evalActiveHud, HorrorHUD } from "../templates/engine/HorrorHUD.tsx";
 
 test("evalActiveHud resolves active caption, notification, interpolated timeSkip clock, and choiceCard", () => {
@@ -63,5 +69,52 @@ test("templates/engine/index.ts exports v4.5 modules (including bodyHorror & ret
   }
   for (const oldMod of ["./toon", "./cast", "./cardshade"]) {
     assert.equal(src.includes(oldMod), false, `index.ts must not export removed v2 module ${oldMod}`);
+  }
+});
+
+test("v10.0 word-timed subtitle chunker splits long walls of text into crisp 4-8 word phrases and respects clean minimal HUD", () => {
+  const longText =
+    "Tháng mười mùa nước nổi năm 1999, mưa đổ rát mái tôn trên bến phà cũ ven sông Hậu. Tôi tên Nam, nhận trực đêm đầu tiên chỉ để kiếm tiền mổ mắt cho mẹ.";
+  const chunks = splitCaptionTextIntoChunks(longText, 7, 42);
+  assert.ok(chunks.length >= 4, `expected >= 4 compact chunks, got ${chunks.length}`);
+  for (const ch of chunks) {
+    assert.ok(ch.split(" ").length <= 9, `chunk too long (${ch.split(" ").length} words): ${ch}`);
+  }
+
+  const m: SceneManifest = {
+    projectId: "v10-hud-test",
+    title: "V10 HUD Test",
+    totalFrames: 300,
+    aspect: "9:16",
+    headerStyle: "minimal",
+    locations: [],
+    beats: [
+      {
+        beatId: "B1",
+        shotId: 1,
+        a: 0,
+        b: 300,
+        peakFrame: 150,
+        locationId: "S01",
+        spokenLine: { speaker: "NAM", text: longText, highlight: ["1999", "mổ mắt cho mẹ"] },
+        lightState: { preset: "warmLamp", lampsOn: [] },
+        castStates: {},
+        propStates: {},
+        cameraIntent: "Test auto-chunking fallback",
+      },
+    ],
+  };
+
+  // Fallback auto-chunking when captionChunks isn't pre-populated
+  const hudAuto = hudFromManifest(m);
+  assert.equal(hudAuto.headerStyle, "minimal");
+  assert.ok((hudAuto.captions?.length ?? 0) >= 4, "long beat must auto-split into compact subtitle chunks");
+
+  // Exact word-timed chunking from words.json
+  const words = longText.split(" ").map((w, i) => ({ w, s: i * 0.25, e: i * 0.25 + 0.22, speaker: "NARRATOR" }));
+  const timed = buildWordCaptionsFromWords(words, m, { fps: 30, maxWords: 7, maxChars: 42 });
+  assert.ok(timed.length >= 4);
+  for (let i = 1; i < timed.length; i++) {
+    assert.ok(timed[i].a >= timed[i - 1].b, "word-timed caption chunks must not overlap");
   }
 });

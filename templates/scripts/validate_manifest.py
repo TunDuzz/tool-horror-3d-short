@@ -37,8 +37,14 @@ VALID_CEILINGS = {
 }
 VALID_POSES = {
     "standIdle",
+    "nervousIdle",
+    "talkCalm",
+    "talkUrgent",
+    "reachInteract",
+    "glassSlam",
     "sitCrossLegged",
     "sitChair",
+    "sitBenchHunched",
     "walk",
     "creep",
     "peerForward",
@@ -544,6 +550,17 @@ def main():
                 "propStates": props,
             }
         )
+
+    # 2b. v10.0 Subtitle Wall-of-Text Gate (captionChunks must stay compact 4-11 words / 1-2 short lines!)
+    caption_chunks = manifest.get("captionChunks")
+    if isinstance(caption_chunks, list):
+        for ci, cc in enumerate(caption_chunks):
+            txt_c = str(cc.get("text", "")).strip()
+            w_cnt = len(txt_c.split())
+            if w_cnt > 12:
+                errors.append(
+                    f"WALL_OF_TEXT_ERROR: captionChunks[{ci}] has {w_cnt} words (>12): {txt_c!r}. Re-run align_manifest.py to split into 4-8 word cinema subtitles."
+                )
 
     if total_frames and cursor < total_frames:
         errors.append(f"Timeline gap at end of manifest: beats end at {cursor} < totalFrames {total_frames}")

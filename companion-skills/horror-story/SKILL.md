@@ -95,5 +95,5 @@ python3 scripts/horror_story.py export-blueprint story.json --out out/<project>/
 
 - **`OUTLINE.json` & `CONTINUITY.init.json`:** Dùng trực tiếp cho `horror-series-pipeline` (cả phim `short` 3–5 chương lẫn `series` 8–15 chương) và `stitch_parts.py` để ghép liền thành 1 file MP4 `2.5–5 phút` hoặc `8–15 phút` với `0.000s` lệch tiếng.
 - **`p01..pNN/SCRIPT.skeleton.md`:** Đã gom Hồi theo `mood`/`[DEAD SILENCE]`, nhúng sẵn `Nội tâm (subtext)`, `Cảm giác (sensoryDetails)` và `wordBudget` từng beat để viết lời thoại Việt tự nhiên cho `VieNeu-TTS` (`Thiện Minh`).
-- **`p01..pNN/manifest.draft.json`:** Đã khóa sẵn `locations[].anchors`, `castBlueprints[]` và tự động gắn `sameLocationOf`/`sameCharacterOf` cho `p02..pNN` để qua cổng chống trùng lặp.
+- **`p01..pNN/manifest.draft.json`:** Đã khóa sẵn `locations[].anchors`, `castBlueprints[]` (gồm cả nhân vật chính `C01` để quay Hybrid POV + OTS!), `headerStyle: "minimal"` mặc định, `recommendedMicroShots` (`ceil(durationSec / 3.5)` — tách mỗi beat lớn thành `3–5` góc máy `2.5–4.5s` ở `story.ts` để triệt tiêu góc quay chết!), và tự động gắn `sameLocationOf`/`sameCharacterOf` cho `p02..pNN`. Chạy `align_manifest.py` để tự động cắt phụ đề `captionChunks[]` (`4–8 từ`/cụm).
 - **`p01..pNN/cues.draft.json`:** Đã khóa `max_jumpscares` đúng mật độ chống nhờn & đồng bộ ID với `manifest.draft.json`.

@@ -116,16 +116,22 @@ python3 scripts/validate_manifest.py src/<project>/manifest.json \
 
 ---
 
-## 5. Mandatory Cinematography & Transition Rules (`story.ts`)
+## 5. Mandatory Cinematography, Hybrid POV+OTS Pacing & Clean Subtitle Rules (v10.0 `story.ts`)
 
-1. **Zero Repeated Camera Angles:** Every shot in `SHOTS` MUST declare a valid `ShotScale` (`POV`, `POV_PROP`, `POV_TURN`, `POV_DOWN`, `POV_CU`, `WS`, `MS`, `OTS`, `MCU`, `CU`, `ECU`, `LOW`) and valid physical `LightKey` (`warmLamp | coldMoon | fluorescent | duskFog | flashlight`). Never perform static-layout filter jump-cuts (`corr > 0.88`).
-2. **Engine Camera & Motion Archetypes (`camera.ts`):** Combine `whipPan`, `povBreath`, `camOTS`, `camArc`, `camPOV`, `camECU`, `dollyZoom`, `handheld`, `snapZoom`, `pushK`, and `rolled` (`0.06–0.095` rad Dutch tilt). Declare all fast head-snaps in `WHIP_PANS` and close prop raises in `POV_MOTIONS` for `extract_shots.py`.
-3. **Purposeful Transitions (`OVERLAYS`):**
+1. **Decouple Macro Story Beats from Cinematic Micro-Shots & Subtitles (CRITICAL — Kills Dead Cameras & Walls of Text!):**
+   - **Micro-Shot Density Law (`14–22` shots per 60 s · Avg `2.5–4.5 s`):** NEVER hold a single static camera angle for `10–20 s`! Split every macro narrative beat into `3–5` distinct `SHOTS` alternating **Hybrid POV + OTS**:
+     - **Protagonist `C01` OTS / MS / Reaction CU** (establishes WHO the main character is — never a disembodied floating ghost camera!)
+     - **Embodied 1st-Person POV** (`POV`, `POV_PROP`, `POV_DOWN`, `POV_TURN`) with **visible `PovRig3D` hands/sleeves/legs** (`idle`, `leanDesk`, `reachBolt`, `holdPaper`, `holdHandset`, `flashlight`, `shieldFace`) physically touching doors, receipts, books, and phones!
+     - **Expressive Character CU/MCU** driven by `applyManifestActors(..., { words, speakerMap })` for **real Vietnamese lip-sync (`mouthFromWords`)**, `autoBlink`, and active poses (`talkUrgent`, `talkCalm`, `nervousIdle`, `sitBenchHunched`, `glassSlam`).
+   - **Word-Timed Clean Subtitles (`4–8 words`, max `1–2` lines):** Run `align_manifest.py --words ... --in-place` to auto-generate `manifest.captionChunks[]` (`validate_manifest.py` blocks `WALL_OF_TEXT_ERROR > 12 words`). Default to `headerStyle: "minimal"` (use `camcorder` ONLY for found-footage stories!).
+2. **Zero Repeated Camera Angles:** Every shot in `SHOTS` MUST declare a valid `ShotScale` (`POV`, `POV_PROP`, `POV_TURN`, `POV_DOWN`, `POV_CU`, `WS`, `MS`, `OTS`, `MCU`, `CU`, `ECU`, `LOW`) and valid physical `LightKey` (`warmLamp | coldMoon | fluorescent | duskFog | flashlight`). Never perform static-layout filter jump-cuts (`corr > 0.88`) or hold low-motion shots `> 7.5 s` (`short_qa.py` `DEAD_CAMERA_WARNS`).
+3. **Engine Camera & Motion Archetypes (`camera.ts`):** Combine `whipPan`, `povBreath`, `camOTS`, `camArc`, `camPOV`, `camECU`, `dollyZoom`, `handheld`, `snapZoom`, `pushK`, and `rolled` (`0.06–0.095` rad Dutch tilt). Declare all fast head-snaps in `WHIP_PANS` and close prop raises in `POV_MOTIONS` for `extract_shots.py`.
+4. **Purposeful Transitions (`OVERLAYS`):**
    - `{ kind: "dipBlack", at, dur: 10, hold: 2 }` for location/time jumps.
    - `{ kind: "blackout", a, b }` for `[DEAD SILENCE]` vacuum beats; `{ kind: "lightning", f }` for real 3D storm flashes.
    - `{ kind: "vignettePulse", a, b, freq, strength }` for creeping dread/heartbeat tension.
    - `{ kind: "aberration", a, b, strength }` to trigger VHS `tapeTear` / `RetroPsxEffect.dreadLevel` surges on entity reveals.
-4. **Action-to-Word Lock:** Land visual impacts (`KICKS`, `lightning`, `aberration`, `lungeCloseUp`, `turnHead`) **0–2 frames before** the matching trigger word in `words.json`.
+5. **Action-to-Word Lock:** Land visual impacts (`KICKS`, `lightning`, `aberration`, `lungeCloseUp`, `turnHead`) **0–2 frames before** the matching trigger word in `words.json`.
 
 ## Formulas & Multi-Part Series Arc
 

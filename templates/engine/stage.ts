@@ -4,11 +4,37 @@
 // actors directly from `manifest.json` locations[].anchors + castStates[].
 
 import * as THREE from "three";
-import { clamp01, lerp, smooth, type V3 } from "./camera";
-import { beatAt, type CharacterPart, type SceneManifest, type ScriptBeat } from "./manifest";
-import type { Character3D } from "./rig3d";
+import { clamp01, lerp, smooth, torchMalfunction, type V3 } from "./camera";
+import { beatAt, type CharacterPart, type RawWordTiming, type SceneManifest, type ScriptBeat } from "./manifest";
+import { mouthFromWords, type Character3D, type WordTiming } from "./rig3d";
 
 const _tmpV = new THREE.Vector3();
+
+export type ManifestActorOpts = {
+  /** Optional words.json array (supports `{ w, s, e, speaker }` or `{ word, start, end, speaker }`) for automatic Vietnamese lip-sync! */
+  words?: RawWordTiming[];
+  /** Optional map from character ID -> words.json speaker labels (e.g. `{ C02: ["CHÚ TƯ", "CHU TU"] }`). */
+  speakerMap?: Record<string, string[]>;
+  /** Optional blackout windows `[a, b]` for `motionMode: "blinkStep"` discrete horror flicker advances! */
+  blackouts?: Array<[number, number]>;
+  fps?: number;
+};
+
+function normSpeakerTag(s: string | undefined): string {
+  return (s ?? "").normalize("NFC").trim().toUpperCase();
+}
+
+function normalizeWords(raw?: RawWordTiming[]): WordTiming[] {
+  if (!raw || !raw.length) return [];
+  return raw
+    .map((x) => ({
+      word: String(x.w ?? x.word ?? "").trim(),
+      start: Number(x.s ?? x.start ?? 0),
+      end: Number(x.e ?? x.end ?? 0),
+      speaker: x.speaker,
+    }))
+    .filter((x) => x.word.length > 0);
+}
 
 /** Lookup a named 3D anchor coordinate from `manifest.locations[].anchors` (with optional extraAnchors fallback). */
 export function resolveLocationAnchor(
@@ -80,7 +106,8 @@ export function evalBeatProgress(beat: ScriptBeat, frame: number): number {
 /**
  * Drive all characters directly from `manifest.json` for `frame`:
  *  - sets visibility, poses (`setPose` or smooth `setPoseBlend(pose -> poseTo)`), `jawOpen`, `headTwitch`
- *  - interpolates smoothly between `moveFromAnchor` -> `moveToAnchor` using `location.anchors`
+ *  - automatically drives Vietnamese lip-sync (`mouthFromWords`) + natural `autoBlink` + `ageLines`/`sweat` when `opts.words` is supplied!
+ *  - interpolates smoothly (`motionMode: "smooth"`) OR snaps discretely inside blackout flicker windows (`motionMode: "blinkStep"`)
  *  - aligns `alignPart` ("feet" by default, or "head"/"eyes" for low peeks/jumpscare lunges!)
  *  - optionally rotates toward `facingYaw` or calls `lookAtWorld(...)`
  */
@@ -89,8 +116,12 @@ export function applyManifestActors(
   frame: number,
   actors: Record<string, Character3D>,
   extraAnchors?: Record<string, V3>,
+  actorOpts?: ManifestActorOpts,
 ): ScriptBeat {
   const beat = beatAt(manifest, frame);
+  const fps = actorOpts?.fps ?? 30;
+  const allWords = normalizeWords(actorOpts?.words);
+  const beatBlackouts = (actorOpts?.blackouts ?? []).filter(([ba, bb]) => ba >= beat.a && bb <= beat.b);
 
   for (const [cid, char] of Object.entries(actors)) {
     const cst = beat.castStates[cid];
@@ -101,10 +132,33 @@ export function applyManifestActors(
     char.group.visible = true;
     const beatSpan = Math.max(1, beat.b - beat.a - 1);
     const moveSpan = typeof cst.moveFrames === "number" && cst.moveFrames > 0 ? Math.min(cst.moveFrames, beatSpan) : beatSpan;
-    const tSmooth = smooth(clamp01((frame - beat.a) / moveSpan));
+    let tSmooth = smooth(clamp01((frame - beat.a) / moveSpan));
+    if (cst.motionMode === "blinkStep" && beatBlackouts.length > 0) {
+      const malf = torchMalfunction(frame, beatBlackouts, 23);
+      tSmooth = clamp01(malf.stage / beatBlackouts.length);
+    }
+
+    // Automatic Vietnamese lip-sync & natural eye blinking for living humans!
+    const isLivingHuman = char.config.entity?.breathing !== false && !char.config.entity?.silhouetteMode;
+    let mouthShape: ReturnType<typeof mouthFromWords> | undefined;
+    if (allWords.length > 0 && isLivingHuman) {
+      const tags = new Set<string>();
+      if (cst.speakingAs) tags.add(normSpeakerTag(cst.speakingAs));
+      for (const alias of actorOpts?.speakerMap?.[cid] ?? []) tags.add(normSpeakerTag(alias));
+      if (tags.size > 0) {
+        const matchedWords = allWords.filter((w) => tags.has(normSpeakerTag(w.speaker)));
+        if (matchedWords.length > 0) {
+          mouthShape = mouthFromWords(matchedWords, frame, fps, "closed");
+        }
+      }
+    }
 
     const opts = {
-      expr: cst.expr,
+      expr: cst.expr ?? (isLivingHuman ? "calm" : undefined),
+      ...(mouthShape !== undefined ? { mouth: mouthShape } : {}),
+      ...(isLivingHuman ? { autoBlink: true } : {}),
+      ...(typeof cst.ageLines === "boolean" ? { ageLines: cst.ageLines } : {}),
+      ...(typeof cst.sweat === "boolean" ? { sweat: cst.sweat } : {}),
       ...(typeof cst.jawOpen === "number" ? { jawOpen: cst.jawOpen } : {}),
       ...(typeof cst.headTwitch === "number" ? { headTwitch: cst.headTwitch, twitch: cst.headTwitch > 0.5 } : {}),
     };

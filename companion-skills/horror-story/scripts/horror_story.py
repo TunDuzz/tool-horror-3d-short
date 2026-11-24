@@ -29,7 +29,8 @@ VALID_CLUE_KINDS = {"foreshadow", "physical_clue", "red_herring", "truth_piece"}
 VALID_PACING_TYPES = {"setup", "slow_burn", "investigation", "false_relief", "escalation", "twist_reveal", "climax_chase", "aftermath"}
 VALID_CLIFFHANGERS = {"question", "sensory_shock", "rule_broken", "betrayal", "arrival", "final_twist", "none"}
 VALID_ENGINE_POSES = {
-    "standIdle", "sitCrossLegged", "sitChair", "walk", "creep", "peerForward", "recoil",
+    "standIdle", "nervousIdle", "talkCalm", "talkUrgent", "reachInteract", "glassSlam",
+    "sitCrossLegged", "sitChair", "sitBenchHunched", "walk", "creep", "peerForward", "recoil",
     "holdPhone", "holdLantern", "point", "lunge", "loomingStill", "peekAroundDoor",
     "turnHead", "stalkLoom", "jawUnlatch", "crawler", "doorwayPeek", "backbendCrab", "lungeCloseUp",
 }
@@ -2152,13 +2153,16 @@ def _export_single_part_blueprint(doc, part, out_dir, base_project_id, aspect, b
             }} if cam.get("posLandmark") or cam.get("lookLandmark") else {}),
             **({"audioCueIds": beat_cue_ids} if beat_cue_ids else {}),
             "cameraIntent": ab.get("actionSummary") or f"Beat {idx_ab}",
+            "recommendedMicroShots": max(1, int(math.ceil(float(ab.get("durationSec") or 5.0) / 3.5))),
         })
 
+    pov_mode = str((doc.get("params") or {}).get("pov") or "first_person_survivor")
     manifest_draft = {
         "projectId": project_id,
         "title": f"{doc.get('title', project_id)} — Chương {part_no}" if len(parts) > 1 else doc.get("title", project_id),
         "totalFrames": cur_f if cur_f > 0 else int(round(float(part.get("target_sec") or 60) * fps)),
         "aspect": aspect,
+        "headerStyle": "camcorder" if pov_mode == "found_footage_tape" else "minimal",
         "locations": loc_blueprints,
         "castBlueprints": cast_blueprints,
         "beats": m_beats,

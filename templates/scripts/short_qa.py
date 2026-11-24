@@ -129,6 +129,28 @@ if directing_warns:
 else:
     R.append("DIRECTING_WARNS none")
 
+# v10.0 Pacing & Dead-Camera Gate: catch static 10-20s shots that slip past diff<0.02 due to grain/scanlines!
+dead_cam_warns = []
+shot_durs_s = []
+for s in shots:
+    sa, sb = max(0, int(s["a"])), min(n, int(s["b"]))
+    if sb <= sa:
+        continue
+    dur_s = (sb - sa) / 30.0
+    shot_durs_s.append(dur_s)
+    if sb - 1 > sa:
+        med_d = float(np.median(diff[sa:min(sb - 1, len(diff))]))
+        if dur_s > 7.5 and med_d < 3.0:
+            dead_cam_warns.append(f"shot {s['id']} holds {dur_s:.1f}s with low motion median_diff={med_d:.2f} (split into 2.5-4.5s micro-shots!)")
+if shot_durs_s:
+    avg_s = sum(shot_durs_s) / len(shot_durs_s)
+    spm = len(shot_durs_s) / max(0.1, (n / 30.0) / 60.0)
+    R.append(f"PACING shots={len(shot_durs_s)} ({spm:.1f} shots/min) | avg={avg_s:.2f}s | max={max(shot_durs_s):.2f}s")
+if dead_cam_warns:
+    R.append("DEAD_CAMERA_WARNS " + "; ".join(dead_cam_warns))
+else:
+    R.append("DEAD_CAMERA_WARNS none")
+
 R.append("\nPER SHOT  (luma mean / std / p2 / p98 / saturation mean, medians over the shot)")
 for s in shots or [{"id": 0, "a": 0, "b": n}]:
     a, b = s["a"], min(s["b"], n)

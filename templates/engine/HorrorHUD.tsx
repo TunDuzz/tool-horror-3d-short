@@ -101,7 +101,10 @@ export const HorrorHUD: React.FC<{
 }> = ({ config, frame, width, height }) => {
   const s = Math.min(width, height) / 1080;
   const active = evalActiveHud(config, frame);
-  const camOn = !!config.camcorder?.enabled;
+  const headerStyle = config.headerStyle ?? (config.camcorder?.enabled ? "camcorder" : "minimal");
+  const camOn = headerStyle === "camcorder" && !!config.camcorder?.enabled;
+  const showHeader = headerStyle !== "none" && (!!config.header || camOn);
+  const showCaptions = config.showCaptions ?? true;
   const recBlink = ((frame % 24) + 24) % 24 < 14;
   const tcText = camOn ? formatTimecode(config.camcorder?.startClock, frame) : "";
 
@@ -116,14 +119,14 @@ export const HorrorHUD: React.FC<{
         overflow: "hidden",
       }}
     >
-      {/* Opt-in Found-Footage VHS Camcorder viewfinder corner brackets (never collides with captions or cards!) */}
+      {/* Opt-in Found-Footage VHS Camcorder viewfinder corner brackets (strictly ONLY when headerStyle === "camcorder") */}
       {camOn && (
         <>
           {([
-            { top: 28 * s, left: 28 * s, borderTop: true, borderLeft: true },
-            { top: 28 * s, right: 28 * s, borderTop: true, borderRight: true },
-            { bottom: 28 * s, left: 28 * s, borderBottom: true, borderLeft: true },
-            { bottom: 28 * s, right: 28 * s, borderBottom: true, borderRight: true },
+            { top: 26 * s, left: 26 * s, borderTop: true, borderLeft: true },
+            { top: 26 * s, right: 26 * s, borderTop: true, borderRight: true },
+            { bottom: 26 * s, left: 26 * s, borderBottom: true, borderLeft: true },
+            { bottom: 26 * s, right: 26 * s, borderBottom: true, borderRight: true },
           ] as const).map((br, idx) => (
             <div
               key={`vf-${idx}`}
@@ -133,28 +136,28 @@ export const HorrorHUD: React.FC<{
                 ...("bottom" in br ? { bottom: br.bottom } : {}),
                 ...("left" in br ? { left: br.left } : {}),
                 ...("right" in br ? { right: br.right } : {}),
-                width: 34 * s,
-                height: 34 * s,
-                borderTop: "borderTop" in br ? `${2.5 * s}px solid rgba(240,238,232,0.52)` : undefined,
-                borderBottom: "borderBottom" in br ? `${2.5 * s}px solid rgba(240,238,232,0.52)` : undefined,
-                borderLeft: "borderLeft" in br ? `${2.5 * s}px solid rgba(240,238,232,0.52)` : undefined,
-                borderRight: "borderRight" in br ? `${2.5 * s}px solid rgba(240,238,232,0.52)` : undefined,
+                width: 28 * s,
+                height: 28 * s,
+                borderTop: "borderTop" in br ? `${2 * s}px solid rgba(240,238,232,0.42)` : undefined,
+                borderBottom: "borderBottom" in br ? `${2 * s}px solid rgba(240,238,232,0.42)` : undefined,
+                borderLeft: "borderLeft" in br ? `${2 * s}px solid rgba(240,238,232,0.42)` : undefined,
+                borderRight: "borderRight" in br ? `${2 * s}px solid rgba(240,238,232,0.42)` : undefined,
               }}
             />
           ))}
           <div
             style={{
               position: "absolute",
-              bottom: 42 * s,
-              left: 48 * s,
-              right: 48 * s,
+              bottom: 34 * s,
+              left: 44 * s,
+              right: 44 * s,
               display: "flex",
               justifyContent: "space-between",
               fontFamily: "'JetBrains Mono', 'Courier New', monospace",
-              fontSize: 22 * s,
+              fontSize: 18 * s,
               fontWeight: 700,
-              letterSpacing: 1.4 * s,
-              color: "rgba(236, 234, 226, 0.78)",
+              letterSpacing: 1.2 * s,
+              color: "rgba(236, 234, 226, 0.62)",
               textShadow: `0 ${2 * s}px ${6 * s}px rgba(0,0,0,0.92)`,
             }}
           >
@@ -164,14 +167,14 @@ export const HorrorHUD: React.FC<{
         </>
       )}
 
-      {/* Top-left timestamp/location header (or live REC ● camcorder timecode when camcorder.enabled) & top-right fiction badge */}
-      {(config.header || camOn) && (
+      {/* Subtle clean cinema top header (minimal by default — never competes with the 3D scene!) */}
+      {showHeader && (
         <div
           style={{
             position: "absolute",
-            top: 40 * s,
-            left: 48 * s,
-            right: 48 * s,
+            top: 34 * s,
+            left: 42 * s,
+            right: 42 * s,
             display: "flex",
             justifyContent: "space-between",
             alignItems: "flex-start",
@@ -183,34 +186,35 @@ export const HorrorHUD: React.FC<{
                 style={{
                   display: "flex",
                   alignItems: "center",
-                  gap: 12 * s,
-                  fontSize: 32 * s,
+                  gap: 10 * s,
+                  fontSize: 25 * s,
                   fontWeight: 800,
-                  letterSpacing: 1.5 * s,
+                  letterSpacing: 1.3 * s,
+                  color: "rgba(244, 242, 238, 0.85)",
                   textShadow: `0 ${2 * s}px ${8 * s}px rgba(0,0,0,0.95)`,
                 }}
               >
                 <span
                   style={{
-                    width: 18 * s,
-                    height: 18 * s,
+                    width: 14 * s,
+                    height: 14 * s,
                     borderRadius: "50%",
                     background: recBlink ? "#e62c2c" : "rgba(180,30,30,0.22)",
-                    boxShadow: recBlink ? `0 0 ${12 * s}px rgba(230,44,44,0.85)` : "none",
+                    boxShadow: recBlink ? `0 0 ${10 * s}px rgba(230,44,44,0.85)` : "none",
                     display: "inline-block",
                   }}
                 />
                 <span>REC</span>
-                <span style={{ opacity: 0.92 }}>{tcText}</span>
+                <span style={{ opacity: 0.88 }}>{tcText}</span>
               </div>
               {config.header?.subtitle && (
                 <div
                   style={{
-                    fontSize: 21 * s,
+                    fontSize: 18 * s,
                     fontWeight: 600,
-                    opacity: 0.78,
-                    marginTop: 4 * s,
-                    letterSpacing: 1 * s,
+                    opacity: 0.68,
+                    marginTop: 3 * s,
+                    letterSpacing: 0.8 * s,
                     textShadow: `0 ${2 * s}px ${8 * s}px rgba(0,0,0,0.95)`,
                   }}
                 >
@@ -220,24 +224,27 @@ export const HorrorHUD: React.FC<{
             </div>
           ) : (
             <div>
-              <div
-                style={{
-                  fontSize: 38 * s,
-                  fontWeight: 800,
-                  letterSpacing: 1 * s,
-                  textShadow: `0 ${3 * s}px ${10 * s}px rgba(0,0,0,0.85)`,
-                }}
-              >
-                {config.header?.title}
-              </div>
+              {config.header?.title && (
+                <div
+                  style={{
+                    fontSize: 24 * s,
+                    fontWeight: 800,
+                    letterSpacing: 0.8 * s,
+                    color: "rgba(244, 242, 238, 0.82)",
+                    textShadow: `0 ${2 * s}px ${8 * s}px rgba(0,0,0,0.92)`,
+                  }}
+                >
+                  {config.header.title}
+                </div>
+              )}
               {config.header?.subtitle && (
                 <div
                   style={{
-                    fontSize: 25 * s,
+                    fontSize: 18 * s,
                     fontWeight: 500,
-                    opacity: 0.88,
-                    marginTop: 4 * s,
-                    textShadow: `0 ${2 * s}px ${8 * s}px rgba(0,0,0,0.85)`,
+                    color: "rgba(220, 224, 232, 0.66)",
+                    marginTop: 2 * s,
+                    textShadow: `0 ${2 * s}px ${8 * s}px rgba(0,0,0,0.92)`,
                   }}
                 >
                   {config.header.subtitle}
@@ -248,13 +255,14 @@ export const HorrorHUD: React.FC<{
           {config.header?.badge && (
             <div
               style={{
-                padding: `${10 * s}px ${22 * s}px`,
-                borderRadius: 999,
-                border: `${2 * s}px solid rgba(255,255,255,0.62)`,
-                background: "rgba(8, 8, 14, 0.56)",
-                fontSize: 22 * s,
+                padding: `${5 * s}px ${14 * s}px`,
+                borderRadius: 6 * s,
+                border: `${1.5 * s}px solid rgba(255,255,255,0.28)`,
+                background: "rgba(6, 7, 12, 0.42)",
+                fontSize: 15 * s,
                 fontWeight: 700,
-                letterSpacing: 0.8 * s,
+                letterSpacing: 1.0 * s,
+                color: "rgba(235, 236, 242, 0.68)",
               }}
             >
               {config.header.badge}
@@ -323,14 +331,14 @@ export const HorrorHUD: React.FC<{
         </div>
       )}
 
-      {/* Bottom dialogue speaker pill + bold crisp black-outlined subtitle */}
-      {active.caption && !active.timeSkip && (
+      {/* Crisp compact 1-2 line cinema subtitle anchored cleanly in lower-fifth (never covers center hero 3D props!) */}
+      {showCaptions && active.caption && !active.timeSkip && (
         <div
           style={{
             position: "absolute",
-            left: 52 * s,
-            right: 52 * s,
-            bottom: Math.round(height * 0.22),
+            left: 58 * s,
+            right: 58 * s,
+            bottom: Math.round(height * 0.14),
             display: "flex",
             flexDirection: "column",
             alignItems: "center",
@@ -340,16 +348,16 @@ export const HorrorHUD: React.FC<{
           {active.caption.speaker && (
             <div
               style={{
-                background: active.caption.speakerColor ?? "#f4f2ee",
-                color: "#0b0a10",
-                padding: `${6 * s}px ${22 * s}px`,
+                background: "rgba(10, 11, 16, 0.78)",
+                color: active.caption.speakerColor ?? "#f4f2ee",
+                padding: `${4 * s}px ${16 * s}px`,
                 borderRadius: 999,
-                border: `${3 * s}px solid #09080f`,
-                fontSize: 25 * s,
-                fontWeight: 900,
-                letterSpacing: 0.6 * s,
-                marginBottom: 14 * s,
-                boxShadow: `0 ${4 * s}px ${14 * s}px rgba(0,0,0,0.65)`,
+                border: `${1.8 * s}px solid ${active.caption.speakerColor ?? "rgba(244,242,238,0.45)"}`,
+                fontSize: 20 * s,
+                fontWeight: 800,
+                letterSpacing: 0.8 * s,
+                marginBottom: 8 * s,
+                boxShadow: `0 ${3 * s}px ${10 * s}px rgba(0,0,0,0.72)`,
               }}
             >
               {active.caption.speaker}
@@ -357,13 +365,17 @@ export const HorrorHUD: React.FC<{
           )}
           <div
             style={{
-              fontSize: 44 * s,
-              fontWeight: 900,
+              fontSize: 38 * s,
+              fontWeight: 800,
               lineHeight: 1.24,
-              color: "#ffffff",
-              WebkitTextStroke: `${2.2 * s}px #08070d`,
+              color: "#f8f7f3",
+              maxWidth: "94%",
+              padding: `${6 * s}px ${16 * s}px`,
+              borderRadius: 10 * s,
+              background: "rgba(6, 7, 12, 0.44)",
+              WebkitTextStroke: `${1.8 * s}px #08070d`,
               paintOrder: "stroke fill",
-              textShadow: `0 ${4 * s}px ${14 * s}px rgba(0,0,0,0.92), 0 0 ${4 * s}px #08070d`,
+              textShadow: `0 ${3 * s}px ${12 * s}px rgba(0,0,0,0.96), 0 0 ${3 * s}px #08070d`,
             }}
           >
             {renderHighlightedText(active.caption.text, active.caption.highlight)}
