@@ -36,10 +36,11 @@ import { InkOptions, InkPass, NOINK, noInkFallback } from "./ink";
 import { WhipMotionBlurEffect } from "./motionblur";
 import { LensBlur, GrainEffect } from "./lensblur";
 import { GradeEffect, GRADES, GRADE_STRENGTH, gradeFor } from "./grade";
-import { setLightningFlash } from "./shade";
+import { DEF_PSX_OPTIONS, RetroPsxEffect, type PsxOptions } from "./retroPsx";
+import { setLightningFlash, setPsxVertexSnap } from "./shade";
 import { HorrorHUD, type HorrorHudConfig } from "./HorrorHUD";
 
-export type RenderStyle = "semiReal" | "painterly" | "comic";
+export type RenderStyle = "psxHorror" | "semiReal" | "painterly" | "comic";
 
 /** NormalPass that temporarily hides non-opaque / non-depth-writing FX (flashlight cones, halos, smoke, decals) so SSAO only occludes solid 3D geometry. */
 class OpaqueNormalPass extends NormalPass {
@@ -100,6 +101,7 @@ export type ShortPlayerProps<TAssets = undefined> = {
   overlays?: ScreenBeat[];
   hud?: HorrorHudConfig;
   renderStyle?: RenderStyle;
+  psxOptions?: PsxOptions;
   inkOptions?: InkOptions;
   grainAmount?: number;
   ssao?: boolean;
@@ -112,6 +114,7 @@ export type ShortPlayerProps<TAssets = undefined> = {
 type PostToggles = {
   ink: boolean;
   ssao: boolean;
+  psx: boolean;
   lens: boolean;
   pre: boolean;
   motionBlur: boolean;
@@ -121,8 +124,9 @@ type PostToggles = {
 };
 
 const toggles = (renderStyle: RenderStyle, ssaoEnabled: boolean, grainAmount = 0): PostToggles => ({
-  ink: renderStyle !== "semiReal",
+  ink: renderStyle === "painterly" || renderStyle === "comic",
   ssao: ssaoEnabled,
+  psx: renderStyle === "psxHorror",
   lens: true,
   pre: true,
   motionBlur: true,
@@ -194,6 +198,7 @@ type InnerProps<TAssets> = {
   assets: TAssets;
   createWorld: (assets: TAssets) => ShortWorld;
   renderStyle: RenderStyle;
+  psxOptions?: PsxOptions;
   inkOptions?: InkOptions;
   grainAmount: number;
   ssao: boolean;
@@ -210,6 +215,7 @@ function Inner<TAssets>({
   assets,
   createWorld,
   renderStyle,
+  psxOptions,
   inkOptions,
   grainAmount,
   ssao,
@@ -234,6 +240,7 @@ function Inner<TAssets>({
   const grainOn = grainAmount > 0;
   const ssaoOn = ssao && !draft;
   const on = useMemo(() => toggles(renderStyle, ssaoOn, grainOn ? 1 : 0), [renderStyle, ssaoOn, grainOn]);
+  const vertexSnap = on.psx ? (psxOptions?.vertexSnap ?? DEF_PSX_OPTIONS.vertexSnap) : 0;
 
   const fx = useMemo(() => {
     const normalPass = new OpaqueNormalPass(scene, camera, { resolutionScale: 0.75 });
@@ -242,7 +249,7 @@ function Inner<TAssets>({
       samples: 16,
       rings: 7,
       radius: 0.088,
-      intensity: renderStyle === "semiReal" ? 2.45 : 1.85,
+      intensity: renderStyle === "semiReal" || renderStyle === "psxHorror" ? 2.45 : 1.85,
       luminanceInfluence: 0.42,
       bias: 0.024,
       fade: 0.015,
@@ -269,15 +276,19 @@ function Inner<TAssets>({
       bloom: makeBloom(),
       tone: new ToneMappingEffect({ mode: ToneMappingMode.NEUTRAL }),
       grade: new GradeEffect(GRADES.warmLamp, GRADE_STRENGTH.warmLamp),
-      grain: new GrainEffect({ amount: grainAmount, cellPx: renderStyle === "semiReal" ? 1.55 : 1.35 }),
+      grain: new GrainEffect({ amount: grainAmount, cellPx: renderStyle === "semiReal" ? 1.55 : 1.4 }),
+      psx: new RetroPsxEffect(psxOptions),
     };
   }, [camera, scene, renderStyle, grainAmount]);
 
   if (inkOptions) fx.ink.set(inkOptions);
+  if (psxOptions) fx.psx.setOptions(psxOptions);
   if (grainOn) fx.grain.amount = grainAmount;
 
   const composer = useMemo(() => {
-    const c = new PostComposer(gl, { frameBufferType: THREE.HalfFloatType, multisampling: draft ? 0 : 4 });
+    // PSX retro mode intentionally disables MSAA so low-poly pixel silhouettes remain sharp & fast!
+    const msaa = draft || on.psx ? 0 : 4;
+    const c = new PostComposer(gl, { frameBufferType: THREE.HalfFloatType, multisampling: msaa });
     c.autoRenderToScreen = true;
     c.addPass(new RenderPass(scene, camera));
     if (on.ssao) {
@@ -291,6 +302,7 @@ function Inner<TAssets>({
     c.addPass(new EffectPass(camera, ...(on.bloom ? [fx.bloom] : []), fx.tone));
     const gradeTail = [...(on.grade ? [fx.grade] : []), ...(on.grain ? [fx.grain] : [])];
     if (gradeTail.length) c.addPass(new EffectPass(camera, ...gradeTail));
+    if (on.psx) c.addPass(new EffectPass(camera, fx.psx));
     const w0 = size.width || width;
     const h0 = size.height || height;
     c.setSize(w0, h0);
@@ -312,6 +324,7 @@ function Inner<TAssets>({
         fx.ssao.dispose();
       }
       if (!on.ink) fx.ink.dispose();
+      if (!on.psx) fx.psx.dispose();
       if (!on.lens) fx.lens.dispose();
       else if (!on.pre) fx.lens.pre.dispose();
       if (!on.motionBlur) fx.motionBlur.dispose();
@@ -333,6 +346,7 @@ function Inner<TAssets>({
     }
     world.syncLighting?.(id, frameRef.current);
     setLightningFlash(lightningAt(overlaysRef.current, frameRef.current));
+    setPsxVertexSnap(vertexSnap);
     const prevAutoClear = gl.autoClear;
     gl.autoClear = true;
     composer.render(delta);
@@ -343,6 +357,7 @@ function Inner<TAssets>({
   cam.aspect = width / Math.max(1, height);
   cam.layers.enable(NOINK);
   setLightningFlash(lightningAt(overlays, f));
+  setPsxVertexSnap(vertexSnap);
   target.copy(world.update(id, f, cam, scene));
   noInkFallback(world.root);
 
@@ -351,7 +366,8 @@ function Inner<TAssets>({
   if (d.focus) fpt.set(...d.focus(f));
   else fpt.copy(target);
   fx.lens.focus = Math.max(0.18, fpt.sub(cam.position).dot(fwd));
-  fx.lens.cInf = d.cInf;
+  // Keep PSX low-res pixels crisp & readable by dampening heavy cinematic bokeh blur
+  fx.lens.cInf = on.psx ? d.cInf * 0.22 : d.cInf;
 
   // Deterministic per-frame Whip-Pan motion blur velocity
   const vel = world.getMotionVelocity?.(id, f, cam.aspect, height) ?? { vx: 0, vy: 0, speedPx: 0 };
@@ -360,8 +376,10 @@ function Inner<TAssets>({
   const shot = shots.find((s) => s.id === id) ?? shots[0];
   const blend = world.getLightBlend?.(id, f);
   const extraAb = aberrationAt(overlays, f) + lightningAt(overlays, f) * 0.45;
-  gradeFor(fx.grade, blend?.from ?? shot.light, f, extraAb, blend?.to, blend?.t ?? 0);
+  gradeFor(fx.grade, blend?.from ?? shot.light, f, on.psx ? extraAb * 0.25 : extraAb, blend?.to, blend?.t ?? 0);
   fx.grain.seed = f;
+  fx.psx.frame = f;
+  fx.psx.glitchSurge = aberrationAt(overlays, f) + lightningAt(overlays, f) * 0.65;
 
   return <primitive object={world.root} dispose={null} />;
 }
@@ -377,6 +395,7 @@ type ShotViewProps<TAssets> = {
   assets: TAssets;
   createWorld: (assets: TAssets) => ShortWorld;
   renderStyle: RenderStyle;
+  psxOptions?: PsxOptions;
   inkOptions?: InkOptions;
   grainAmount: number;
   ssao: boolean;
@@ -394,6 +413,7 @@ function ShotView<TAssets>({
   assets,
   createWorld,
   renderStyle,
+  psxOptions,
   inkOptions,
   grainAmount,
   ssao,
@@ -426,6 +446,7 @@ function ShotView<TAssets>({
           assets={assets}
           createWorld={createWorld}
           renderStyle={renderStyle}
+          psxOptions={psxOptions}
           inkOptions={inkOptions}
           grainAmount={grainAmount}
           ssao={ssao}
@@ -445,7 +466,8 @@ export function ShortPlayer<TAssets = undefined>({
   flashes = [],
   overlays = [],
   hud,
-  renderStyle = "semiReal",
+  renderStyle = "psxHorror",
+  psxOptions,
   inkOptions,
   grainAmount,
   ssao = true,
@@ -457,7 +479,7 @@ export function ShortPlayer<TAssets = undefined>({
   const f = useCurrentFrame();
   const vc = useVideoConfig();
   const isDraft = draft ?? !!(getInputProps() as { draft?: boolean })?.draft;
-  const resolvedGrain = grainAmount ?? (renderStyle === "semiReal" ? 0.018 : 0.008);
+  const resolvedGrain = grainAmount ?? (renderStyle === "psxHorror" ? 0.014 : renderStyle === "semiReal" ? 0.018 : 0.008);
   const w = width ?? vc.width;
   const h = height ?? vc.height;
   const { ready, assets } = useLoadedAssets(loadAssets);
@@ -484,6 +506,7 @@ export function ShortPlayer<TAssets = undefined>({
           assets={assets as TAssets}
           createWorld={createWorld}
           renderStyle={renderStyle}
+          psxOptions={psxOptions}
           inkOptions={inkOptions}
           grainAmount={resolvedGrain}
           ssao={ssao}

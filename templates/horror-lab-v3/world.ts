@@ -17,6 +17,7 @@ import {
   type ShortWorld,
   V,
   applyLightUniforms,
+  applyPsxTextureFilter,
   beatAt,
   clamp01,
   createCharacter3D,
@@ -218,6 +219,9 @@ export class HorrorLabV3World implements ShortWorld {
     this.flashlight.group.position.set(0.0, 0.01, -0.05);
     this.pov.rightHand.add(this.phone.group, this.flashlight.group);
     this.root.add(this.pov.group);
+
+    // Horror Engine v4.5: Crisp unfiltered PS1 NearestFilter across all world/character textures (preserving Phone3D lockscreen legibility)
+    applyPsxTextureFilter(this.root, true);
   }
 
   getLightBlend(_shotId: number, frame: number): { from?: LightKey; to: LightKey; t: number } | null {
@@ -276,18 +280,18 @@ export class HorrorLabV3World implements ShortWorld {
       }
       if (beat.lightState.doorMoonlight) {
         const [dx, , dz] = ANCHORS.DOUBLE_DOOR;
-        pts.push({ pos: [dx, 0.35, dz + 0.45], color: [0.58, 0.76, 1.12], radius: 3.4 });
+        pts.push({ pos: [dx, 0.38, dz + 0.45], color: [0.74, 0.94, 1.34], radius: 3.9 });
         // Side-raking cold moonlight grazing the Body-Horror doorway entity's skull hollows, eyeballs & crooked teeth!
         if (beat.castStates.doorEntity?.visible) {
-          pts.push({ pos: [dx + 0.85, 1.88, dz + 1.45], color: [0.92, 1.14, 1.56], radius: 3.6 });
+          pts.push({ pos: [dx + 0.85, 1.88, dz + 1.45], color: [0.96, 1.18, 1.60], radius: 3.8 });
         }
       }
     } else if (beat.locationId === "hospitalCorridor") {
-      // Stark chiaroscuro: dim eerie overhead tube + fierce POV handheld flashlight SpotLight carving the Body Horror entity!
+      // Stark chiaroscuro: eerie sickly yellow-green overhead tubes + fierce POV handheld flashlight SpotLight carving the Body Horror entity!
       const flkA = flickerAt(frame, 13, 0.30, 0.25);
       const flkB = flickerAt(frame, 41, 0.20, 0.58);
-      pts.push({ pos: [0, 2.72, -0.4], color: [0.46 * flkA, 0.58 * flkA, 0.54 * flkA], radius: 4.6 });
-      pts.push({ pos: [0, 2.72, -6.8], color: [0.55 * flkB, 0.76 * flkB, 0.70 * flkB], radius: 5.2 });
+      pts.push({ pos: [0, 2.72, -0.4], color: [0.58 * flkA, 0.74 * flkA, 0.54 * flkA], radius: 5.8 });
+      pts.push({ pos: [0, 2.72, -6.8], color: [0.66 * flkB, 0.92 * flkB, 0.66 * flkB], radius: 6.6 });
       this.hospitalSet.tubeA.setIntensity(flkA * 0.75);
       this.hospitalSet.tubeB.setIntensity(flkB * 0.70);
       const torchSpot = this.flashlight.getSpotLight();

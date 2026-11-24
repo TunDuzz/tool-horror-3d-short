@@ -44,8 +44,9 @@ export function buildHorrorSkullHeadGeo(
   ry: number,
   rz: number,
   hasJawDrop = true,
+  lowPoly = false,
 ): THREE.BufferGeometry {
-  const geo = new THREE.SphereGeometry(1, 40, 30);
+  const geo = new THREE.SphereGeometry(1, lowPoly ? 22 : 40, lowPoly ? 16 : 30);
   const pos = geo.attributes.position;
 
   for (let i = 0; i < pos.count; i++) {
@@ -863,14 +864,15 @@ export function buildExtraArms3D(
   const srcPhong = skinMat as THREE.MeshPhongMaterial;
   const shadowArmMat = stylizedShade(
     new THREE.MeshPhongMaterial({
-      color: "#52535c",
+      color: "#7c7d88",
       ...(srcPhong.map ? { map: srcPhong.map } : {}),
       ...(srcPhong.bumpMap ? { bumpMap: srcPhong.bumpMap, bumpScale: 0.012 } : {}),
-      specular: "#3a353d",
+      flatShading: !!srcPhong.flatShading,
+      specular: "#46404a",
       shininess: 18,
     }),
-    0.55,
-    0.55,
+    0.65,
+    0.45,
   );
   disposables.push(shadowArmMat);
 
@@ -878,14 +880,14 @@ export function buildExtraArms3D(
     const pfx = side < 0 ? "leftExtra" : "rightExtra";
     const root = new THREE.Group();
     root.name = `${pfx}Arm`;
-    // Positioned visibly wide from behind the mid-ribs so both eerie extra arms & claws jut into silhouette!
-    root.position.set(side * 0.165 * hScale * gaunt, -0.04 * hScale, -0.095 * hScale);
-    root.rotation.set(0.08, side * -0.14, side * 0.72);
+    // Positioned visibly wide from behind upper ribs/shoulders so both eerie extra spider-clawed limbs jut into silhouette!
+    root.position.set(side * 0.17 * hScale * gaunt, 0.06 * hScale, -0.055 * hScale);
+    root.rotation.set(0.18, side * -0.10, side * 0.98);
     chest.add(root);
 
-    const uLen = 0.27 * hScale * armS;
-    const fLen = 0.26 * hScale * armS;
-    const uGeo = new THREE.CapsuleGeometry(0.019 * hScale * gaunt, uLen, 5, 8);
+    const uLen = 0.28 * hScale * armS;
+    const fLen = 0.27 * hScale * armS;
+    const uGeo = new THREE.CapsuleGeometry(0.019 * hScale * gaunt, uLen, 4, 6);
     disposables.push(uGeo);
     const uMesh = new THREE.Mesh(uGeo, shadowArmMat);
     uMesh.name = `${pfx}Upper`;
@@ -896,10 +898,10 @@ export function buildExtraArms3D(
     const elbow = new THREE.Group();
     elbow.name = `${pfx}Elbow`;
     elbow.position.set(0, -uLen, 0);
-    elbow.rotation.set(-0.26, 0, side * -0.54);
+    elbow.rotation.set(-0.32, 0, side * -0.34);
     root.add(elbow);
 
-    const fGeo = new THREE.CapsuleGeometry(0.015 * hScale * gaunt, fLen, 5, 8);
+    const fGeo = new THREE.CapsuleGeometry(0.015 * hScale * gaunt, fLen, 4, 6);
     disposables.push(fGeo);
     const fMesh = new THREE.Mesh(fGeo, shadowArmMat);
     fMesh.name = `${pfx}Forearm`;

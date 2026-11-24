@@ -33,6 +33,7 @@ export type FaceSpec = {
   ageLines?: boolean;
   sweat?: boolean; // subtle cold sweat bead on temple (auto-enabled in terrified)
   realisticStyle?: boolean; // default true (v4 Style B): softer lash shading, textured iris, shaded lips
+  pixelFace?: boolean; // v4.5 PSX low-poly mode: deeper orbital eye shadows & stronger facial contrast for 360x640 pixelation
   eyeHorror?: EyeHorrorMode;
   cheekSplitGrin?: boolean;
 };
@@ -66,20 +67,22 @@ function drawAlmondEye(
   const gazeY = Math.max(-1, Math.min(1, spec.gazeY ?? 0));
   const pupilScale = Math.max(0.22, Math.min(1.0, spec.pupilScale ?? def.pupil));
 
-  // 1. Soft orbital & under-eye dark hollow shading (smooth gradient, NOT a solid black block!)
-  if (hollow > 0.02) {
-    const gr = g.createRadialGradient(cx, cy + 14, 12, cx, cy + 12, 94);
-    gr.addColorStop(0, `rgba(16, 10, 24, ${(0.56 * hollow).toFixed(3)})`);
-    gr.addColorStop(0.55, `rgba(22, 14, 32, ${(0.28 * hollow).toFixed(3)})`);
+  // 1. Soft orbital & under-eye dark hollow shading (deeper sunken PSX hollows when pixelFace=true!)
+  const pfBoost = spec.pixelFace ? 1.48 : 1.0;
+  if (hollow > 0.02 || spec.pixelFace) {
+    const hVal = Math.max(hollow, spec.pixelFace ? 0.65 : 0);
+    const gr = g.createRadialGradient(cx, cy + 12, 10, cx, cy + 10, spec.pixelFace ? 104 : 94);
+    gr.addColorStop(0, `rgba(12, 7, 18, ${Math.min(0.88, 0.56 * hVal * pfBoost).toFixed(3)})`);
+    gr.addColorStop(0.55, `rgba(18, 11, 26, ${Math.min(0.60, 0.28 * hVal * pfBoost).toFixed(3)})`);
     gr.addColorStop(1, "rgba(22, 14, 32, 0)");
     g.fillStyle = gr;
     g.beginPath();
-    g.ellipse(cx, cy + 12, 94, 58, 0, 0, Math.PI * 2);
+    g.ellipse(cx, cy + 10, spec.pixelFace ? 102 : 94, spec.pixelFace ? 66 : 58, 0, 0, Math.PI * 2);
     g.fill();
 
     // Subtle crisp tired under-eye bag crease
-    g.strokeStyle = `rgba(16, 10, 22, ${(0.48 * hollow).toFixed(3)})`;
-    g.lineWidth = 4.0;
+    g.strokeStyle = `rgba(14, 8, 20, ${Math.min(0.75, 0.48 * hVal * pfBoost).toFixed(3)})`;
+    g.lineWidth = spec.pixelFace ? 5.2 : 4.0;
     g.lineCap = "round";
     g.beginPath();
     g.moveTo(cx - rx * 0.72, cy + ry + 12);
@@ -580,6 +583,7 @@ export class FaceTextureCache {
       !!s.ageLines,
       !!s.sweat,
       s.realisticStyle !== false,
+      !!s.pixelFace,
       s.eyeHorror ?? "",
       !!s.cheekSplitGrin,
     ]);

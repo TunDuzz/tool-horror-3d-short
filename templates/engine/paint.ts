@@ -1868,6 +1868,36 @@ export const tatteredGownPair = (key = "v4_tatteredGownPair", baseHex = "#8c8b84
     }
   });
 
+/**
+ * Horror Engine v4.5: Switch all world/character color textures to crisp unfiltered PS1 NearestFilter
+ * (disabling bilinear blur & mipmaps for crunchy retro grime surfaces), while skipping legible UI meshes like phoneScreen.
+ */
+export function applyPsxTextureFilter(
+  root: THREE.Object3D,
+  enabled = true,
+  skipNames: Set<string> = new Set(["phoneScreen"]),
+): number {
+  let updated = 0;
+  const seen = new Set<THREE.Texture>();
+  root.traverse((obj) => {
+    const m = obj as THREE.Mesh;
+    if (!m.isMesh || skipNames.has(m.name)) return;
+    const mats = Array.isArray(m.material) ? m.material : [m.material];
+    for (const mat of mats) {
+      const lm = mat as THREE.MeshLambertMaterial | THREE.MeshPhongMaterial;
+      if (!lm || !lm.map || seen.has(lm.map)) continue;
+      seen.add(lm.map);
+      lm.map.minFilter = enabled ? THREE.NearestFilter : THREE.LinearMipmapLinearFilter;
+      lm.map.magFilter = enabled ? THREE.NearestFilter : THREE.LinearFilter;
+      lm.map.generateMipmaps = !enabled;
+      lm.map.needsUpdate = true;
+      updated++;
+    }
+  });
+  return updated;
+}
+
+
 
 
 

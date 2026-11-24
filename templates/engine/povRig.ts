@@ -200,17 +200,17 @@ export function createPhone3D(
   screen.userData.noSSAO = true;
   group.add(screen);
 
-  // Articulated 2-joint curled fingers wrapping organically around the left bezel edge (muted weathered skin so phone light never blows them white!)
-  const skinP = humanSkinPair("v4_pov_phone_skin", "#98806c");
+  // Articulated 2-joint curled low-poly fingers wrapping organically around the left bezel edge (muted weathered skin)
+  const skinP = humanSkinPair("v4_pov_phone_skin", "#846e5d");
   const skinMat = stylizedShade(
-    new THREE.MeshPhongMaterial({ map: skinP.map, bumpMap: skinP.bumpMap, bumpScale: 0.003, specular: "#2c221c", shininess: 10 }),
-    0.75,
-    0.25,
+    new THREE.MeshPhongMaterial({ map: skinP.map, bumpMap: skinP.bumpMap, bumpScale: 0.003, specular: "#261d17", shininess: 8, flatShading: true }),
+    0.72,
+    0.30,
   );
   const knuckleShadeMat = stylizedShade(
-    new THREE.MeshPhongMaterial({ color: "#88705e", map: skinP.map, bumpMap: skinP.bumpMap, bumpScale: 0.003, specular: "#261e18", shininess: 10 }),
-    0.75,
-    0.28,
+    new THREE.MeshPhongMaterial({ color: "#725e4f", map: skinP.map, bumpMap: skinP.bumpMap, bumpScale: 0.003, specular: "#201813", shininess: 8, flatShading: true }),
+    0.72,
+    0.34,
   );
   // Curved palm cradle tucked cleanly behind the phone body (-Z) without peeking past the bottom bezel
   const backPalm = new THREE.Mesh(new THREE.BoxGeometry(0.062, 0.072, 0.014), knuckleShadeMat);
@@ -222,23 +222,23 @@ export function createPhone3D(
   for (let i = 0; i < 4; i++) {
     const fy = 0.019 - i * 0.0185;
     // Proximal knuckle wrapping around the left side edge
-    const prox = new THREE.Mesh(new THREE.CapsuleGeometry(0.0068, 0.014, 5, 8), knuckleShadeMat);
+    const prox = new THREE.Mesh(new THREE.CapsuleGeometry(0.0060, 0.014, 3, 6), knuckleShadeMat);
     prox.name = `phoneGripKnuckle_${i}`;
     prox.position.set(-0.047, fy, -0.007);
     prox.rotation.set(Math.PI * 0.48, 0, -0.18);
     // Distal fingertip curling onto the outer left bezel rim
-    const tip = new THREE.Mesh(new THREE.CapsuleGeometry(0.0060, fLengths[i], 5, 8), skinMat);
+    const tip = new THREE.Mesh(new THREE.CapsuleGeometry(0.0054, fLengths[i], 3, 6), skinMat);
     tip.name = `phoneGripFinger_${i}`;
     tip.position.set(-0.0465, fy - 0.001, 0.004);
     tip.rotation.set(0.08, 0.22, Math.PI * 0.5 - 0.14);
     group.add(prox, tip);
   }
   // Articulated 2-segment right thumb emerging from lower-right palm & resting cleanly on outer right bezel
-  const thumbBase = new THREE.Mesh(new THREE.CapsuleGeometry(0.0092, 0.028, 5, 8), knuckleShadeMat);
+  const thumbBase = new THREE.Mesh(new THREE.CapsuleGeometry(0.0082, 0.028, 3, 6), knuckleShadeMat);
   thumbBase.name = "phoneGripThumbBase";
   thumbBase.position.set(0.047, -0.056, -0.004);
   thumbBase.rotation.set(-0.18, 0.16, 0.36);
-  const thumbTip = new THREE.Mesh(new THREE.CapsuleGeometry(0.0078, 0.022, 5, 8), skinMat);
+  const thumbTip = new THREE.Mesh(new THREE.CapsuleGeometry(0.0070, 0.022, 3, 6), skinMat);
   thumbTip.name = "phoneGripThumb";
   thumbTip.position.set(0.044, -0.032, 0.006);
   thumbTip.rotation.set(0.08, -0.18, 0.62);
@@ -291,35 +291,36 @@ export function createFlashlight3D(outlineMode: OutlineMode = "off"): Flashlight
   const metalPair = wovenFabricPair("v4_torch_knurl", "#232730");
   const metalMat = stylizedShade(
     new THREE.MeshPhongMaterial({
-      color: "#2b303a",
+      color: "#262b34",
       bumpMap: metalPair.bumpMap,
       bumpScale: 0.0035,
-      specular: "#9eb2cc",
-      shininess: 64,
+      specular: "#8da0ba",
+      shininess: 48,
+      flatShading: true,
     }),
     1,
-    0.3,
+    0.34,
   );
-  const skinP = humanSkinPair("v4_pov_torch_skin", "#c2aa92");
+  const skinP = humanSkinPair("v4_pov_torch_skin", "#7e6858");
   const gripSkinMat = stylizedShade(
-    new THREE.MeshPhongMaterial({ map: skinP.map, bumpMap: skinP.bumpMap, bumpScale: 0.0028, specular: "#382c24", shininess: 14 }),
-    1,
-    0.25,
+    new THREE.MeshPhongMaterial({ map: skinP.map, bumpMap: skinP.bumpMap, bumpScale: 0.0028, specular: "#261d17", shininess: 9, flatShading: true }),
+    0.75,
+    0.34,
   );
-  const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.019, 0.20, 14).rotateX(Math.PI * 0.5), metalMat);
-  const bezel = new THREE.Mesh(new THREE.CylinderGeometry(0.031, 0.022, 0.052, 14).rotateX(Math.PI * 0.5), metalMat);
+  const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.019, 0.20, 8).rotateX(Math.PI * 0.5), metalMat);
+  const bezel = new THREE.Mesh(new THREE.CylinderGeometry(0.031, 0.022, 0.052, 8).rotateX(Math.PI * 0.5), metalMat);
   bezel.position.set(0, 0, -0.115);
 
-  // Curled POV gripping fingers & thumb wrapping naturally around the flashlight barrel
+  // Curled low-poly POV gripping fingers & thumb wrapping naturally around the flashlight barrel
   const gripGroup = new THREE.Group();
   gripGroup.name = "flashlightGrip";
   for (let i = 0; i < 4; i++) {
-    const f = new THREE.Mesh(new THREE.TorusGeometry(0.024, 0.0068, 6, 12, Math.PI * 1.15), gripSkinMat);
+    const f = new THREE.Mesh(new THREE.TorusGeometry(0.024, 0.0058, 5, 8, Math.PI * 1.15), gripSkinMat);
     f.position.set(0, 0, -0.045 + i * 0.018);
     f.rotation.z = -Math.PI * 0.15;
     gripGroup.add(f);
   }
-  const fThumb = new THREE.Mesh(new THREE.CapsuleGeometry(0.0075, 0.026, 5, 8), gripSkinMat);
+  const fThumb = new THREE.Mesh(new THREE.CapsuleGeometry(0.0066, 0.026, 3, 6), gripSkinMat);
   fThumb.position.set(-0.016, 0.024, -0.036);
   fThumb.rotation.set(Math.PI * 0.44, 0.18, 0.28);
   gripGroup.add(fThumb);

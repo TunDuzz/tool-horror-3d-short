@@ -96,6 +96,16 @@ export function setSpotLight(spot: SpotLightCfg | null): void {
   DYNAMIC_LIGHTS.uSpCosOut.value = Math.cos(outRad);
 }
 
+/** PSX hardware clip-space vertex snapping uniform (0 = off, ~200..320 = subtle PS1 polygon wobble). */
+export const PSX_UNIFORMS = {
+  uPsxSnap: { value: 0.0 },
+};
+
+/** Set global PSX clip-space vertex snap resolution (0 disables vertex snapping). */
+export function setPsxVertexSnap(grid: number): void {
+  PSX_UNIFORMS.uPsxSnap.value = Math.max(0, grid);
+}
+
 /** Update real 3D lightning flash illumination (0..1). */
 export function setLightningFlash(amount: number, color: [number, number, number] = [0.84, 0.94, 1.18]): void {
   DYNAMIC_LIGHTS.uFlashAmt.value = Math.max(0, amount);
@@ -123,6 +133,11 @@ const VERT_WORLD_POS = /* glsl */ `
   #endif
   vToneWorldPos = ( modelMatrix * tWp ).xyz;
   vToneWorldNormal = normalize( mat3( modelMatrix ) * tWn );
+  if ( uPsxSnap > 0.5 ) {
+    vec2 psxGrid = vec2( uPsxSnap, uPsxSnap * 1.7778 );
+    float safeW = max( abs( gl_Position.w ), 0.001 );
+    gl_Position.xy = floor( ( gl_Position.xy / safeW ) * psxGrid + 0.5 ) / psxGrid * safeW;
+  }
 `;
 
 const NOISE_GLSL = /* glsl */ `
@@ -256,9 +271,9 @@ const DECL =
 export function stylizedShade<T extends THREE.MeshLambertMaterial | THREE.MeshPhongMaterial>(m: T, liftK = 1, grimeK = 1): T {
   const isPhong = m instanceof THREE.MeshPhongMaterial;
   m.onBeforeCompile = (sh) => {
-    Object.assign(sh.uniforms, TONE, DYNAMIC_LIGHTS);
+    Object.assign(sh.uniforms, TONE, DYNAMIC_LIGHTS, PSX_UNIFORMS);
     sh.vertexShader = sh.vertexShader
-      .replace("#include <common>", "#include <common>\nvarying vec3 vToneWorldPos;\nvarying vec3 vToneWorldNormal;")
+      .replace("#include <common>", "#include <common>\nuniform float uPsxSnap;\nvarying vec3 vToneWorldPos;\nvarying vec3 vToneWorldNormal;")
       .replace("#include <project_vertex>", "#include <project_vertex>\n" + VERT_WORLD_POS);
     const specDef = isPhong ? "#define USE_STYLIZED_SPEC\n" : "";
     sh.fragmentShader = sh.fragmentShader
@@ -266,7 +281,7 @@ export function stylizedShade<T extends THREE.MeshLambertMaterial | THREE.MeshPh
       .replace("#include <lights_fragment_begin>", "float sunVis = 1.0;\n" + LFB)
       .replace("#include <lights_fragment_end>", "#include <lights_fragment_end>\n" + STYLIZED_SHADE);
   };
-  m.customProgramCacheKey = () => `stylizedShadeV40_${isPhong ? "p" : "l"}_${liftK.toFixed(3)}_${grimeK.toFixed(3)}`;
+  m.customProgramCacheKey = () => `stylizedShadeV45_${isPhong ? "p" : "l"}_${liftK.toFixed(3)}_${grimeK.toFixed(3)}`;
   return m;
 }
 

@@ -56,9 +56,9 @@ test("hudFromManifest output integrates cleanly with evalActiveHud", () => {
   assert.equal(active.notification?.sender, "Mẹ");
 });
 
-test("templates/engine/index.ts exports v4 modules (including bodyHorror) and does not reference removed v2 billboard modules", () => {
+test("templates/engine/index.ts exports v4.5 modules (including bodyHorror & retroPsx) and does not reference removed v2 billboard modules", () => {
   const src = fs.readFileSync(path.resolve("templates/engine/index.ts"), "utf-8");
-  for (const mod of ["./camera", "./lights", "./manifest", "./shade", "./outline3d", "./ink", "./motionblur", "./lensblur", "./grade", "./paint", "./build", "./face2d", "./bodyHorror", "./rig3d", "./povRig", "./fx3d", "./HorrorHUD", "./ShortPlayer"]) {
+  for (const mod of ["./camera", "./lights", "./manifest", "./shade", "./outline3d", "./ink", "./motionblur", "./lensblur", "./grade", "./retroPsx", "./paint", "./build", "./face2d", "./bodyHorror", "./rig3d", "./povRig", "./fx3d", "./HorrorHUD", "./ShortPlayer"]) {
     assert.ok(src.includes(mod), `index.ts missing export for ${mod}`);
   }
   for (const oldMod of ["./toon", "./cast", "./cardshade"]) {

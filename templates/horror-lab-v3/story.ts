@@ -152,7 +152,8 @@ export const CAMS: Record<number, CamKey[]> = {
 export const OVERLAYS: ScreenBeat[] = [
   { kind: "dipBlack", at: 160, dur: 8, hold: 1 },
   { kind: "dipBlack", at: 230, dur: 8, hold: 1 },
-  { kind: "aberration", a: 128, b: 158, strength: 0.35, pulse: true },
+  { kind: "aberration", a: 128, b: 158, strength: 0.40, pulse: true },
+  { kind: "aberration", a: 184, b: 226, strength: 0.44, pulse: true },
 ];
 
 export const KICKS: Kick[] = [];

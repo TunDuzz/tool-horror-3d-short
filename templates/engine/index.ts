@@ -8,6 +8,7 @@ export * from "./ink";
 export * from "./motionblur";
 export * from "./lensblur";
 export * from "./grade";
+export * from "./retroPsx";
 export * from "./paint";
 export * from "./build";
 export * from "./face2d";

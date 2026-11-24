@@ -103,7 +103,8 @@ export type CharacterConfig = {
   shoeCol?: string;
   garment?: GarmentStyle;
   headbandCol?: string; // e.g. white funeral headband (khăn tang)
-  outlineMode?: OutlineMode; // default "off" (Style B semi-realistic), or "grittyThin" (Style A) / "cleanBold"
+  lowPoly?: boolean; // v4.5 PSX faceted low-poly geometry + flatShading (default true!)
+  outlineMode?: OutlineMode; // default "off" (Style B / PSX), or "grittyThin" (Style A) / "cleanBold"
   outlinePx?: number; // legacy explicit outline width override
   entity?: EntityConfig;
 };
@@ -163,9 +164,9 @@ export type Character3D = {
   dispose: () => void;
 };
 
-/** Sculpted non-chibi adult human head (28x22): subtle 3D eye-socket hollows, brow ridge, cheekbones, angular jaw & chin. */
-function buildSculptedHeadGeo(rx: number, ry: number, rz: number): THREE.BufferGeometry {
-  const geo = new THREE.SphereGeometry(1, 28, 22);
+/** Sculpted adult human head: angular jaw, subtle eye hollows, brow ridge & cheekbones (lowPoly uses faceted 12x10 PS1 topology!). */
+function buildSculptedHeadGeo(rx: number, ry: number, rz: number, lowPoly = false): THREE.BufferGeometry {
+  const geo = new THREE.SphereGeometry(1, lowPoly ? 12 : 28, lowPoly ? 10 : 22);
   const pos = geo.attributes.position;
   for (let i = 0; i < pos.count; i++) {
     let x = pos.getX(i);
@@ -446,6 +447,8 @@ function buildHairMeshes(
 export function createCharacter3D(cfg: CharacterConfig): Character3D {
   const ent = cfg.entity;
   const bh = ent?.bodyHorror;
+  const lowPoly = cfg.lowPoly ?? true;
+  const limbSegs = lowPoly ? 7 : 12;
   const hScale = ((cfg.height ?? 1.72) / 1.72) * (ent?.heightScale ?? 1.0);
   const gaunt = ent?.gauntness ?? 1.0;
   const armS = ent?.armScale ?? 1.0;
@@ -464,10 +467,10 @@ export function createCharacter3D(cfg: CharacterConfig): Character3D {
   const disposables: Array<{ dispose(): void }> = [];
   const faceCache = new FaceTextureCache();
 
-  // Tactile Style B Bump-Mapped Materials (kills smooth plastic surfaces!)
+  // Tactile Bump-Mapped Materials (flatShading: true in PSX lowPoly mode creates razor-sharp angular facets!)
   let skinMat: THREE.Material;
   if (isSil) {
-    skinMat = stylizedShade(new THREE.MeshLambertMaterial({ color: skinHex }), 0.6, 0.3);
+    skinMat = stylizedShade(new THREE.MeshLambertMaterial({ color: skinHex, flatShading: lowPoly }), 0.6, 0.3);
   } else if (bh?.cadaverSkin) {
     const cp = cadaverSkinPair(`v4_cad_${cfg.id}`, skinHex, bloodLevel);
     skinMat = stylizedShade(
@@ -475,6 +478,7 @@ export function createCharacter3D(cfg: CharacterConfig): Character3D {
         map: cp.map,
         bumpMap: cp.bumpMap,
         bumpScale: 0.015,
+        flatShading: lowPoly,
         specular: "#4a424c",
         shininess: 22,
       }),
@@ -488,6 +492,7 @@ export function createCharacter3D(cfg: CharacterConfig): Character3D {
         map: hp.map,
         bumpMap: hp.bumpMap,
         bumpScale: 0.0032,
+        flatShading: lowPoly,
         specular: "#46352b",
         shininess: 14,
       }),
@@ -498,7 +503,7 @@ export function createCharacter3D(cfg: CharacterConfig): Character3D {
 
   let topMat: THREE.Material;
   if (isSil) {
-    topMat = stylizedShade(new THREE.MeshLambertMaterial({ color: topHex }), 0.6, 0.4);
+    topMat = stylizedShade(new THREE.MeshLambertMaterial({ color: topHex, flatShading: lowPoly }), 0.6, 0.4);
   } else if (bh?.tatteredCloth || (bh && (garment === "hospitalGown" || garment === "shroud"))) {
     const gp = tatteredGownPair(`v4_gown_${cfg.id}`, topHex, bloodLevel);
     topMat = stylizedShade(
@@ -506,6 +511,7 @@ export function createCharacter3D(cfg: CharacterConfig): Character3D {
         map: gp.map,
         bumpMap: gp.bumpMap,
         bumpScale: 0.012,
+        flatShading: lowPoly,
         side: THREE.DoubleSide,
       }),
       0.85,
@@ -514,7 +520,7 @@ export function createCharacter3D(cfg: CharacterConfig): Character3D {
   } else {
     const fp = wovenFabricPair(`v4_top_${cfg.id}`, topHex);
     topMat = stylizedShade(
-      new THREE.MeshLambertMaterial({ map: fp.map, bumpMap: fp.bumpMap, bumpScale: 0.009 }),
+      new THREE.MeshLambertMaterial({ map: fp.map, bumpMap: fp.bumpMap, bumpScale: 0.009, flatShading: lowPoly }),
       1.0,
       0.38,
     );
@@ -524,6 +530,7 @@ export function createCharacter3D(cfg: CharacterConfig): Character3D {
   const hairMat = stylizedShade(
     new THREE.MeshPhongMaterial({
       ...(isSil ? { color: hairHex } : { map: hairP.map, bumpMap: hairP.bumpMap, bumpScale: 0.006, color: "#ffffff" }),
+      flatShading: lowPoly,
       specular: "#4a4240",
       shininess: 20,
     }),
@@ -534,11 +541,16 @@ export function createCharacter3D(cfg: CharacterConfig): Character3D {
   const botMat = stylizedShade(
     new THREE.MeshLambertMaterial({
       ...(isSil ? { color: botHex } : { map: botP.map, bumpMap: botP.bumpMap, bumpScale: 0.008, color: "#ffffff" }),
+      flatShading: lowPoly,
     }),
     0.9,
     0.42,
   );
-  const shoeMat = stylizedShade(new THREE.MeshPhongMaterial({ color: shoeHex, specular: "#3a3840", shininess: 22 }), 0.85, 0.4);
+  const shoeMat = stylizedShade(
+    new THREE.MeshPhongMaterial({ color: shoeHex, flatShading: lowPoly, specular: "#3a3840", shininess: 22 }),
+    0.85,
+    0.4,
+  );
   disposables.push(skinMat, hairMat, topMat, botMat, shoeMat);
 
   // Core adult measurements (non-chibi: height/headH ~5.8-6.4)
@@ -611,7 +623,7 @@ export function createCharacter3D(cfg: CharacterConfig): Character3D {
       new THREE.Vector2(0.062 * hScale * gaunt, 0.492 * hScale),
       new THREE.Vector2(0.01, 0.50 * hScale),
     ];
-    const torsoGeo = new THREE.LatheGeometry(torsoPts, 18);
+    const torsoGeo = new THREE.LatheGeometry(torsoPts, lowPoly ? 10 : 18);
     torsoGeo.scale(1.12, 1, 0.65);
     spine.add(mkMesh(torsoGeo, topMat, "torsoMesh"));
   }
@@ -691,14 +703,14 @@ export function createCharacter3D(cfg: CharacterConfig): Character3D {
 
   if (uses3DHorrorSkull) {
     const hasJaw = (bh?.jawDrop3D ?? 0) > 0 || !!bh?.crookedTeeth;
-    const skullGeo = buildHorrorSkullHeadGeo(headRx, headRy, headRz, hasJaw);
+    const skullGeo = buildHorrorSkullHeadGeo(headRx, headRy, headRz, hasJaw, lowPoly);
     head.add(mkMesh(skullGeo, skinMat, "horrorSkullMesh"));
     buildHorrorEyes3D(head, bh!, headRx, headRy, headRz, hScale, disposables);
     if (hasJaw) {
       jawSocket = buildHorrorJaw3D(head, bh!, headRx, headRy, headRz, hScale, skinMat, disposables);
     }
   } else {
-    const headGeo = buildSculptedHeadGeo(headRx, headRy, headRz);
+    const headGeo = buildSculptedHeadGeo(headRx, headRy, headRz, lowPoly);
     head.add(mkMesh(headGeo, skinMat, "headMesh"));
 
     // Sculpted 3D nose bridge + subtle nostril tip
@@ -806,16 +818,16 @@ export function createCharacter3D(cfg: CharacterConfig): Character3D {
     if (shortSleeve && bh) {
       // Torn short hospital sleeve exposing emaciated upper arm skin midway
       const sleeveLen = upperArmLen * 0.48;
-      upperArm.add(mkMesh(buildTaperedLimbGeo(upperRTop, upperRTop * 0.96, sleeveLen), topMat, `${pfx}SleeveMesh`));
-      const bareUpper = mkMesh(buildTaperedLimbGeo(upperRBot * 0.82, upperRBot * 0.72, upperArmLen * 0.56), skinMat, `${pfx}UpperArmMesh`);
+      upperArm.add(mkMesh(buildTaperedLimbGeo(upperRTop, upperRTop * 0.96, sleeveLen, limbSegs), topMat, `${pfx}SleeveMesh`));
+      const bareUpper = mkMesh(buildTaperedLimbGeo(upperRBot * 0.82, upperRBot * 0.72, upperArmLen * 0.56, limbSegs), skinMat, `${pfx}UpperArmMesh`);
       bareUpper.position.y = -sleeveLen * 0.92;
       upperArm.add(bareUpper);
     } else {
-      upperArm.add(mkMesh(buildTaperedLimbGeo(upperRTop, upperRBot, upperArmLen), topMat, `${pfx}UpperArmMesh`));
+      upperArm.add(mkMesh(buildTaperedLimbGeo(upperRTop, upperRBot, upperArmLen, limbSegs), topMat, `${pfx}UpperArmMesh`));
       if (shortSleeve && !isSil) {
-        const cuffMat = stylizedShade(new THREE.MeshLambertMaterial({ color: new THREE.Color(topHex).multiplyScalar(0.80) }), 1, 0.35);
+        const cuffMat = stylizedShade(new THREE.MeshLambertMaterial({ color: new THREE.Color(topHex).multiplyScalar(0.80), flatShading: lowPoly }), 1, 0.35);
         disposables.push(cuffMat);
-        const cuff = mkMesh(new THREE.CylinderGeometry(0.038 * hScale * gaunt, 0.039 * hScale * gaunt, 0.024 * hScale, 12), cuffMat, `${pfx}SleeveCuff`);
+        const cuff = mkMesh(new THREE.CylinderGeometry(0.038 * hScale * gaunt, 0.039 * hScale * gaunt, 0.024 * hScale, limbSegs), cuffMat, `${pfx}SleeveCuff`);
         cuff.position.set(0, -upperArmLen + 0.012 * hScale, 0);
         upperArm.add(cuff);
       }
@@ -828,8 +840,8 @@ export function createCharacter3D(cfg: CharacterConfig): Character3D {
     const fTop = (shortSleeve ? 0.027 : 0.033) * hScale * gaunt;
     const fBot = (shortSleeve ? 0.022 : 0.027) * hScale * gaunt;
     // Rounded anatomical elbow joint cap so sharply bent elbows never kink!
-    forearm.add(mkMesh(new THREE.SphereGeometry(fTop * 1.04, 10, 8), sleeveMat, `${pfx}ElbowJoint`));
-    forearm.add(mkMesh(buildTaperedLimbGeo(fTop, fBot, forearmLen), sleeveMat, `${pfx}ForearmMesh`));
+    forearm.add(mkMesh(new THREE.SphereGeometry(fTop * 1.04, limbSegs, 6), sleeveMat, `${pfx}ElbowJoint`));
+    forearm.add(mkMesh(buildTaperedLimbGeo(fTop, fBot, forearmLen, limbSegs), sleeveMat, `${pfx}ForearmMesh`));
 
     const hand = mkGroup(`${pfx}Hand`);
     hand.position.set(0, -forearmLen, 0);
@@ -881,12 +893,12 @@ export function createCharacter3D(cfg: CharacterConfig): Character3D {
     const thigh = mkGroup(`${pfx}Thigh`);
     thigh.position.set(side * 0.095 * hScale * gaunt, -0.02 * hScale, 0);
     pelvis.add(thigh);
-    thigh.add(mkMesh(buildTaperedLimbGeo(0.066 * hScale * gaunt, 0.044 * hScale * gaunt, thighLen), legMat, `${pfx}ThighMesh`));
+    thigh.add(mkMesh(buildTaperedLimbGeo(0.066 * hScale * gaunt, 0.044 * hScale * gaunt, thighLen, limbSegs), legMat, `${pfx}ThighMesh`));
 
     const calf = mkGroup(`${pfx}Calf`);
     calf.position.set(0, -thighLen, 0);
     thigh.add(calf);
-    calf.add(mkMesh(buildTaperedLimbGeo(0.044 * hScale * gaunt, 0.030 * hScale * gaunt, calfLen), legMat, `${pfx}CalfMesh`));
+    calf.add(mkMesh(buildTaperedLimbGeo(0.044 * hScale * gaunt, 0.030 * hScale * gaunt, calfLen, limbSegs), legMat, `${pfx}CalfMesh`));
 
     const foot = mkGroup(`${pfx}Foot`);
     foot.position.set(0, -calfLen, 0);
@@ -944,6 +956,7 @@ export function createCharacter3D(cfg: CharacterConfig): Character3D {
     const tex = faceCache.get({
       skinCol: skinHex,
       realisticStyle: resolvedOutlineMode === "off",
+      pixelFace: lowPoly,
       eyeHorror: bh?.eyeHorror,
       cheekSplitGrin: bh?.cheekSplitGrin,
       ...spec,

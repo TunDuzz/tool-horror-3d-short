@@ -13,9 +13,19 @@ const LabBase: React.FC<{ width: number; height: number }> = ({ width, height })
     dof={DOF}
     overlays={OVERLAYS}
     hud={HUD}
-    renderStyle="semiReal"
+    renderStyle="psxHorror"
+    psxOptions={{
+      pixelScale: 3.0,
+      colorLevels: 22,
+      ditherStrength: 0.85,
+      scanlineStrength: 0.19,
+      vhsWave: 0.28,
+      chromaPx: 1.65,
+      crtCurvature: 0.048,
+      vertexSnap: 280,
+    }}
     ssao={true}
-    grainAmount={0.018}
+    grainAmount={0.014}
     width={width}
     height={height}
     background="#06060b"
