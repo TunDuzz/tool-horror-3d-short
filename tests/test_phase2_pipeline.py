@@ -692,6 +692,48 @@ class TestPhase2Pipeline(unittest.TestCase):
             for mood, _, _ in per.EMOTION_SLOTS:
                 self.assertTrue(os.path.isfile(os.path.join(out_refs, f"{mood}.wav")))
 
+    def test_v64_sfx_cc0_catalog_verify_reel_and_load_sfx_or_fallback(self):
+        # 1. Verify CC0_OPEN_HORROR_PACK has >= 24 unique valid horror Foley slugs & 12 TangoFlux cues
+        slugs = [row[0] for row in sm.CC0_OPEN_HORROR_PACK]
+        self.assertGreaterEqual(len(slugs), 24)
+        self.assertEqual(len(slugs), len(set(slugs)))
+        self.assertGreaterEqual(len(sm.DEFAULT_SFX_CUES), 12)
+
+        with tempfile.TemporaryDirectory() as td:
+            lib = os.path.join(td, "sfx_library")
+            src_dir = os.path.join(td, "raw")
+            os.makedirs(src_dir)
+            t = np.arange(int(0.6 * sm.SR_LIB), dtype=np.float64) / sm.SR_LIB
+            sig = np.stack([0.35 * np.sin(2.0 * np.pi * 220.0 * t), 0.35 * np.sin(2.0 * np.pi * 220.0 * t)])
+            sm.write_wav_stereo16(os.path.join(src_dir, "wooden_door_creak.wav"), sig, sm.SR_LIB)
+            sm.write_wav_stereo16(os.path.join(src_dir, "rain_on_roof.wav"), sig * 0.5, sm.SR_LIB)
+
+            sm.main(["import-local", "--src", src_dir, "--library", lib])
+            sm.main(["verify", "--library", lib])
+            reel = sm.build_sfx_audition_reel(lib, os.path.join(td, "sfx_audition_reel.wav"))
+            cat = sm.write_sfx_catalog(lib, os.path.join(td, "SFX_CATALOG.md"), reel_wav=reel)
+            self.assertTrue(os.path.isfile(reel))
+            self.assertTrue(os.path.isfile(cat))
+            with open(cat, encoding="utf-8") as fp:
+                txt = fp.read()
+            self.assertIn("wooden_door_creak", txt)
+            self.assertIn("rain_on_roof", txt)
+
+            # 2. load_sfx_or_fallback prefers real WAV over fallback_fn, and uses fallback when missing
+            fallback_called = {"n": 0}
+
+            def _fb():
+                fallback_called["n"] += 1
+                return np.ones((2, 4800), dtype=np.float64) * 0.1
+
+            real_arr = mb.load_sfx_or_fallback("wooden_door_creak", fallback_fn=_fb, library_dir=lib, dur_sec=0.5)
+            self.assertEqual(fallback_called["n"], 0)
+            self.assertEqual(real_arr.shape, (2, dsp.ns(0.5)))
+
+            syn_arr = mb.load_sfx_or_fallback("nonexistent_foley_xyz", fallback_fn=_fb, library_dir=lib, dur_sec=0.1)
+            self.assertEqual(fallback_called["n"], 1)
+            self.assertEqual(syn_arr.shape, (2, 4800))
+
 
 if __name__ == "__main__":
     unittest.main()

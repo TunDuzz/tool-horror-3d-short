@@ -38,17 +38,20 @@ Zero-distortion, act-level coherent Vietnamese horror voice + **Asset-First Real
 
 ## 2. Managing Real Cinema SFX (`scripts/sfx_manager.py`)
 
-### A. Free Real Recorded CC0 Horror Foley (Freesound API / Local Folder)
+### A. Free Real Recorded CC0 Horror Foley (25-Clip Open Pack — ZERO API Key + Freesound + Local)
 ```bash
-# 1. Fetch 16 essential CC0 real-recorded horror Foley clips (free key: https://freesound.org/apiv2/apply/)
+# 1. Fetch 25 verified 100% CC0 real-recorded horror Foley clips (ZERO API key, commercial-safe!)
+python3 scripts/sfx_manager.py fetch-cc0-open --library shorts-project/audio/sfx_library
+
+# 2. Verify all library WAVs (48 kHz stereo PCM16, 0 clipping)
+python3 scripts/sfx_manager.py verify --library shorts-project/audio/sfx_library
+
+# 3. Optional: fetch additional custom CC0 queries via Freesound API (free key: https://freesound.org/apiv2/apply/)
 export FREESOUND_API_KEY="your_free_key"
-python3 scripts/sfx_manager.py fetch-freesound --preset horror-starter --library audio/sfx_library
+python3 scripts/sfx_manager.py fetch-freesound --preset horror-starter --library shorts-project/audio/sfx_library
 
-# 2. Or import your own local WAV/MP3/FLAC Foley folder (normalized cleanly to 48kHz stereo 24-bit WAV)
-python3 scripts/sfx_manager.py import-local --src /path/to/my_foley --library audio/sfx_library
-
-# 3. Inspect available assets
-python3 scripts/sfx_manager.py list --library audio/sfx_library
+# 4. Or import your own local WAV/MP3/FLAC Foley folder (normalized cleanly to 48kHz stereo WAV)
+python3 scripts/sfx_manager.py import-local --src /path/to/my_foley --library shorts-project/audio/sfx_library
 ```
 
 ### B. Open-Source Local GPU Neural SFX Packs (`TangoFlux` & `MMAudio`)

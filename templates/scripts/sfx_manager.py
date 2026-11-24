@@ -15,8 +15,10 @@ Subcommands:
   python3 scripts/sfx_manager.py list --library shorts-project/audio/sfx_library
 """
 
+from concurrent.futures import ThreadPoolExecutor, as_completed
 import argparse
 import json
+import math
 import os
 import re
 import shutil
@@ -27,7 +29,40 @@ import urllib.parse
 import urllib.request
 import wave
 
+import numpy as np
+
 SR_LIB = 48000
+CC0_GITHUB_RAW_BASE = "https://raw.githubusercontent.com/lavenderdotpet/CC0-Public-Domain-Sounds/main"
+
+# 25 verified 100% CC0 / Public Domain real-recorded horror Foley & ambience assets (zero API key required, commercial-safe!)
+# Tuple: (slug, category, repo_rel_path, vi_desc, highpass_hz, max_dur_sec)
+CC0_OPEN_HORROR_PACK = [
+    ("wooden_door_creak", "foley", "kenney_rpgaudio/Audio/creak1.ogg", "Cửa gỗ cũ kẽo kẹt chậm", 45.0, 8.0),
+    ("floorboard_creak", "foley", "kenney_rpgaudio/Audio/creak2.ogg", "Sàn gỗ / gác xép kêu răng rắc", 45.0, 8.0),
+    ("door_open_creak", "foley", "kenney_rpgaudio/Audio/doorOpen_1.ogg", "Cánh cửa gỗ tự hé mở", 45.0, 8.0),
+    ("heavy_door_slam", "foley", "100-CC0-SFX/door_close_01.ogg", "Cửa gỗ đóng sập mạnh", 35.0, 6.0),
+    ("door_bolt_latch", "foley", "100-CC0-wood-metal-SFX/lock_open_01.ogg", "Chốt sắt / khóa cửa trượt kêu lách cách", 60.0, 6.0),
+    ("door_bang_impact", "foley", "25-CC0-bang-sfx/bang_01.ogg", "Cú đập mạnh vào cửa", 30.0, 6.0),
+    ("wood_footsteps_slow", "foley", "100-cc0-sfx-2/sfx100v2_footstep_wood_01.ogg", "Bước chân trên sàn gỗ cũ", 45.0, 8.0),
+    ("wet_footsteps", "foley", "100-cc0-sfx-2/sfx100v2_footstep_wet_01.ogg", "Bước chân trên vũng nước / ngõ mưa", 50.0, 8.0),
+    ("rain_on_roof", "ambience", "30-cc0-sfx-loops/rain.ogg", "Mưa đêm rơi liên tục (lặp mượt)", 60.0, 20.0),
+    ("distant_thunder", "ambience", "100-cc0-sfx-2/sfx100v2_thunder_01.ogg", "Sấm rền xa giữa đêm mưa", 25.0, 16.0),
+    ("room_tone_dark", "ambience", "bb - Fans and Drones (Jul 2021)/Outside.wav", "Không gian đêm yên ắng tự nhiên", 40.0, 18.0),
+    ("wind_howl_night", "ambience", "30-cc0-sfx-loops/ambient_01.ogg", "Gió đêm rít qua khe cửa", 45.0, 18.0),
+    ("clock_ticking", "ambience", "bb - Smol Mechanisms (May 2021)/Ratchet Muted 1.wav", "Tiếng tích tắc cơ khí / đồng hồ lúc 01:06", 80.0, 4.0),
+    ("insect_flies", "ambience", "80-CC0-creature-SFX/bug_01.ogg", "Tiếng ruồi / côn trùng đêm vo ve", 80.0, 8.0),
+    ("glass_break", "foley", "100-cc0-sfx-2/sfx100v2_glass_01.ogg", "Tiếng kính vỡ / va chạm sắc", 60.0, 6.0),
+    ("flashlight_click", "foley", "bb - Smol Mechanisms (May 2021)/Click Button 1.wav", "Bấm công tắc đèn pin cơ thật", 70.0, 4.0),
+    ("paper_talisman_rustle", "foley", "bb - Books, Paper, Writing (Jan 2021)/Page Turn 1.wav", "Tiếng lá bùa giấy vàng / thư cũ sột soạt", 80.0, 6.0),
+    ("knife_metal_scrape", "foley", "kenney_rpgaudio/Audio/drawKnife1.ogg", "Tiếng kim loại rít lạnh sống lưng", 80.0, 6.0),
+    ("vhs_static", "analog", "Micro Pack - Record Fuzzies/Classic Record Fuzz.wav", "Nhiễu hạt analog băng VHS / rách băng", 60.0, 12.0),
+    ("emf_glitch_buzz", "analog", "Micro Pack - NazdyNate - Electromagnetic Sounds/NazdyNate - EM Room Noise 1.wav", "Nhiễu sóng điện từ / điện thoại lúc ma hiện hình", 60.0, 10.0),
+    ("whip_pan_whoosh", "transition", "Micro Pack - Organic Wooshes/Classic Swish 1.wav", "Tiếng vút quay đầu đột ngột (whipPan)", 50.0, 4.0),
+    ("breathing_heavy", "vocal_fx", "BB_2HTC Samples Vol 4/Weird/2022-04-16 Triple-C THICCC - Heavy Breathing.wav", "Hơi thở dốc nặng trong bóng tối", 55.0, 12.0),
+    ("cello_dread_sting", "tension", "bb - Novice Cello (Nov 2021)/C2 - Sforzando 1.wav", "Tiếng kéo dây Cello C2 trầm rợn thật", 0.0, 10.0),
+    ("cinematic_boom", "tension", "BB_2HTC Samples Vol 4/Drums/2022-08-17 Approaching the Crash Site - Boom.wav", "Cú đấm sub-bass điện ảnh sau Dead Silence", 0.0, 8.0),
+    ("gong_omen", "tension", "100-CC0-SFX/gong_01.ogg", "Tiếng chiêng / chuông điềm báo kinh dị dân gian", 25.0, 10.0),
+]
 
 HORROR_STARTER_PRESETS = [
     ("wooden_door_creak", "wooden door creak slow eerie", "foley"),
@@ -49,12 +84,18 @@ HORROR_STARTER_PRESETS = [
 ]
 
 DEFAULT_SFX_CUES = [
-    {"name": "wooden_door_creak", "dur": 4.0, "prompt": "Slow heavy wooden door creaking open in a silent dark old house, realistic foley, close mic"},
-    {"name": "wood_footsteps_slow", "dur": 6.0, "prompt": "Slow cautious footsteps walking on creaking old wooden floorboards at night, realistic horror foley"},
-    {"name": "rain_night_interior", "dur": 12.0, "prompt": "Muffled heavy night rain falling outside an old rural house with soft distant thunder rumble"},
-    {"name": "flashlight_click_fail", "dur": 3.0, "prompt": "Tactile metal flashlight button click followed by brief electrical flicker hum in dead silence"},
-    {"name": "cinematic_sub_boom", "dur": 4.0, "prompt": "Deep dark cinematic horror sub bass boom impact with long cold dark hall tail"},
+    {"name": "wooden_door_creak", "dur": 4.0, "prompt": "Slow heavy wooden door creaking open in a silent dark old Vietnamese rural house, realistic foley, close mic"},
+    {"name": "wood_footsteps_slow", "dur": 6.0, "prompt": "Slow cautious bare footsteps walking on creaking old wooden floorboards at night, realistic horror foley"},
+    {"name": "rain_night_interior", "dur": 12.0, "prompt": "Muffled heavy night rain falling on an old tin roof outside a quiet dark house with soft distant thunder rumble"},
+    {"name": "door_bolt_slide", "dur": 3.0, "prompt": "Rusted iron door bolt slowly sliding open by itself on an old wooden door in dead silence, tactile close-mic foley"},
+    {"name": "fingernails_scratch_wood", "dur": 4.5, "prompt": "Slow eerie fingernails lightly scratching on the outside of a wooden door at night, quiet tense horror foley"},
+    {"name": "flashlight_click_fail", "dur": 3.0, "prompt": "Tactile metal flashlight button click followed by brief electrical flicker sputter hum in dead silence"},
+    {"name": "paper_talisman_flutter", "dur": 3.5, "prompt": "Dry yellow paper talisman fluttering and rustling softly in cold night draft inside a dark room"},
+    {"name": "terrified_human_gasp", "dur": 2.5, "prompt": "Sudden sharp terrified human intake breath gasp in complete silence, realistic close-mic foley"},
+    {"name": "heavy_door_slam_hall", "dur": 3.0, "prompt": "Heavy old wooden door slamming violently shut with short dark concrete corridor echo"},
     {"name": "vhs_tape_glitch", "dur": 2.0, "prompt": "Short sharp analog VHS magnetic tape static burst and tracking glitch crackle"},
+    {"name": "cinematic_sub_boom", "dur": 4.0, "prompt": "Deep dark cinematic horror sub bass boom impact with long cold dark hall tail"},
+    {"name": "cello_bow_screech_dread", "dur": 5.0, "prompt": "Single dark dissonant low cello bow swell descending slowly into dread silence, film horror score"},
 ]
 
 
@@ -90,14 +131,242 @@ def probe_wav_dur(path: str) -> float:
         return round(float(out), 4)
 
 
-def convert_to_library_wav(src_path: str, dst_wav: str, max_dur: float | None = None):
-    """Normalize any audio file to crisp 48 kHz stereo PCM16 WAV (universal stdlib wave + Remotion compatible)."""
+def read_wav_stereo(path: str) -> tuple[np.ndarray, int]:
+    """Read PCM16 WAV as `(2, N)` float64 array."""
+    with wave.open(path, "rb") as w:
+        sr, ch, sw, n = w.getframerate(), w.getnchannels(), w.getsampwidth(), w.getnframes()
+        raw = w.readframes(n)
+    if sw == 2:
+        x = np.frombuffer(raw, "<i2").astype(np.float64) / 32768.0
+    elif sw == 4:
+        x = np.frombuffer(raw, "<i4").astype(np.float64) / float(1 << 31)
+    else:
+        raise ValueError(f"Unsupported sample width {sw} in {path}")
+    if ch == 1:
+        x = np.stack([x, x])
+    else:
+        x = x.reshape(-1, ch).T[:2]
+    return x, sr
+
+
+def write_wav_stereo16(path: str, x: np.ndarray, sr: int = SR_LIB):
+    os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
+    arr = np.asarray(x, dtype=np.float64)
+    if arr.ndim == 1:
+        arr = np.stack([arr, arr])
+    inter = np.clip(np.round(arr[:2].T * 32767.0), -32768, 32767).astype("<i2")
+    with wave.open(path, "wb") as w:
+        w.setnchannels(2)
+        w.setsampwidth(2)
+        w.setframerate(sr)
+        w.writeframes(inter.tobytes())
+
+
+def convert_to_library_wav(src_path: str, dst_wav: str, max_dur: float | None = None, highpass_hz: float = 0.0, peak_ceil_db: float = -1.5):
+    """Normalize any audio file to crisp 48 kHz stereo PCM16 WAV with 0 clipping (universal stdlib wave + Remotion compatible)."""
     os.makedirs(os.path.dirname(os.path.abspath(dst_wav)), exist_ok=True)
-    cmd = ["ffmpeg", "-y", "-v", "error", "-i", src_path]
-    if max_dur and max_dur > 0:
-        cmd.extend(["-t", f"{max_dur:.3f}"])
-    cmd.extend(["-ar", str(SR_LIB), "-ac", "2", "-c:a", "pcm_s16le", dst_wav])
-    subprocess.run(cmd, check=True)
+    with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tf:
+        tmp_wav = tf.name
+    try:
+        cmd = ["ffmpeg", "-y", "-v", "error", "-i", src_path]
+        if max_dur and max_dur > 0:
+            cmd.extend(["-t", f"{max_dur:.3f}"])
+        if highpass_hz and highpass_hz > 0:
+            cmd.extend(["-af", f"highpass=f={highpass_hz:.1f}"])
+        cmd.extend(["-ar", str(SR_LIB), "-ac", "2", "-c:a", "pcm_s16le", tmp_wav])
+        subprocess.run(cmd, check=True)
+
+        x, sr = read_wav_stereo(tmp_wav)
+        if x.shape[1] > 0:
+            # Normalize quiet recordings gently without over-amplifying room floor; hard-protect peak <= peak_ceil_db
+            pk = float(np.max(np.abs(x)))
+            ceil_lin = 10.0 ** (float(peak_ceil_db) / 20.0)
+            if pk > 1e-6:
+                target_pk = ceil_lin if pk > ceil_lin else min(ceil_lin, max(pk, 10.0 ** (-4.0 / 20.0)))
+                # Cap boost to +14 dB so subtle ambiences don't turn noisy
+                gain = min(target_pk / pk, 10.0 ** (14.0 / 20.0))
+                if pk > ceil_lin:
+                    gain = ceil_lin / pk
+                x = x * gain
+            nf = min(int(0.008 * sr), x.shape[1] // 6)
+            if nf > 1:
+                x[:, :nf] *= np.linspace(0.0, 1.0, nf)[None, :]
+                x[:, -nf:] *= np.linspace(1.0, 0.0, nf)[None, :]
+        write_wav_stereo16(dst_wav, x, sr)
+    finally:
+        if os.path.exists(tmp_wav):
+            os.remove(tmp_wav)
+
+
+def inspect_wav_metrics(path: str) -> dict:
+    with wave.open(path, "rb") as w:
+        sr, ch, sw, n = w.getframerate(), w.getnchannels(), w.getsampwidth(), w.getnframes()
+    x, _ = read_wav_stereo(path)
+    pk = float(np.max(np.abs(x))) if x.size else 0.0
+    rms = float(np.sqrt(np.mean(x * x) + 1e-18)) if x.size else 0.0
+    clips = int(np.sum(np.abs(x) >= 0.999))
+    return {
+        "sr": sr,
+        "ch": ch,
+        "dur": round(n / float(max(1, sr)), 3),
+        "peak_dbfs": round(20.0 * math.log10(max(pk, 1e-9)), 2),
+        "rms_dbfs": round(20.0 * math.log10(max(rms, 1e-9)), 2),
+        "clips": clips,
+    }
+
+
+def build_sfx_audition_reel(lib_dir: str, out_wav: str, max_per_clip_s: float = 3.5) -> str:
+    """Build ONE stereo 48 kHz audition reel playing every SFX in manifest.json sequentially with crisp 660Hz pips."""
+    mf = load_manifest(lib_dir)
+    assets = mf.get("assets") or {}
+    t_pip = np.arange(int(0.075 * SR_LIB), dtype=np.float64) / SR_LIB
+    pip_m = 0.07 * np.sin(2.0 * np.pi * 660.0 * t_pip) * np.hanning(len(t_pip))
+    pip = np.stack([pip_m, pip_m])
+    gap = np.zeros((2, int(0.38 * SR_LIB)), dtype=np.float64)
+
+    parts = []
+    max_n = int(round(max_per_clip_s * SR_LIB))
+    for slug in sorted(assets.keys()):
+        p = os.path.join(lib_dir, assets[slug]["file"])
+        if not os.path.isfile(p):
+            continue
+        x, _ = read_wav_stereo(p)
+        if x.shape[1] > max_n:
+            x = x[:, :max_n].copy()
+            nf = min(int(0.06 * SR_LIB), x.shape[1] // 4)
+            x[:, -nf:] *= np.linspace(1.0, 0.0, nf)[None, :]
+        parts.extend([pip, gap, x, gap])
+    reel = np.concatenate(parts, axis=1) if parts else np.zeros((2, SR_LIB), dtype=np.float64)
+    pk = float(np.max(np.abs(reel)))
+    if pk > 0.92:
+        reel *= 0.92 / pk
+    write_wav_stereo16(out_wav, reel, SR_LIB)
+    return out_wav
+
+
+def write_sfx_catalog(lib_dir: str, out_md: str, reel_wav: str | None = None) -> str:
+    """Write a clickable Markdown SFX catalog (`SFX_CATALOG.md`) with license, duration, peak, clips & file:// links."""
+    mf = load_manifest(lib_dir)
+    assets = mf.get("assets") or {}
+    lines = [
+        "# Kho SFX Foley Điện Ảnh Thu Âm Thật (`100% CC0` · 48 kHz Stereo)",
+        "",
+        f"- **Thư mục kho:** `{os.path.abspath(lib_dir)}` (**{len(assets)}** tài nguyên chuẩn `48 kHz stereo PCM16 WAV`, an toàn thương mại YouTube/TikTok).",
+    ]
+    if reel_wav and os.path.isfile(reel_wav):
+        lines.append(f"- **Nghe nối tiếp toàn bộ kho SFX (1 file duy nhất, có tiếng bíp ngăn cách):** [sfx_audition_reel.wav](file://{os.path.abspath(reel_wav)})")
+    lines.extend([
+        "",
+        "| # | Tên chuẩn (`slug`) | Nhóm | Mô tả / Công dụng | Độ dài | Peak · Clips | Giấy phép | Nghe trực tiếp |",
+        "|---|---|---|---|---|---|---|---|",
+    ])
+    for idx, slug in enumerate(sorted(assets.keys()), 1):
+        info = assets[slug]
+        ap = os.path.abspath(os.path.join(lib_dir, info["file"]))
+        m = inspect_wav_metrics(ap) if os.path.isfile(ap) else {"dur": 0.0, "peak_dbfs": -99.0, "clips": -1}
+        desc = str(info.get("desc") or info.get("query") or info.get("source") or "").replace("|", "/")
+        lines.append(
+            f"| {idx:02d} | `{slug}` | `{info.get('category', '')}` | {desc} | "
+            f"{m['dur']:.2f}s | `{m['peak_dbfs']:.1f} dBFS` · `{m['clips']}` clips | "
+            f"`{info.get('license', 'CC0')}` | [{info['file']}](file://{ap}) |"
+        )
+    os.makedirs(os.path.dirname(os.path.abspath(out_md)), exist_ok=True)
+    with open(out_md, "w", encoding="utf-8") as fp:
+        fp.write("\n".join(lines) + "\n")
+    return out_md
+
+
+def cmd_fetch_cc0_open(args):
+    """Fetch 25 verified strict-CC0 real-recorded horror Foley assets directly from public GitHub (ZERO API key)."""
+    only_set = {safe_slug(s) for s in args.only.split(",") if s.strip()} if args.only else None
+    jobs = [row for row in CC0_OPEN_HORROR_PACK if (only_set is None or row[0] in only_set)]
+    if not jobs:
+        raise ValueError(f"No matching CC0 slugs for --only={args.only!r}")
+
+    os.makedirs(args.library, exist_ok=True)
+    mf = load_manifest(args.library)
+    fetched = 0
+
+    def _download_one(row, td):
+        slug, cat, rel_path, desc, hp_hz, max_d = row
+        dst_wav = os.path.join(args.library, f"{slug}.wav")
+        if os.path.isfile(dst_wav) and not args.overwrite:
+            return slug, "skip", None
+        url = f"{CC0_GITHUB_RAW_BASE}/{urllib.parse.quote(rel_path, safe='/')}"
+        ext = os.path.splitext(rel_path)[1].lower() or ".wav"
+        tmp_src = os.path.join(td, f"{slug}{ext}")
+        req = urllib.request.Request(url, headers={"User-Agent": "HorrorEngineV64-CC0SFX/1.0"})
+        with urllib.request.urlopen(req, timeout=30) as resp, open(tmp_src, "wb") as fp:
+            fp.write(resp.read())
+        convert_to_library_wav(tmp_src, dst_wav, max_dur=max_d, highpass_hz=hp_hz)
+        m = inspect_wav_metrics(dst_wav)
+        entry = {
+            "file": f"{slug}.wav",
+            "category": cat,
+            "desc": desc,
+            "dur": m["dur"],
+            "peak_dbfs": m["peak_dbfs"],
+            "clips": m["clips"],
+            "license": "CC0-1.0 (Public Domain)",
+            "source": f"github:lavenderdotpet/CC0-Public-Domain-Sounds/{rel_path}",
+        }
+        return slug, "ok", entry
+
+    with tempfile.TemporaryDirectory(prefix="cc0_sfx_") as td:
+        with ThreadPoolExecutor(max_workers=4) as ex:
+            futs = {ex.submit(_download_one, row, td): row for row in jobs}
+            for fut in as_completed(futs):
+                slug = futs[fut][0]
+                try:
+                    sl, status, entry = fut.result()
+                    if status == "skip":
+                        print(f"  SKIP (exists): {sl}.wav")
+                    elif status == "ok" and entry is not None:
+                        mf["assets"][sl] = entry
+                        fetched += 1
+                        print(f"  OK [{entry['category']:10s}] {sl:22s} ({entry['dur']:5.2f}s · {entry['peak_dbfs']:5.1f} dBFS · clips={entry['clips']})")
+                except Exception as exc:
+                    print(f"  WARN '{slug}': {exc}")
+
+    mf["version"] = "v6.4-sfx-library"
+    save_manifest(args.library, mf)
+
+    reel_wav = None
+    if not args.no_reel and mf.get("assets"):
+        reel_dir = args.catalog_dir or args.library
+        reel_wav = build_sfx_audition_reel(args.library, os.path.join(reel_dir, "sfx_audition_reel.wav"))
+        cat_md = write_sfx_catalog(args.library, os.path.join(reel_dir, "SFX_CATALOG.md"), reel_wav=reel_wav)
+        print(f"AUDITION REEL -> {reel_wav}")
+        print(f"SFX CATALOG   -> {cat_md}")
+    print(f"CC0 OPEN PACK DONE: fetched {fetched} new assets into {args.library} (total={len(mf['assets'])})")
+
+
+def cmd_verify(args):
+    """Verify every WAV listed in manifest.json exists, is 48 kHz stereo PCM16, non-empty, and has 0 clipping."""
+    mf = load_manifest(args.library)
+    assets = mf.get("assets") or {}
+    if not assets:
+        print(f"VERIFY FAIL: SFX library empty ({args.library})", file=sys.stderr)
+        sys.exit(1)
+    bad = 0
+    print(f"VERIFYING SFX LIBRARY ({args.library}) — {len(assets)} assets:")
+    for slug in sorted(assets.keys()):
+        info = assets[slug]
+        p = os.path.join(args.library, info["file"])
+        if not os.path.isfile(p):
+            print(f"  [FAIL] {slug:24s} MISSING FILE")
+            bad += 1
+            continue
+        m = inspect_wav_metrics(p)
+        ok = (m["sr"] == SR_LIB) and (m["ch"] == 2) and (m["dur"] >= 0.05) and (m["clips"] == 0)
+        tag = "OK  " if ok else "FAIL"
+        if not ok:
+            bad += 1
+        print(f"  [{tag}] {slug:24s} | {m['dur']:5.2f}s | {m['sr']}Hz {m['ch']}ch | peak={m['peak_dbfs']:6.2f} dBFS | clips={m['clips']}")
+    if bad:
+        print(f"VERIFY FAILED: {bad}/{len(assets)} assets failed quality check", file=sys.stderr)
+        sys.exit(1)
+    print(f"VERIFY OK: {len(assets)}/{len(assets)} real SFX assets passed (48 kHz stereo, 0 clips)")
 
 
 def freesound_search(query: str, api_key: str, max_dur: float = 25.0, page_size: int = 5) -> list:
@@ -316,8 +585,16 @@ def cmd_list(args):
 
 
 def build_parser():
-    ap = argparse.ArgumentParser(description="Horror Engine v6.0 Asset-First Cinema SFX Manager (CC0 Freesound + TangoFlux + MMAudio).")
+    ap = argparse.ArgumentParser(description="Horror Engine v6.4 Asset-First Cinema SFX Manager (100% CC0 Open Pack + Freesound + TangoFlux + MMAudio).")
     sub = ap.add_subparsers(dest="cmd", required=True)
+
+    p_cc0 = sub.add_parser("fetch-cc0-open", help="Fetch 25 verified 100% CC0 real-recorded horror Foley assets (ZERO API key!)")
+    p_cc0.add_argument("--library", default="audio/sfx_library")
+    p_cc0.add_argument("--catalog-dir", default=None, help="Optional folder for SFX_CATALOG.md & sfx_audition_reel.wav (defaults to --library)")
+    p_cc0.add_argument("--only", default=None, help="Comma-separated subset of slugs to fetch/replace")
+    p_cc0.add_argument("--overwrite", action="store_true")
+    p_cc0.add_argument("--no-reel", action="store_true", help="Skip generating sfx_audition_reel.wav and SFX_CATALOG.md")
+    p_cc0.set_defaults(func=cmd_fetch_cc0_open)
 
     p_fs = sub.add_parser("fetch-freesound", help="Fetch real recorded CC0 horror Foley from Freesound API")
     p_fs.add_argument("--preset", choices=["horror-starter"], default=None)
@@ -347,6 +624,10 @@ def build_parser():
     p_ls = sub.add_parser("list", help="List available normalized assets in audio/sfx_library")
     p_ls.add_argument("--library", default="audio/sfx_library")
     p_ls.set_defaults(func=cmd_list)
+
+    p_vf = sub.add_parser("verify", help="Verify all SFX assets in audio/sfx_library are 48kHz stereo with 0 clipping")
+    p_vf.add_argument("--library", default="audio/sfx_library")
+    p_vf.set_defaults(func=cmd_verify)
     return ap
 
 

@@ -100,6 +100,41 @@ def load_sfx_asset(
     return fades(x, fade_in, fade_out)
 
 
+def load_sfx_or_fallback(
+    name_or_path,
+    fallback_fn=None,
+    library_dir=None,
+    dur_sec=None,
+    gain_db=0.0,
+    pan_pos=None,
+    loop=False,
+    fade_in=0.015,
+    fade_out=0.04,
+    verbose=False,
+):
+    """Asset-First v6.4 helper: load a real CC0/Neural SFX asset first; fall back cleanly to `fallback_fn()` if absent."""
+    real = load_sfx_asset(
+        name_or_path,
+        library_dir=library_dir,
+        dur_sec=dur_sec,
+        gain_db=gain_db,
+        pan_pos=pan_pos,
+        loop=loop,
+        fade_in=fade_in,
+        fade_out=fade_out,
+    )
+    if real is not None:
+        if verbose:
+            print(f"  [SFX REAL ] {name_or_path} ({real.shape[1] / float(SR):.2f}s, gain={gain_db:+.1f} dB)")
+        return real
+    if fallback_fn is not None:
+        syn = fallback_fn()
+        if verbose:
+            print(f"  [SFX SYNTH] {name_or_path} (fallback procedural)")
+        return syn
+    return np.zeros((2, ns(dur_sec or 0.1)), dtype=np.float64)
+
+
 def cached(cache_dir, name, fn):
     os.makedirs(cache_dir, exist_ok=True)
     p = os.path.join(cache_dir, name + ".npy")
