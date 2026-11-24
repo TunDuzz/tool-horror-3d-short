@@ -49,12 +49,22 @@ description: Use when writing coherent act-level horror narration scripts (2.7-3
 
 ## 2. Generating Studio-Clean Neural Voice (100% Free & Open-Source)
 
-### Option A — Local CPU 48 kHz (`VieNeu-TTS v3 Turbo`, Runs Right Here!)
+### Option A — Local CPU 48 kHz (`VieNeu-TTS v3 Turbo` + Reusable 6-Clip Emotion Bank!)
 ```bash
-# Built-in 48 kHz Vietnamese voice (or pass --ref-audio narrator.wav / --emotion-refs refs/ for 3-8s instant cloning!)
+# Optional one-time 3-minute setup: build permanent 6-emotion refs (calm, curious, whisper, fear, panic, dread)
+python3 scripts/prepare_emotion_refs.py guide
+python3 scripts/prepare_emotion_refs.py split-auto --src emotions_take.m4a --out-dir audio/emotion_refs
+python3 scripts/prepare_emotion_refs.py check --dir audio/emotion_refs
+
+# Generate clean 48 kHz voice (auto-detects audio/emotion_refs/ if present, or uses built-in per-mood silence_p/temp + clean tempo!)
 python3 scripts/gen_horror_voice.py --script out/<project>/SCRIPT.md \
   --tts-engine vieneu --out-dir out/<project>/voice --no-vc
+
+# Or export 1-file So-VITS-SVC guide (unifies all 6 emotion refs into your 1 narrator voice via -na!)
+python3 scripts/gen_horror_voice.py --script out/<project>/SCRIPT.md \
+  --tts-engine vieneu --export-vc-pack out/<project>/vc_pack
 ```
+*(Also supports direct Voice-to-Voice Directing via `--human-guide my_rough_take.m4a --export-vc-pack ...`!)*
 
 ### Option B — Local GPU Acting Pack (`IndexTTS-2 Vietnamese` / `F5-TTS-Vietnamese`) + Optional So-VITS-SVC (`-na`)
 1. **This PC — Export Act-Level GPU Pack (`acts.json` with 8-D emotion vectors + ready scripts):**

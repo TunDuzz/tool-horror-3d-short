@@ -47,22 +47,32 @@ VIENEU_TAG_RE = re.compile(r"\[(?:thở\s+dài|hắng\s+giọng|cười)\]", re.
 CLOCK_RE = re.compile(r"\b(\d{1,2}):(\d{2})\b")
 DATE_RE = re.compile(r"\b(\d{1,2})/(\d{1,2})(?:/(\d{2,4}))?\b")
 
-# Clean act-level mood profiles:
-#   - `speed`: subtle transparent tempo factor (used only on clean edge fallback; neural engines keep natural rhythm!)
-#   - `gain_db`: clean studio level contour (no harsh clipping or noise distortion)
+# Clean act-level mood profiles (v6.1):
+#   - `vn_silence_p` / `vn_temp`: native neural phrasing pause & expressiveness inside `VieNeu-TTS v3 Turbo`!
+#   - `clean_tempo`: subtle formant-preserved studio tempo trim via `rubberband` (0.82x..1.08x, 0% distortion!)
+#   - `multi_style_voice`: optional built-in preset variation strictly for `--multi-style-guide` before So-VITS-SVC (-na)
+#   - `gain_db`: clean studio level contour
 #   - `indextts2_emo`: exact 8-D emotion vector [happy, angry, sad, afraid, disgusted, melancholic, surprised, calm]
 MOOD_PROFILES = {
     "calm_omen": {
-        "speed": 0.92,
+        "speed": 0.90,
+        "clean_tempo": 0.88,
+        "vn_silence_p": 0.28,
+        "vn_temp": 0.70,
+        "multi_style_voice": "Thiền Tâm Đức",
         "pitch_semi": -0.35,
         "gain_db": 0.0,
-        "tail_pad": 0.22,
+        "tail_pad": 0.24,
         "ref_key": "calm",
         "indextts2_emo": [0.0, 0.0, 0.15, 0.15, 0.0, 0.35, 0.0, 0.65],
         "acting_prompt": "Kể chuyện kinh dị tiếng Việt trầm lắng, chậm rãi, tự nhiên và ẩn chứa điềm báo rờn rợn",
     },
     "curious": {
         "speed": 0.94,
+        "clean_tempo": 0.92,
+        "vn_silence_p": 0.24,
+        "vn_temp": 0.90,
+        "multi_style_voice": "Thiện Minh",
         "pitch_semi": +0.15,
         "gain_db": -0.5,
         "tail_pad": 0.24,
@@ -72,6 +82,10 @@ MOOD_PROFILES = {
     },
     "tense": {
         "speed": 1.02,
+        "clean_tempo": 1.00,
+        "vn_silence_p": 0.12,
+        "vn_temp": 0.88,
+        "multi_style_voice": "Hải Đăng",
         "pitch_semi": 0.0,
         "gain_db": +0.5,
         "tail_pad": 0.16,
@@ -80,16 +94,24 @@ MOOD_PROFILES = {
         "acting_prompt": "Đọc tiếng Việt với nhịp độ căng thẳng, hồi hộp và cảnh giác tăng dần",
     },
     "whisper": {
-        "speed": 0.88,
+        "speed": 0.86,
+        "clean_tempo": 0.84,
+        "vn_silence_p": 0.40,
+        "vn_temp": 0.74,
+        "multi_style_voice": "Thiền Tâm Đức",
         "pitch_semi": -0.45,
         "gain_db": -3.5,
-        "tail_pad": 0.26,
+        "tail_pad": 0.28,
         "ref_key": "whisper",
         "indextts2_emo": [0.0, 0.0, 0.15, 0.60, 0.0, 0.25, 0.10, 0.35],
         "acting_prompt": "Nói nhỏ nhẹ, thì thầm sát tai đầy cẩn trọng và sợ bị phát hiện trong bóng tối",
     },
     "fear": {
         "speed": 0.96,
+        "clean_tempo": 0.98,
+        "vn_silence_p": 0.18,
+        "vn_temp": 0.92,
+        "multi_style_voice": "Thiện Minh",
         "pitch_semi": +0.35,
         "gain_db": -0.5,
         "tail_pad": 0.22,
@@ -98,34 +120,50 @@ MOOD_PROFILES = {
         "acting_prompt": "Đọc tiếng Việt với cảm xúc sợ hãi, lo âu và hụt hơi tự nhiên khi chứng kiến điều kinh dị",
     },
     "dread": {
-        "speed": 0.88,
+        "speed": 0.86,
+        "clean_tempo": 0.82,
+        "vn_silence_p": 0.46,
+        "vn_temp": 0.68,
+        "multi_style_voice": "Thiền Tâm Đức",
         "pitch_semi": -0.60,
         "gain_db": -1.5,
-        "tail_pad": 0.28,
+        "tail_pad": 0.30,
         "ref_key": "dread",
         "indextts2_emo": [0.0, 0.0, 0.35, 0.65, 0.10, 0.65, 0.0, 0.10],
         "acting_prompt": "Đọc tiếng Việt chậm rãi, nặng nề và rờn rợn như điềm dữ đang áp sát",
     },
     "panic": {
         "speed": 1.08,
+        "clean_tempo": 1.08,
+        "vn_silence_p": 0.05,
+        "vn_temp": 0.94,
+        "multi_style_voice": "Hải Đăng",
         "pitch_semi": +0.65,
         "gain_db": +2.0,
-        "tail_pad": 0.14,
+        "tail_pad": 0.12,
         "ref_key": "panic",
         "indextts2_emo": [0.0, 0.30, 0.0, 0.95, 0.0, 0.0, 0.45, 0.0],
         "acting_prompt": "Đọc tiếng Việt gấp gáp, hoảng loạn và khẩn cấp như đang chạy trốn thực sự",
     },
     "cold_twist": {
-        "speed": 0.86,
+        "speed": 0.84,
+        "clean_tempo": 0.82,
+        "vn_silence_p": 0.46,
+        "vn_temp": 0.64,
+        "multi_style_voice": "Thiền Tâm Đức",
         "pitch_semi": -0.65,
         "gain_db": -1.0,
-        "tail_pad": 0.32,
-        "ref_key": "cold_twist",
+        "tail_pad": 0.34,
+        "ref_key": "dread",
         "indextts2_emo": [0.0, 0.0, 0.25, 0.25, 0.0, 0.55, 0.0, 0.60],
         "acting_prompt": "Đọc tiếng Việt chậm, lạnh lẽo và điềm tĩnh đến rợn người để chốt cú lật cuối cùng",
     },
     "ghost_entity": {
         "speed": 0.84,
+        "clean_tempo": 0.82,
+        "vn_silence_p": 0.42,
+        "vn_temp": 0.68,
+        "multi_style_voice": "Thiền Tâm Đức",
         "pitch_semi": -1.50,
         "gain_db": -0.5,
         "tail_pad": 0.28,
@@ -568,15 +606,35 @@ def _get_vieneu(mode: str = "v3turbo"):
     return _VIENEU_INSTANCE
 
 
+def _discover_emotion_refs_dir(args) -> str | None:
+    """Resolve explicit `--emotion-refs` or auto-discover populated `audio/emotion_refs/` in workspace."""
+    explicit = getattr(args, "emotion_refs", None)
+    if explicit and os.path.isdir(explicit):
+        return explicit
+    # Auto-detect workspace emotion bank only when explicit dir wasn't given (and not disabled)
+    if getattr(args, "no_auto_refs", False):
+        return None
+    here = os.path.dirname(os.path.abspath(__file__))
+    candidates = [
+        os.path.abspath(os.path.join(here, "..", "audio", "emotion_refs")),
+        os.path.abspath(os.path.join(os.getcwd(), "audio", "emotion_refs")),
+        os.path.abspath(os.path.join(os.getcwd(), "shorts-project", "audio", "emotion_refs")),
+    ]
+    for cand in candidates:
+        if os.path.isdir(cand) and any(f.lower().endswith((".wav", ".mp3", ".flac")) for f in os.listdir(cand)):
+            return cand
+    return None
+
+
 def resolve_emotion_ref(item: dict, args) -> str | None:
     """Resolve optional 3-8s reference audio clip for zero-shot voice/emotion cloning (`VieNeu-TTS`)."""
     if item.get("ref_audio") and os.path.isfile(item["ref_audio"]):
         return item["ref_audio"]
-    emo_dir = getattr(args, "emotion_refs", None)
-    if emo_dir and os.path.isdir(emo_dir):
+    emo_dir = _discover_emotion_refs_dir(args)
+    if emo_dir:
         mood = item["mood"]
         ref_key = MOOD_PROFILES.get(mood, {}).get("ref_key", mood)
-        for stem in (mood, ref_key, "narrator", "default"):
+        for stem in (mood, ref_key, "calm", "narrator", "default"):
             for ext in (".wav", ".mp3", ".flac"):
                 cand = os.path.join(emo_dir, stem + ext)
                 if os.path.isfile(cand):
@@ -587,24 +645,59 @@ def resolve_emotion_ref(item: dict, args) -> str | None:
     return None
 
 
-def synth_vieneu_chunk(item: dict, sr: int, args, cache_dir: str | None = None):
-    """Synthesize ONE coherent act paragraph via `pnnbao97/VieNeu-TTS` (48 kHz native Vietnamese ONNX CPU!)."""
+def apply_clean_tempo(samples: np.ndarray, sr: int, tempo: float, tmp_dir: str | None = None) -> np.ndarray:
+    """Transparent studio-grade formant-preserved tempo trim via `ffmpeg rubberband` (strictly [0.80..1.12], 0% noise/distortion)."""
+    t = max(0.80, min(1.12, float(tempo)))
+    if len(samples) < 256 or abs(t - 1.0) < 0.015 or not shutil.which("ffmpeg"):
+        return samples
+    in_w = os.path.join(tmp_dir or tempfile.gettempdir(), f"ct_in_{os.getpid()}_{int(time.time()*1e6)%1000000}.wav")
+    out_w = in_w.replace("_in_", "_out_")
+    try:
+        write_wav_mono16(in_w, samples, sr)
+        af = f"rubberband=tempo={t:.5f}:formant=preserved" if _ffmpeg_has_rubberband() else _atempo_chain(t)
+        subprocess.run(
+            ["ffmpeg", "-y", "-v", "error", "-i", in_w, "-af", af, "-ar", str(sr), "-ac", "1", "-c:a", "pcm_s16le", out_w],
+            check=True,
+        )
+        y, _ = read_wav_mono(out_w)
+        return y
+    finally:
+        for p in (in_w, out_w):
+            if os.path.exists(p):
+                os.remove(p)
+
+
+def synth_vieneu_chunk(item: dict, sr: int, args, cache_dir: str | None = None, tmp_dir: str | None = None):
+    """Synthesize ONE coherent act paragraph via `pnnbao97/VieNeu-TTS` (48 kHz native Vietnamese ONNX CPU!).
+    Uses per-mood native `silence_p`, `temperature`, optional 3-8s `emotion_refs` cloning, and clean `rubberband` tempo trim."""
     mode = getattr(args, "vieneu_mode", "v3turbo")
-    voice_name = getattr(args, "vieneu_voice", None)
+    mood = item["mood"]
+    prof = MOOD_PROFILES.get(mood, MOOD_PROFILES["calm_omen"])
+    use_multi = bool(getattr(args, "multi_style_guide", False))
+    voice_name = (prof.get("multi_style_voice") if use_multi else None) or getattr(args, "vieneu_voice", None) or "Thiện Minh"
     ref_audio = resolve_emotion_ref(item, args)
+    silence_p = float(prof.get("vn_silence_p", 0.22))
+    temp = float(prof.get("vn_temp", 0.80))
     text = item.get("vieneu_text") or normalize_vi_for_tts(item["text"], keep_vieneu_tags=True)
 
-    ref_sig = f"{os.path.abspath(ref_audio)}:{os.path.getmtime(ref_audio):.0f}" if ref_audio else "preset"
-    key = hashlib.sha256(f"vieneu|{mode}|{voice_name}|{ref_sig}|{text}".encode("utf-8")).hexdigest()[:16]
+    ref_sig = f"{os.path.abspath(ref_audio)}:{os.path.getmtime(ref_audio):.0f}" if ref_audio else f"preset:{voice_name}"
+    key = hashlib.sha256(f"vieneu61|{mode}|{ref_sig}|sp={silence_p:.2f}|t={temp:.2f}|{text}".encode("utf-8")).hexdigest()[:16]
     wav_cache = os.path.join(cache_dir, f"vn_{key}.wav") if cache_dir else None
 
     if wav_cache and os.path.isfile(wav_cache) and os.path.getsize(wav_cache) >= 512:
         samples = load_audio_mono(wav_cache, sr)
     else:
         tts = _get_vieneu(mode=mode)
-        infer_kw = {"text": text, "denoise": True, "apply_watermark": False}
+        infer_kw = {
+            "text": text,
+            "denoise": True,
+            "apply_watermark": False,
+            "silence_p": silence_p,
+            "temperature": temp,
+        }
         if ref_audio:
             infer_kw["ref_audio"] = ref_audio
+            print(f"  [VieNeu-TTS] mood={mood} using emotion ref: {os.path.basename(ref_audio)} (silence_p={silence_p}, temp={temp})")
         elif voice_name:
             infer_kw["voice"] = voice_name
         raw = tts.infer(**infer_kw)
@@ -615,6 +708,12 @@ def synth_vieneu_chunk(item: dict, sr: int, args, cache_dir: str | None = None):
         if wav_cache:
             os.makedirs(cache_dir, exist_ok=True)
             write_wav_mono16(wav_cache, samples, sr)
+
+    # Subtle, transparent formant-preserved tempo shaping (0.82x slow dread <-> 1.08x urgent panic, 0% distortion!)
+    if not getattr(args, "no_tempo_trim", False):
+        target_tempo = float(item["speed"]) if item.get("speed") is not None else float(prof.get("clean_tempo", 1.0)) * float(getattr(args, "speed_scale", 1.0))
+        if abs(target_tempo - 1.0) >= 0.02:
+            samples = apply_clean_tempo(samples, sr, target_tempo, tmp_dir=tmp_dir)
 
     dur_s = len(samples) / float(sr)
     words = estimate_syllable_words(item["text"], dur_s, 0.0, item["speaker"], item["mood"])
@@ -790,7 +889,7 @@ def synth_line_auto(item: dict, sr: int, tmp_dir: str, idx: int, args, cache_dir
 
     if engine == "vieneu" or (engine == "auto" and _has_vieneu()):
         try:
-            return synth_vieneu_chunk(item, sr, args, cache_dir=cache_dir)
+            return synth_vieneu_chunk(item, sr, args, cache_dir=cache_dir, tmp_dir=tmp_dir)
         except Exception as exc:
             if engine == "vieneu":
                 raise
@@ -1035,11 +1134,25 @@ def export_vc_pack(items: list, out_dir: str, tmp_dir: str, args, synth_fn=None)
     cursor = 0
     n_idx = 0
 
+    narrator_items = [i for i, it in enumerate(items) if it["kind"] == "speech" and it["is_narrator"]]
+    human_chunks = {}
+    if getattr(args, "human_guide", None):
+        raw_h = load_audio_mono(args.human_guide, SR_VC)
+        raw_h = _hp(raw_h, 55.0, SR_VC, order=2)
+        h_parts = split_audio_vad(raw_h, SR_VC, len(narrator_items))
+        for item_idx, seg_h in zip(narrator_items, h_parts):
+            seg_h = trim_silence(seg_h, SR_VC, pad_s=0.03)
+            it = items[item_idx]
+            human_chunks[item_idx] = (seg_h, estimate_syllable_words(it["text"], len(seg_h) / float(SR_VC), 0.0, it["speaker"], it["mood"]))
+
     for idx, it in enumerate(items):
         if it["kind"] != "speech" or not it["is_narrator"]:
             continue
         n_idx += 1
-        seg, rel_words = synth_line_auto(it, SR_VC, tmp_dir, idx, args, cache_dir=cache_dir, synth_fn=synth_fn)
+        if idx in human_chunks:
+            seg, rel_words = human_chunks[idx]
+        else:
+            seg, rel_words = synth_line_auto(it, SR_VC, tmp_dir, idx, args, cache_dir=cache_dir, synth_fn=synth_fn)
         seg = normalize_rms(_hp(seg, 45.0, SR_VC, order=2), target_dbfs=-19.0)
         start_s = cursor
         end_s = cursor + len(seg)
@@ -1153,6 +1266,14 @@ def assemble_voice(items: list, args, tmp_dir: str, synth_fn=None):
             it = items[item_idx]
             p = find_act_clip(args.narrator_dir, n_idx)
             clip = trim_silence(load_audio_mono(p, SR_FINAL), SR_FINAL, pad_s=0.025)
+            rel_w = estimate_syllable_words(it["text"], len(clip) / float(SR_FINAL), 0.0, it["speaker"], it["mood"])
+            preloaded_clips[item_idx] = (clip, rel_w)
+    elif getattr(args, "human_guide", None):
+        raw_full = _hp(load_audio_mono(args.human_guide, SR_FINAL), 55.0, SR_FINAL, order=2)
+        chunks = split_audio_vad(raw_full, SR_FINAL, len(narrator_indices))
+        for item_idx, clip in zip(narrator_indices, chunks):
+            it = items[item_idx]
+            clip = trim_silence(clip, SR_FINAL, pad_s=0.025)
             rel_w = estimate_syllable_words(it["text"], len(clip) / float(SR_FINAL), 0.0, it["speaker"], it["mood"])
             preloaded_clips[item_idx] = (clip, rel_w)
     elif args.narrator_audio:
@@ -1281,6 +1402,8 @@ def assemble_voice(items: list, args, tmp_dir: str, synth_fn=None):
         src_label = "vc_pack_external"
     elif args.narrator_dir:
         src_label = "narrator_dir"
+    elif getattr(args, "human_guide", None):
+        src_label = "human_voice_guide"
     elif args.narrator_audio:
         src_label = "narrator_audio"
     elif use_local_vc:
@@ -1333,7 +1456,11 @@ def build_parser():
     ap.add_argument("--vieneu-mode", default="v3turbo", choices=["v3turbo", "v3nano"], help="VieNeu-TTS ONNX CPU model (v3turbo=48kHz best, v3nano=24kHz fast)")
     ap.add_argument("--vieneu-voice", default="Thiện Minh", help="VieNeu-TTS built-in preset voice name (default: 'Thiện Minh' storytelling voice)")
     ap.add_argument("--ref-audio", default=None, help="Optional 3-8s clean voice/emotion reference WAV for VieNeu-TTS instant cloning")
-    ap.add_argument("--emotion-refs", default=None, help="Optional folder of per-mood 3-8s reference clips (calm.wav, curious.wav, whisper.wav, fear.wav, panic.wav)")
+    ap.add_argument("--emotion-refs", default=None, help="Optional folder of per-mood 3-8s reference clips (auto-detected at audio/emotion_refs/ if present)")
+    ap.add_argument("--no-auto-refs", action="store_true", help="Disable auto-detection of audio/emotion_refs/")
+    ap.add_argument("--no-tempo-trim", action="store_true", help="Disable clean rubberband tempo trim (0.82x..1.08x) on VieNeu-TTS acts")
+    ap.add_argument("--multi-style-guide", action="store_true", help="Vary built-in VieNeu presets by mood when exporting a So-VITS-SVC VC-Pack guide")
+    ap.add_argument("--human-guide", default=None, help="Voice-to-Voice Directing: your own 1-take rough acting recording (.m4a/.wav) for So-VITS-SVC -na or direct assembly")
     ap.add_argument("--base-voice", default="vi-VN-NamMinhNeural", help="Fallback edge-tts voice")
     ap.add_argument("--gemini-model", default="gemini-2.5-flash-preview-tts")
     ap.add_argument("--gemini-voice", default="Charon")

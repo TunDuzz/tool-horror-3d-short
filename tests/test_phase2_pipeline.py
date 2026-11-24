@@ -21,6 +21,7 @@ for p in (SCRIPTS_DIR, AUDIO_DIR):
         sys.path.insert(0, p)
 
 import gen_horror_voice as ghv  # noqa: E402
+import prepare_emotion_refs as per  # noqa: E402
 import sfx_manager as sm  # noqa: E402
 import align_manifest as am  # noqa: E402
 import horror_instruments as hi  # noqa: E402
@@ -154,8 +155,80 @@ class TestPhase2Pipeline(unittest.TestCase):
             call_kw = fake_tts.infer.call_args.kwargs
             self.assertEqual(call_kw["ref_audio"], ref_fear)
             self.assertIn("[thở dài]", call_kw["text"])
+            self.assertAlmostEqual(call_kw["silence_p"], ghv.MOOD_PROFILES["fear"]["vn_silence_p"], places=2)
+            self.assertAlmostEqual(call_kw["temperature"], ghv.MOOD_PROFILES["fear"]["vn_temp"], places=2)
             self.assertGreater(len(samples), 30000)
             self.assertEqual(len(words), 6)
+
+    def test_v61_prepare_emotion_refs_cut_split_auto_and_check(self):
+        with tempfile.TemporaryDirectory() as td:
+            # Build synthetic 6-clip 1-take recording (each 3.2s speech separated by 1.0s silence)
+            sr = 48000
+            parts = []
+            for idx in range(6):
+                t = np.arange(int(3.2 * sr), dtype=np.float64) / float(sr)
+                parts.append(0.28 * np.sin(2.0 * np.pi * (160.0 + idx * 25.0) * t))
+                if idx < 5:
+                    parts.append(np.zeros(int(1.0 * sr), dtype=np.float64))
+            src_wav = os.path.join(td, "one_take.wav")
+            ghv.write_wav_mono16(src_wav, np.concatenate(parts), sr)
+
+            # 1. Test `split-auto`
+            out_auto = os.path.join(td, "refs_auto")
+            per.main(["split-auto", "--src", src_wav, "--out-dir", out_auto])
+            for slug, _, _ in per.EMOTION_SLOTS:
+                p = os.path.join(out_auto, f"{slug}.wav")
+                self.assertTrue(os.path.isfile(p), f"Missing auto-split ref {slug}.wav")
+                x, s_r = per.read_wav_mono(p)
+                self.assertEqual(s_r, 48000)
+                self.assertGreaterEqual(len(x) / float(s_r), 2.8)
+
+            # 2. Test `cut` with MM:SS slices
+            out_cut = os.path.join(td, "refs_cut")
+            per.main(["cut", "--src", src_wav, "--slice", "calm=00:00-00:03.2", "--slice", "fear=00:12.6-00:15.8", "--out-dir", out_cut])
+            self.assertTrue(os.path.isfile(os.path.join(out_cut, "calm.wav")))
+            self.assertTrue(os.path.isfile(os.path.join(out_cut, "fear.wav")))
+
+            # 3. Test `check` exits cleanly on full bank
+            per.main(["check", "--dir", out_auto])
+
+    def test_v61_clean_tempo_contrast_and_human_guide_vc_pack(self):
+        sr = 48000
+        t = np.arange(int(2.0 * sr), dtype=np.float64) / float(sr)
+        base = 0.25 * np.sin(2.0 * np.pi * 200.0 * t)
+        slow = ghv.apply_clean_tempo(base, sr, 0.82)
+        fast = ghv.apply_clean_tempo(base, sr, 1.08)
+        self.assertGreater(len(slow), len(base) * 1.15)
+        self.assertLess(len(fast), len(base) * 0.96)
+        # Zero broadband distortion introduced by clean rubberband tempo trim
+        self.assertLess(float(np.sqrt(np.mean(ghv._bp(slow, 3000.0, 9000.0, sr, 2) ** 2))), 0.004)
+
+        # Test `--human-guide` Voice-to-Voice Directing -> 1-file So-VITS-SVC VC-Pack
+        short_script = (
+            "[NARRATOR | mood=calm_omen]\nĐêm nay gió rất lớn.\n"
+            "[DEAD SILENCE 0.60s]\n"
+            "[NARRATOR | mood=panic]\nCó người đứng sau cửa!\n"
+        )
+        with tempfile.TemporaryDirectory() as td:
+            sp = os.path.join(td, "SCRIPT.md")
+            with open(sp, "w", encoding="utf-8") as fp:
+                fp.write(short_script)
+            h_wav = os.path.join(td, "human_take.wav")
+            clip = 0.25 * np.sin(2.0 * np.pi * 195.0 * np.arange(int(1.0 * sr)) / float(sr))
+            ghv.write_wav_mono16(h_wav, np.concatenate([clip, np.zeros(int(0.6 * sr)), clip]), sr)
+
+            items = ghv.parse_script(sp)
+            pack_dir = os.path.join(td, "vc_human")
+            args = ghv.build_parser().parse_args(["--script", sp, "--human-guide", h_wav, "--export-vc-pack", pack_dir])
+            g_wav, mf_p = ghv.export_vc_pack(items, pack_dir, td, args)
+            self.assertTrue(os.path.isfile(g_wav))
+            self.assertTrue(os.path.isfile(mf_p))
+
+            out_dir = os.path.join(td, "voice_human")
+            args2 = ghv.build_parser().parse_args(["--script", sp, "--human-guide", h_wav, "--out-dir", out_dir, "--no-vc"])
+            _, _, payload = ghv.assemble_voice(items, args2, td)
+            self.assertEqual(payload["narrator_source"], "human_voice_guide")
+            self.assertEqual(len(payload["dead_silences"]), 1)
 
     def test_v6_gpu_voice_pack_indextts2_and_import_acts_roundtrip(self):
         with tempfile.TemporaryDirectory() as td:
