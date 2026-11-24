@@ -131,7 +131,7 @@ class TestPhase2Pipeline(unittest.TestCase):
             ghv.write_wav_mono16(ref_fear, 0.2 * np.sin(2.0 * np.pi * 180.0 * np.arange(4800) / 48000.0), 48000)
 
             args = ghv.build_parser().parse_args([
-                "--script", "dummy.md", "--tts-engine", "vieneu", "--emotion-refs", refs_dir,
+                "--script", "dummy.md", "--tts-engine", "vieneu", "--emotion-refs", refs_dir, "--no-speaker-lock",
             ])
             item = {
                 "kind": "speech",
@@ -624,6 +624,73 @@ class TestPhase2Pipeline(unittest.TestCase):
             self.assertEqual(len(applied), 6)
             for mood in cec.MOOD_SPEC:
                 self.assertTrue(os.path.isfile(os.path.join(refs_dir, f"{mood}.wav")))
+
+    def test_v63_speaker_lock_disentanglement_and_vc_bank_roundtrip(self):
+        sr = per.SR_REF
+        t = np.arange(int(3.2 * sr), dtype=np.float64) / sr
+        sig = 0.22 * np.sin(2.0 * np.pi * 140.0 * t)
+        with tempfile.TemporaryDirectory() as td:
+            refs_dir = os.path.join(td, "emotion_refs")
+            os.makedirs(refs_dir, exist_ok=True)
+            for mood, _, _ in per.EMOTION_SLOTS:
+                per.write_wav_mono16(os.path.join(refs_dir, f"{mood}.wav"), sig, sr)
+
+            # 1. Speaker-locked VieNeu disentanglement: same narrator speaker_emb across fear & dread, distinct emotion codes trimmed!
+            anchor_emb = np.linspace(0.1, 1.0, 192, dtype=np.float32)
+            calls = []
+
+            class FakeLockedVieneu:
+                sample_rate = 48000
+
+                def get_preset_voice(self, name):
+                    return {"speaker_emb": anchor_emb.copy(), "codes": np.zeros((40, 16), dtype=np.int64)}
+
+                def encode_reference(self, path, denoise=True):
+                    tag = 1 if "fear" in os.path.basename(path) else 2
+                    return np.full(192, float(tag), dtype=np.float32), np.full((60, 16), tag, dtype=np.int64)
+
+                def infer(self, **kw):
+                    calls.append(kw)
+                    return np.zeros(24000, dtype=np.float32)
+
+            ghv._ANCHOR_CACHE.clear()
+            args = ghv.build_parser().parse_args([
+                "--script", "dummy.md",
+                "--tts-engine", "vieneu",
+                "--emotion-refs", refs_dir,
+                "--speaker-lock",
+                "--speaker-lock-source", "preset",
+                "--ref-codes-max-frames", "24",
+                "--no-tempo-trim",
+            ])
+            with mock.patch.object(ghv, "_get_vieneu", return_value=FakeLockedVieneu()), \
+                 mock.patch.object(ghv, "measure_median_f0", return_value=0.0):
+                ghv.synth_vieneu_chunk({"text": "Sợ quá!", "mood": "fear", "speaker": "NARRATOR", "is_narrator": True, "fx": "dry"}, 48000, args)
+                ghv.synth_vieneu_chunk({"text": "Đêm lạnh quá.", "mood": "dread", "speaker": "NARRATOR", "is_narrator": True, "fx": "dry"}, 48000, args)
+
+            self.assertEqual(len(calls), 2)
+            self.assertIsInstance(calls[0]["voice"], dict)
+            self.assertIsInstance(calls[1]["voice"], dict)
+            self.assertNotIn("ref_audio", calls[0])
+            self.assertTrue(np.allclose(calls[0]["voice"]["speaker_emb"], anchor_emb))
+            self.assertTrue(np.allclose(calls[1]["voice"]["speaker_emb"], anchor_emb))
+            self.assertEqual(calls[0]["voice"]["codes"].shape, (24, 16))
+            self.assertEqual(calls[1]["voice"]["codes"].shape, (24, 16))
+            self.assertEqual(int(calls[0]["voice"]["codes"][0, 0]), 1)
+            self.assertEqual(int(calls[1]["voice"]["codes"][0, 0]), 2)
+
+            # 2. Export -> Import 6-in-1 So-VITS-SVC VC Bank round-trip
+            pack_dir = os.path.join(td, "vc_bank_pack")
+            out_refs = os.path.join(td, "refs_unified")
+            os.makedirs(out_refs, exist_ok=True)
+            per.write_wav_mono16(os.path.join(out_refs, "whisper.wav"), sig * 0.5, sr)
+            per.main(["export-vc-bank", "--refs-dir", refs_dir, "--out-dir", pack_dir])
+            bank_wav = os.path.join(pack_dir, "emotion_bank_6in1_44k.wav")
+            self.assertTrue(os.path.isfile(bank_wav))
+            self.assertTrue(os.path.isfile(os.path.join(pack_dir, "run_svc_win.bat")))
+            per.main(["import-vc-bank", "--pack", pack_dir, "--svc-wav", bank_wav, "--out-dir", out_refs, "--keep-original-whisper"])
+            for mood, _, _ in per.EMOTION_SLOTS:
+                self.assertTrue(os.path.isfile(os.path.join(out_refs, f"{mood}.wav")))
 
 
 if __name__ == "__main__":

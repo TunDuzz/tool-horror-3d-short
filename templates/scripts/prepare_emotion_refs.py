@@ -296,8 +296,127 @@ def cmd_check(args):
     print(f"TOTAL READY: {found}/{len(expected)} emotion clips")
 
 
+def _resample_simple(x: np.ndarray, sr_in: int, sr_out: int) -> np.ndarray:
+    if sr_in == sr_out or len(x) == 0:
+        return x.astype(np.float64)
+    g = int(np.gcd(sr_in, sr_out))
+    return signal.resample_poly(x.astype(np.float64), sr_out // g, sr_in // g)
+
+
+def cmd_export_vc_bank(args):
+    """Export all emotion_refs clips into ONE 44.1 kHz WAV (`emotion_bank_6in1_44k.wav`) for 1-time So-VITS-SVC (-na) unification."""
+    src_dir = args.refs_dir
+    out_dir = args.out_dir
+    if not os.path.isdir(src_dir):
+        raise FileNotFoundError(f"Emotion refs directory not found: {src_dir}")
+    os.makedirs(out_dir, exist_ok=True)
+
+    sr_vc = 44100
+    pad_sec = 0.60
+    pad_n = int(round(pad_sec * sr_vc))
+    parts = []
+    segs = []
+    cursor = 0
+
+    for mood, _, _ in EMOTION_SLOTS:
+        p = os.path.join(src_dir, f"{mood}.wav")
+        if not os.path.isfile(p):
+            continue
+        x48, sr_in = read_wav_mono(p)
+        x44 = _resample_simple(x48, sr_in, sr_vc)
+        # Clean RMS parity (-19 dBFS)
+        active = x44[np.abs(x44) > 0.008]
+        rms = float(np.sqrt(np.mean(active ** 2))) if len(active) > 32 else float(np.sqrt(np.mean(x44 ** 2)))
+        if rms > 1e-6:
+            x44 = x44 * ((10.0 ** (-19.0 / 20.0)) / rms)
+        pk = float(np.max(np.abs(x44)))
+        if pk > 0.88:
+            x44 *= 0.88 / pk
+        s0 = cursor
+        s1 = cursor + len(x44)
+        parts.append(x44)
+        parts.append(np.zeros(pad_n, dtype=np.float64))
+        cursor = s1 + pad_n
+        segs.append({"mood": mood, "start_sample": s0, "end_sample": s1, "sr": sr_vc, "dur_s": round(len(x44) / float(sr_vc), 3)})
+
+    if not parts:
+        raise ValueError(f"No emotion WAV files found in {src_dir}")
+
+    bank_wav = os.path.join(out_dir, "emotion_bank_6in1_44k.wav")
+    full = np.concatenate(parts)
+    write_wav_mono16(bank_wav, full, sr_vc)
+
+    mf = {"version": "v6.3-vc-bank", "sr": sr_vc, "total_samples": len(full), "pad_sec": pad_sec, "segments": segs}
+    mf_path = os.path.join(out_dir, "vc_bank_manifest.json")
+    with open(mf_path, "w", encoding="utf-8") as fp:
+        json.dump(mf, fp, ensure_ascii=False, indent=2)
+
+    bat = (
+        "@echo off\r\n"
+        "REM Chay 1 LAN DUY NHAT tren may So-VITS-SVC (-na) de dong nhat ca 6 khuon cam xuc ve 1 giong narrator!\r\n"
+        f'"{os.path.join(args.vc_venv, "Scripts", "svc.exe")}" infer emotion_bank_6in1_44k.wav -o emotion_bank_svc_out.wav '
+        f'-s {args.speaker} -m "{args.vc_model}" -c "{args.vc_config}" -fm {args.f0_method} -na -t {args.transpose} '
+        f"-n {args.noise_scale} -p 0.25 -mc 20.0\r\n"
+    )
+    sh = (
+        "#!/usr/bin/env bash\n"
+        "# Run ONCE on So-VITS-SVC PC (-na) to unify all 6 emotion refs into YOUR single narrator voice!\n"
+        f'svc infer emotion_bank_6in1_44k.wav -o emotion_bank_svc_out.wav -s "{args.speaker}" '
+        f'-m "{args.vc_model}" -c "{args.vc_config}" -fm {args.f0_method} -na -t {args.transpose} '
+        f"-n {args.noise_scale} -p 0.25 -mc 20.0\n"
+    )
+    with open(os.path.join(out_dir, "run_svc_win.bat"), "w", encoding="utf-8") as fp:
+        fp.write(bat)
+    with open(os.path.join(out_dir, "run_svc_unix.sh"), "w", encoding="utf-8") as fp:
+        fp.write(sh)
+
+    print(f"VC BANK EXPORTED -> {bank_wav} ({len(full) / sr_vc:.2f}s, {len(segs)} emotion clips)")
+    print(f"  1) Copy {out_dir} to your So-VITS-SVC PC and run run_svc_win.bat (or run_svc_unix.sh)")
+    print(f"  2) Copy emotion_bank_svc_out.wav back and run:")
+    print(f"     python3 scripts/prepare_emotion_refs.py import-vc-bank --pack {out_dir} --svc-wav {os.path.join(out_dir, 'emotion_bank_svc_out.wav')} --out-dir {src_dir}")
+
+
+def cmd_import_vc_bank(args):
+    """Slice So-VITS-SVC converted `emotion_bank_svc_out.wav` back into 48 kHz mono `audio/emotion_refs/`."""
+    mf_path = os.path.join(args.pack, "vc_bank_manifest.json")
+    if not os.path.isfile(mf_path):
+        raise FileNotFoundError(f"Missing vc_bank_manifest.json in {args.pack}")
+    if not os.path.isfile(args.svc_wav):
+        raise FileNotFoundError(f"Converted SVC WAV not found: {args.svc_wav}")
+    with open(mf_path, encoding="utf-8") as fp:
+        mf = json.load(fp)
+
+    sr_vc = int(mf.get("sr", 44100))
+    svc_raw, sr_in = read_wav_mono(args.svc_wav)
+    svc_44 = _resample_simple(svc_raw, sr_in, sr_vc)
+    n_target = int(mf["total_samples"])
+    svc_44 = svc_44[:n_target] if len(svc_44) >= n_target else np.pad(svc_44, (0, n_target - len(svc_44)))
+
+    os.makedirs(args.out_dir, exist_ok=True)
+    entries = {}
+    for seg in mf["segments"]:
+        mood = seg["mood"]
+        out_wav = os.path.join(args.out_dir, f"{mood}.wav")
+        if mood == "whisper" and args.keep_original_whisper and os.path.isfile(out_wav):
+            x_old, _ = read_wav_mono(out_wav)
+            print(f"  KEPT original whisper.wav ({len(x_old)/SR_REF:.2f}s — unvoiced whisper preserved)")
+            entries[mood] = {"file": "whisper.wav", "dur": round(len(x_old) / float(SR_REF), 3), "source": "original_whisper_preserved"}
+            continue
+        clip_44 = svc_44[int(seg["start_sample"]) : int(seg["end_sample"])].copy()
+        clip_48 = _resample_simple(clip_44, sr_vc, SR_REF)
+        clean = clean_reference_clip(clip_48, SR_REF, use_denoiser=False)
+        write_wav_mono16(out_wav, clean, SR_REF)
+        dur = len(clean) / float(SR_REF)
+        print(f"  IMPORTED SVC {mood}.wav ({dur:.2f}s @ 48kHz)")
+        entries[mood] = {"file": f"{mood}.wav", "dur": round(dur, 3), "source": os.path.basename(args.svc_wav), "unified_svc": True}
+
+    save_manifest(args.out_dir, entries)
+    print(f"UNIFIED EMOTION BANK READY -> {args.out_dir} ({len(entries)} clips)")
+    cmd_check(argparse.Namespace(dir=args.out_dir))
+
+
 def build_parser():
-    ap = argparse.ArgumentParser(description="Horror Engine v6.1 Emotion Bank Builder for VieNeu-TTS & So-VITS-SVC (-na).")
+    ap = argparse.ArgumentParser(description="Horror Engine v6.3 Emotion Bank Builder for VieNeu-TTS & So-VITS-SVC (-na).")
     sub = ap.add_subparsers(dest="cmd", required=True)
 
     p_g = sub.add_parser("guide", help="Print 35-second 6-emotion Vietnamese acting script to record once")
@@ -320,6 +439,25 @@ def build_parser():
     p_k = sub.add_parser("check", help="Validate emotion reference clips in audio/emotion_refs/")
     p_k.add_argument("--dir", default="audio/emotion_refs")
     p_k.set_defaults(func=cmd_check)
+
+    p_ev = sub.add_parser("export-vc-bank", help="Export 6 emotion clips as 1 WAV (44.1kHz) for 1-time So-VITS-SVC (-na) voice unification")
+    p_ev.add_argument("--refs-dir", default="audio/emotion_refs")
+    p_ev.add_argument("--out-dir", default="out/emotion_bank_vc_pack")
+    p_ev.add_argument("--vc-venv", default="D:/voice-engine/venv")
+    p_ev.add_argument("--vc-model", default="D:/voice-engine/models/ngan/G_1001.pth")
+    p_ev.add_argument("--vc-config", default="D:/voice-engine/models/ngan/config.json")
+    p_ev.add_argument("--speaker", default="ngan")
+    p_ev.add_argument("--f0-method", default="parselmouth")
+    p_ev.add_argument("--transpose", type=int, default=-5)
+    p_ev.add_argument("--noise-scale", type=float, default=0.30)
+    p_ev.set_defaults(func=cmd_export_vc_bank)
+
+    p_iv = sub.add_parser("import-vc-bank", help="Slice So-VITS-SVC unified 6-in-1 WAV back into 48kHz audio/emotion_refs/")
+    p_iv.add_argument("--pack", required=True, help="Pack folder created by export-vc-bank")
+    p_iv.add_argument("--svc-wav", required=True, help="Converted emotion_bank_svc_out.wav from So-VITS-SVC PC")
+    p_iv.add_argument("--out-dir", default="audio/emotion_refs")
+    p_iv.add_argument("--keep-original-whisper", action=argparse.BooleanOptionalAction, default=True, help="Keep original unvoiced whisper.wav intact (default: True)")
+    p_iv.set_defaults(func=cmd_import_vc_bank)
     return ap
 
 

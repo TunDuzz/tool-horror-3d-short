@@ -59,6 +59,7 @@ MOOD_PROFILES = {
         "clean_tempo": 0.88,
         "vn_silence_p": 0.28,
         "vn_temp": 0.70,
+        "f0_offset_st": 0.0,
         "multi_style_voice": "Thiền Tâm Đức",
         "pitch_semi": -0.35,
         "gain_db": 0.0,
@@ -72,6 +73,7 @@ MOOD_PROFILES = {
         "clean_tempo": 0.92,
         "vn_silence_p": 0.24,
         "vn_temp": 0.90,
+        "f0_offset_st": +0.6,
         "multi_style_voice": "Thiện Minh",
         "pitch_semi": +0.15,
         "gain_db": -0.5,
@@ -85,6 +87,7 @@ MOOD_PROFILES = {
         "clean_tempo": 1.00,
         "vn_silence_p": 0.12,
         "vn_temp": 0.88,
+        "f0_offset_st": +0.5,
         "multi_style_voice": "Hải Đăng",
         "pitch_semi": 0.0,
         "gain_db": +0.5,
@@ -98,6 +101,7 @@ MOOD_PROFILES = {
         "clean_tempo": 0.84,
         "vn_silence_p": 0.40,
         "vn_temp": 0.74,
+        "f0_offset_st": None,
         "multi_style_voice": "Thiền Tâm Đức",
         "pitch_semi": -0.45,
         "gain_db": -3.5,
@@ -111,6 +115,7 @@ MOOD_PROFILES = {
         "clean_tempo": 0.98,
         "vn_silence_p": 0.18,
         "vn_temp": 0.92,
+        "f0_offset_st": +1.1,
         "multi_style_voice": "Thiện Minh",
         "pitch_semi": +0.35,
         "gain_db": -0.5,
@@ -124,6 +129,7 @@ MOOD_PROFILES = {
         "clean_tempo": 0.82,
         "vn_silence_p": 0.46,
         "vn_temp": 0.68,
+        "f0_offset_st": -0.6,
         "multi_style_voice": "Thiền Tâm Đức",
         "pitch_semi": -0.60,
         "gain_db": -1.5,
@@ -137,6 +143,7 @@ MOOD_PROFILES = {
         "clean_tempo": 1.08,
         "vn_silence_p": 0.05,
         "vn_temp": 0.94,
+        "f0_offset_st": +1.6,
         "multi_style_voice": "Hải Đăng",
         "pitch_semi": +0.65,
         "gain_db": +2.0,
@@ -150,6 +157,7 @@ MOOD_PROFILES = {
         "clean_tempo": 0.82,
         "vn_silence_p": 0.46,
         "vn_temp": 0.64,
+        "f0_offset_st": -0.8,
         "multi_style_voice": "Thiền Tâm Đức",
         "pitch_semi": -0.65,
         "gain_db": -1.0,
@@ -163,6 +171,7 @@ MOOD_PROFILES = {
         "clean_tempo": 0.82,
         "vn_silence_p": 0.42,
         "vn_temp": 0.68,
+        "f0_offset_st": -1.8,
         "multi_style_voice": "Thiền Tâm Đức",
         "pitch_semi": -1.50,
         "gain_db": -0.5,
@@ -587,6 +596,140 @@ def align_chunk_words(display_text: str, raw_events: list, t0: float, speed: flo
 _VIENEU_INSTANCE = None
 _VIENEU_MODE_LOADED = None
 _HAS_RUBBERBAND = None
+_F0_CACHE: dict[str, float] = {}
+_ANCHOR_CACHE: dict[str, dict] = {}
+_PRESET_DEFAULT_F0 = {
+    "Thiện Minh": 107.4,
+    "Thiền Tâm Đức": 104.0,
+    "Hải Đăng": 124.0,
+    "Thái Sơn": 112.0,
+    "Thanh Bình": 115.0,
+}
+
+
+def _discover_narrator_anchor_wav(args) -> str | None:
+    """Resolve explicit `--narrator-anchor` or auto-discover `audio/narrator_anchor.wav` if present."""
+    explicit = getattr(args, "narrator_anchor", None)
+    if explicit and os.path.isfile(explicit):
+        return os.path.abspath(explicit)
+    here = os.path.dirname(os.path.abspath(__file__))
+    for cand in (
+        os.path.abspath(os.path.join(here, "..", "audio", "narrator_anchor.wav")),
+        os.path.abspath(os.path.join(os.getcwd(), "audio", "narrator_anchor.wav")),
+        os.path.abspath(os.path.join(os.getcwd(), "shorts-project", "audio", "narrator_anchor.wav")),
+    ):
+        if os.path.isfile(cand):
+            return cand
+    return None
+
+
+def measure_median_f0(audio_or_path, sr: int = SR_FINAL) -> float:
+    """Measure vocal median F0 (Hz) via `librosa.pyin`; returns 0.0 for unvoiced whispers or if librosa unavailable."""
+    cache_key = None
+    if isinstance(audio_or_path, str):
+        ap = os.path.abspath(audio_or_path)
+        cache_key = f"{ap}:{os.path.getmtime(ap):.0f}"
+        if cache_key in _F0_CACHE:
+            return _F0_CACHE[cache_key]
+    try:
+        import librosa
+        if isinstance(audio_or_path, str):
+            x = load_audio_mono(audio_or_path, 24000).astype(np.float32)
+            eff_sr = 24000
+        else:
+            x = np.asarray(audio_or_path, dtype=np.float32).reshape(-1)
+            eff_sr = sr
+        if len(x) < int(0.15 * eff_sr):
+            return 0.0
+        f0, _, _ = librosa.pyin(x, fmin=65.0, fmax=380.0, sr=eff_sr)
+        voiced = f0[~np.isnan(f0)]
+        val = float(np.median(voiced)) if len(voiced) >= max(4, int(0.08 * len(f0))) else 0.0
+    except Exception:
+        val = 0.0
+    if cache_key:
+        _F0_CACHE[cache_key] = val
+    return val
+
+
+def _slice_expressive_codes(codes: np.ndarray | None, max_frames: int) -> np.ndarray | None:
+    """Trim `ref_codes` to a centered expressive core window so emotion transfers without overriding locked speaker_emb."""
+    if codes is None or max_frames <= 0:
+        return codes
+    arr = np.asarray(codes, dtype=np.int64)
+    if arr.ndim < 2 or arr.shape[0] <= max_frames:
+        return arr
+    # Skip leading fade-in frames and keep a centered core window
+    start = max(0, (arr.shape[0] - max_frames) // 2)
+    return arr[start : start + max_frames]
+
+
+def _align_ref_f0_to_anchor(ref_path: str, target_f0: float, mood_offset_st: float | None, tmp_dir: str | None) -> tuple[str, float, bool]:
+    """Gently align a reference clip's baseline F0 to the narrator's natural vocal register BEFORE codec encoding.
+    Never alters output audio directly; leaves unvoiced whispers (`mood_offset_st is None`) and close clips (`|delta|<1.2st`) untouched."""
+    if mood_offset_st is None or target_f0 <= 0.0 or not shutil.which("ffmpeg"):
+        return ref_path, 0.0, False
+    ref_f0 = measure_median_f0(ref_path)
+    if ref_f0 <= 0.0:
+        return ref_path, 0.0, False
+    desired_f0 = target_f0 * (2.0 ** (float(mood_offset_st) / 12.0))
+    delta_st = 12.0 * math.log2(max(55.0, desired_f0) / max(55.0, ref_f0))
+    if abs(delta_st) < 1.2:
+        return ref_path, 0.0, False
+    delta_st = max(-4.8, min(4.8, delta_st))
+    ratio = 2.0 ** (delta_st / 12.0)
+    out_w = os.path.join(tmp_dir or tempfile.gettempdir(), f"ref_f0_{os.getpid()}_{abs(hash((ref_path, round(delta_st, 2))))%1000000}.wav")
+    af = f"rubberband=pitch={ratio:.5f}:formant=preserved" if _ffmpeg_has_rubberband() else f"asetrate=48000*{ratio:.5f},aresample=48000,atempo={1.0/ratio:.5f}"
+    subprocess.run(
+        ["ffmpeg", "-y", "-v", "error", "-i", ref_path, "-af", af, "-ar", str(SR_FINAL), "-ac", "1", "-c:a", "pcm_s16le", out_w],
+        check=True,
+    )
+    return out_w, round(delta_st, 2), True
+
+
+def _resolve_narrator_anchor(tts, args) -> dict | None:
+    """Resolve the single locked narrator identity (`speaker_emb` + `target_f0`) used across all [NARRATOR] acts."""
+    src_mode = getattr(args, "speaker_lock_source", "auto") or "auto"
+    anchor_wav = _discover_narrator_anchor_wav(args)
+    preset_name = getattr(args, "vieneu_voice", None) or "Thiện Minh"
+
+    if src_mode in ("auto", "anchor") and anchor_wav:
+        ck = f"wav:{anchor_wav}:{os.path.getmtime(anchor_wav):.0f}"
+        if ck not in _ANCHOR_CACHE:
+            emb, _ = tts.encode_reference(anchor_wav, denoise=True)
+            _ANCHOR_CACHE[ck] = {
+                "label": os.path.basename(anchor_wav),
+                "speaker_emb": np.asarray(emb, dtype=np.float32),
+                "target_f0": measure_median_f0(anchor_wav) or 115.0,
+            }
+        return _ANCHOR_CACHE[ck]
+
+    if src_mode == "calm":
+        emo_dir = _discover_emotion_refs_dir(args)
+        if emo_dir:
+            calm_p = os.path.join(emo_dir, "calm.wav")
+            if os.path.isfile(calm_p):
+                ck = f"calm:{calm_p}:{os.path.getmtime(calm_p):.0f}"
+                if ck not in _ANCHOR_CACHE:
+                    emb, _ = tts.encode_reference(calm_p, denoise=True)
+                    _ANCHOR_CACHE[ck] = {
+                        "label": "calm.wav",
+                        "speaker_emb": np.asarray(emb, dtype=np.float32),
+                        "target_f0": measure_median_f0(calm_p) or 135.0,
+                    }
+                return _ANCHOR_CACHE[ck]
+
+    # Default ("auto" without custom anchor wav, or "preset"): lock to built-in VieNeu preset (e.g. "Thiện Minh")
+    if hasattr(tts, "get_preset_voice"):
+        ck = f"preset:{preset_name}"
+        if ck not in _ANCHOR_CACHE:
+            pv = tts.get_preset_voice(preset_name)
+            _ANCHOR_CACHE[ck] = {
+                "label": preset_name,
+                "speaker_emb": np.asarray(pv["speaker_emb"], dtype=np.float32),
+                "target_f0": float(_PRESET_DEFAULT_F0.get(preset_name, 112.0)),
+            }
+        return _ANCHOR_CACHE[ck]
+    return None
 
 
 def _has_vieneu() -> bool:
@@ -669,7 +812,8 @@ def apply_clean_tempo(samples: np.ndarray, sr: int, tempo: float, tmp_dir: str |
 
 def synth_vieneu_chunk(item: dict, sr: int, args, cache_dir: str | None = None, tmp_dir: str | None = None):
     """Synthesize ONE coherent act paragraph via `pnnbao97/VieNeu-TTS` (48 kHz native Vietnamese ONNX CPU!).
-    Uses per-mood native `silence_p`, `temperature`, optional 3-8s `emotion_refs` cloning, and clean `rubberband` tempo trim."""
+    Uses per-mood native `silence_p`, `temperature`, optional 3-8s `emotion_refs` cloning with v6.3 Speaker-Locked
+    Disentanglement (`speaker_emb` locked to ONE narrator anchor + Baseline F0 Alignment), and clean tempo trim."""
     mode = getattr(args, "vieneu_mode", "v3turbo")
     mood = item["mood"]
     prof = MOOD_PROFILES.get(mood, MOOD_PROFILES["calm_omen"])
@@ -680,8 +824,15 @@ def synth_vieneu_chunk(item: dict, sr: int, args, cache_dir: str | None = None, 
     temp = float(prof.get("vn_temp", 0.80))
     text = item.get("vieneu_text") or normalize_vi_for_tts(item["text"], keep_vieneu_tags=True)
 
+    use_speaker_lock = bool(getattr(args, "speaker_lock", True)) and bool(item.get("is_narrator", True)) and bool(ref_audio) and (not use_multi)
+    base_max_frames = int(getattr(args, "ref_codes_max_frames", 36))
+    eff_max_frames = max(base_max_frames, 48) if (mood == "whisper" and base_max_frames > 0) else base_max_frames
+    lock_src = getattr(args, "speaker_lock_source", "auto") or "auto"
+    anchor_wav_sig = _discover_narrator_anchor_wav(args) or f"preset:{voice_name}"
+
     ref_sig = f"{os.path.abspath(ref_audio)}:{os.path.getmtime(ref_audio):.0f}" if ref_audio else f"preset:{voice_name}"
-    key = hashlib.sha256(f"vieneu61|{mode}|{ref_sig}|sp={silence_p:.2f}|t={temp:.2f}|{text}".encode("utf-8")).hexdigest()[:16]
+    lock_sig = f"lock={lock_src}:{anchor_wav_sig}:mf={eff_max_frames}" if use_speaker_lock else "unlocked"
+    key = hashlib.sha256(f"vieneu63|{mode}|{ref_sig}|{lock_sig}|sp={silence_p:.2f}|t={temp:.2f}|{text}".encode("utf-8")).hexdigest()[:16]
     wav_cache = os.path.join(cache_dir, f"vn_{key}.wav") if cache_dir else None
 
     if wav_cache and os.path.isfile(wav_cache) and os.path.getsize(wav_cache) >= 512:
@@ -695,12 +846,35 @@ def synth_vieneu_chunk(item: dict, sr: int, args, cache_dir: str | None = None, 
             "silence_p": silence_p,
             "temperature": temp,
         }
-        if ref_audio:
-            infer_kw["ref_audio"] = ref_audio
-            print(f"  [VieNeu-TTS] mood={mood} using emotion ref: {os.path.basename(ref_audio)} (silence_p={silence_p}, temp={temp})")
-        elif voice_name:
-            infer_kw["voice"] = voice_name
-        raw = tts.infer(**infer_kw)
+        tmp_shifted = None
+        try:
+            if ref_audio and use_speaker_lock and hasattr(tts, "encode_reference"):
+                anchor = _resolve_narrator_anchor(tts, args)
+                if anchor is not None:
+                    f0_off = prof.get("f0_offset_st", 0.0)
+                    aligned_ref, shift_st, is_tmp = _align_ref_f0_to_anchor(ref_audio, anchor["target_f0"], f0_off, tmp_dir)
+                    if is_tmp:
+                        tmp_shifted = aligned_ref
+                    _, emo_codes = tts.encode_reference(aligned_ref, denoise=True)
+                    emo_codes = _slice_expressive_codes(emo_codes, eff_max_frames)
+                    infer_kw["voice"] = {"speaker_emb": anchor["speaker_emb"], "codes": emo_codes}
+                    n_cf = 0 if emo_codes is None else int(np.asarray(emo_codes).shape[0])
+                    print(
+                        f"  [VieNeu-TTS] mood={mood} speaker_lock={anchor['label']} + emotion_ref={os.path.basename(ref_audio)} "
+                        f"(f0_shift={shift_st:+.1f}st, codes={n_cf}f, silence_p={silence_p}, temp={temp})"
+                    )
+                else:
+                    infer_kw["ref_audio"] = ref_audio
+                    print(f"  [VieNeu-TTS] mood={mood} using emotion ref: {os.path.basename(ref_audio)} (silence_p={silence_p}, temp={temp})")
+            elif ref_audio:
+                infer_kw["ref_audio"] = ref_audio
+                print(f"  [VieNeu-TTS] mood={mood} using emotion ref: {os.path.basename(ref_audio)} (silence_p={silence_p}, temp={temp})")
+            elif voice_name:
+                infer_kw["voice"] = voice_name
+            raw = tts.infer(**infer_kw)
+        finally:
+            if tmp_shifted and os.path.exists(tmp_shifted):
+                os.remove(tmp_shifted)
         raw = np.asarray(raw, dtype=np.float64).reshape(-1)
         in_sr = int(getattr(tts, "sample_rate", 48000 if mode == "v3turbo" else 24000))
         raw = trim_silence(raw, in_sr, pad_s=0.03)
@@ -1457,6 +1631,10 @@ def build_parser():
     ap.add_argument("--vieneu-voice", default="Thiện Minh", help="VieNeu-TTS built-in preset voice name (default: 'Thiện Minh' storytelling voice)")
     ap.add_argument("--ref-audio", default=None, help="Optional 3-8s clean voice/emotion reference WAV for VieNeu-TTS instant cloning")
     ap.add_argument("--emotion-refs", default=None, help="Optional folder of per-mood 3-8s reference clips (auto-detected at audio/emotion_refs/ if present)")
+    ap.add_argument("--narrator-anchor", default=None, help="Optional 5-15s narrator voice clip (or auto audio/narrator_anchor.wav) to lock speaker identity across all emotions")
+    ap.add_argument("--speaker-lock", action=argparse.BooleanOptionalAction, default=True, help="Lock narrator speaker_emb to ONE single voice across all emotion_refs acts (default: True)")
+    ap.add_argument("--speaker-lock-source", default="auto", choices=["auto", "preset", "calm", "anchor"], help="Single-voice anchor source when --speaker-lock is enabled (default: auto -> narrator_anchor.wav else --vieneu-voice preset)")
+    ap.add_argument("--ref-codes-max-frames", type=int, default=36, help="Max MOSS codec ref_codes frames for emotion transfer under --speaker-lock (default: 36; 0=full)")
     ap.add_argument("--no-auto-refs", action="store_true", help="Disable auto-detection of audio/emotion_refs/")
     ap.add_argument("--no-tempo-trim", action="store_true", help="Disable clean rubberband tempo trim (0.82x..1.08x) on VieNeu-TTS acts")
     ap.add_argument("--multi-style-guide", action="store_true", help="Vary built-in VieNeu presets by mood when exporting a So-VITS-SVC VC-Pack guide")
