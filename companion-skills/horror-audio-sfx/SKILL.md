@@ -11,14 +11,14 @@ Zero-copyright, 100% deterministic horror voice & sound synthesis powered by `nu
 
 ## 1. Core Horror Sound & Voice Principles
 
-1. **Expressive Context-Aware Voice — Never Flat Monotone:**
-   - Synthesize per line via `gen_horror_voice.py` using 7 calibrated **`MOOD_PROFILES`** (`calm_omen`, `tense`, `whisper`, `dread`, `panic`, `cold_twist`, `ghost_entity`) spanning a **`7 dB` natural vocal dynamic arc** (`-4.5 dB` whisper → `+2.5 dB` panic).
-   - Inject subtle procedural human vocal-tract breaths (`soft_inhale`, `sharp_gasp`, `shaky_exhale`, enabled by default via `--auto-breath`) and split mid-sentence `...` into real `0.42 s` breathless pauses.
-   - Normalize Vietnamese clock & date strings (`01:06` → `"một giờ sáu phút"`, `22/11` → `"ngày hai mươi hai tháng mười một"`) strictly for TTS while keeping verbatim display tokens in `words.json`.
-   - Route non-narrator dialogue `[SPEAKER: NAME | fx=dry|room|phone|ghost]` through dedicated Character DSP (`phone` bandpass, `room` early reflections, `ghost` multi-tap + reverse-reverb pre-swell).
+1. **Expressive Word-Level Voice Acting v5.5 — Never Flat Monotone:**
+   - Synthesize via `gen_horror_voice.py` using **10 calibrated `MOOD_PROFILES`** (`calm_omen`, `curious`, `tense`, `whisper`, `fear_tremble`, `stutter_panic`, `dread`, `panic`, `cold_twist`, `ghost_entity`) spanning a wide **`0.68x .. 1.32x` tempo arc** and **`8.2 dB` loudness range** (`-5.2 dB` whisper → `+3.0 dB` stutter_panic), tunable via `--acting subtle|cinematic|extreme`.
+   - Combine 5 pure-Python/ffmpeg vocal-tract acting DSP engines: **8-band Formant True Breathy Whisper Vocoder** (deferred post-SVC so F0 stays clean), **AM+FM 6.2 Hz Vocal-Cord Fear Tremor**, **Acoustic Syllable-Onset Stuttering** (`[STUTTER]` / `K-không`), **WSOLA Curious Rising / Dread Falling Pitch Ramp**, and **Word-Boundary Intra-Sentence Pacing** (`[SLOW]`/`[FAST]`, curious pre-keyword micro-pauses, fear-tremble mid-phrase halts) + **7 organic human cues** (`soft_inhale`, `short_inhale`, `sharp_gasp`, `tremble_gasp`, `shaky_exhale`, `whisper_breath`, `swallow`).
+   - Pluggable `--tts-engine auto|edge|gemini`: automatically leverages **Gemini 2.5 Flash Preview TTS** (Free Tier REST API via `GEMINI_API_KEY`) with Vietnamese acting prompts, falling back seamlessly to cached 20-retry `edge-tts` + full acting DSP.
+   - Normalize Vietnamese clock & date strings (`01:06` → `"một giờ sáu phút"`) strictly for TTS while keeping verbatim display tokens in `words.json`, and route `[SPEAKER: NAME | fx=dry|room|phone|ghost]` through dedicated Character DSP.
 2. **So-VITS-SVC 1-File Expressive VC-Pack (`-na` F0 Preservation):**
-   - **CRITICAL:** Never pass `-a` (`--auto-predict-f0`) on horror narration — `-a` erases all emotional whisper/dread/panic pitch contours!
-   - Use the effortless 3-step 2-machine VC-Pack workflow (`--export-vc-pack` → run `run_svc_win.bat`/`run_svc_unix.sh` using **`-na` `--no-auto-predict-f0`** on 1 file `narrator_guide_44k.wav` → copy back `narrator_svc_out.wav` → `--vc-pack ... --narrator-vc-wav ...`) for exact 1:1 sample re-assembly + post-SVC mood EQ & dynamic loudness + auto-merged character voices!
+   - **CRITICAL:** Never pass `-a` (`--auto-predict-f0`) on horror narration — `-a` erases all emotional whisper/curious/tremor/panic pitch contours!
+   - Use the effortless 3-step 2-machine VC-Pack workflow (`--export-vc-pack` → run `run_svc_win.bat`/`run_svc_unix.sh` using **`-na`** on 1 file `narrator_guide_44k.wav` carrying full tempo swings, stutters, FM tremor & curious F0 → copy back `narrator_svc_out.wav` → `--vc-pack ... --narrator-vc-wav ...`) for exact 1:1 sample re-assembly + post-SVC True Breathy Whisper Vocoder + dynamic loudness + character voices! (Also supports `--export-acting-pack` for local GPU `F5-TTS-Vietnamese` / `VieNeu-TTS`.)
 3. **TRUE Psychoacoustic Dead Silence (`-48 dB` Vacuum):**
    - `[DEAD SILENCE Xs]` in `SCRIPT.md` is NO LONGER cosmetic! `words.json` exports exact `dead_silences: [{ s, e }]` spans.
    - Pass `dead_silences=load_dead_silences(words_json)` directly into `master_mix(...)` (or call `apply_dead_silences(music, sfx, dead_silences, floor_db=-48.0)`): BOTH music and ambient SFX drop cleanly (`22 ms` pre-fade, `10 ms` post-fade) into an eerie **`-48 dB` vacuum**, making the ensuing `stinger` or whisper hit with physical shock!

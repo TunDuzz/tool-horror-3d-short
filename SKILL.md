@@ -33,9 +33,9 @@ description: Use when creating a standalone 55-75s horror story video (vertical 
 5. **Physical Lighting (5 Presets), Practical Lights & Whip-Pan Motion Blur:**
    - Use strictly the 5 physical presets (`warmLamp`, `coldMoon`, `fluorescent`, `duskFog`, `flashlight`), smooth `lerpLights`/`getLightBlend` transitions when lamps die, up to **6 real `PointLight`s** (`setLocalLights`) + **1 `SpotLight` cone** (`setSpotLight`), and selective HDR Bloom (`thr: 0.92`).
    - Use deterministic 6–8 frame `whipPan` turns paired with `WhipMotionBlurEffect`, and declare `WHIP_PANS` and `POV_MOTIONS` in `story.ts`.
-6. **Expressive Context-Aware Voice & TRUE `-48 dB` Dead Silence:**
-   - Author `SCRIPT.md` with per-line mood & speaker directives (`[NARRATOR | mood=...]`, `[SPEAKER: ... | fx=...]`, `[PAUSE Xs]`, `[DEAD SILENCE Xs]`, mid-sentence `...`).
-   - Use the 1-file So-VITS-SVC Expressive VC-Pack workflow with **`-na` (`--no-auto-predict-f0`)** so So-VITS-SVC preserves emotional F0 pitch contours instead of flattening them, and always pass `dead_silences=load_dead_silences(words_json)` into `master_mix(...)` so music and ambient SFX drop cleanly to `-48 dB` vacuum!
+6. **Expressive Word-Level Voice Acting v5.5 & TRUE `-48 dB` Dead Silence:**
+   - Author `SCRIPT.md` with **10 acting moods** (`calm_omen`, `curious`, `tense`, `whisper`, `fear_tremble`, `stutter_panic`, `dread`, `panic`, `cold_twist`, `ghost_entity`) + inline word/phrase director tags (`[STUTTER]` / `K-không`, `[SLOW]...[/SLOW]`, `[FAST]...[/FAST]`, `[TREMBLE]...[/TREMBLE]`, `[UP]`, `[BEAT]`, `[GASP]`, `[SWALLOW]`, `[PAUSE Xs]`, `[DEAD SILENCE Xs]`).
+   - Run `gen_horror_voice.py` (`--acting cinematic`, pluggable `--tts-engine auto|edge|gemini`) with the 1-file So-VITS-SVC VC-Pack (`-na` preserves all `0.68x..1.32x` tempo swings, acoustic stutters, 6.2 Hz tremor & rising/falling F0; True Breathy Whisper Vocoder runs post-SVC), and pass `dead_silences=load_dead_silences(words_json)` into `master_mix(...)` for TRUE `-48 dB` vacuum!
 
 ## End-to-End 11-Step Pipeline (Engine v5.0)
 

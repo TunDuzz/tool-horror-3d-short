@@ -5,65 +5,77 @@ description: Use when writing expressive multi-speaker horror scripts (2.7-3.2 w
 
 # Horror Scriptwriting, Expressive Voice & Cinematic Storyboarding v5.0 (`SCRIPT.md` → `manifest.json` → `story.ts`)
 
-## 1. Expressive Multi-Speaker Script Grammar (`SCRIPT.md`)
+## 1. Expressive Voice Acting & Multi-Speaker Script Grammar v5.5 (`SCRIPT.md`)
 
-**Never write a flat wall of monochrome narration.** Horror Engine v5.0's `gen_horror_voice.py` synthesizes **per line with distinct emotional prosody, dynamic volume contours, mid-sentence `...` hesitation pauses, human vocal-tract breaths, and multi-speaker FX**:
+**Never write a flat wall of monochrome narration.** Horror Engine v5.5's `gen_horror_voice.py` synthesizes **per phrase and per word** with **10 distinct acting moods**, wide cinematic tempo contrast (`0.68x .. 1.32x`), **true breathy whisper vocoder**, **6.2 Hz vocal-cord fear tremor**, **real acoustic syllable stuttering**, **curious rising pitch inflection**, and **7 organic human body cues**:
 
-- **Speed:** **`2.7–3.2 words/s`** (~150–185 words per 60 s). Slower, intimate, ominous delivery builds dread far better than rapid-fire narration.
-- **Speaker & Mood Directives (line-level headers):**
-  - `[NARRATOR | mood=calm_omen|tense|whisper|dread|panic|cold_twist|ghost_entity]`
-    - `calm_omen`: trầm, chậm rãi đặt điềm báo (`0.0 dB`).
-    - `tense`: nhịp dồn, cảnh giác (`-1.0 dB`).
-    - `whisper`: thì thầm sát tai, chậm, cận âm (`-4.5 dB` — tạo độ tương phản rợn người trước lúc hét/giật mình!).
-    - `dread`: nặng nề, rờn rợn, hụt hơi run (`-2.0 dB`).
-    - `panic`: gấp gáp, cao giọng, hoảng loạn + tiếng hít gấp (`+2.5 dB`).
-    - `cold_twist`: lạnh ngắt, chậm, chốt cú lật (`-1.5 dB` + đuôi vang lạnh nhẹ).
-    - `ghost_entity`: giọng thực thể trầm khàn, tiền-vang ngược (`reverse-reverb pre-swell`).
-  - `[SPEAKER: TÊN | voice=vi-VN-NamMinhNeural|vi-VN-HoaiMyNeural | mood=... | pitch=-12% | speed=0.88 | fx=dry|room|phone|ghost]`
-    - `fx=phone`: lọc băng thông `300–3100 Hz` như cuộc gọi / loa rè.
-    - `fx=room`: vang phòng kín thực tế cho NPC đứng chung không gian.
-    - `fx=ghost`: giọng ma ám đa lớp kèm tiếng vang hút ngược trước khi cất lời.
+- **Speed & Mandatory Tempo Contrast:** Average **`2.7–3.2 words/s`** (~150–185 words per 60 s), but EVERY 60 s short **MUST contain at least 3 distinct pace shifts** (slow suffocating dread/whisper `0.68x–0.74x` ↔ curious probing `0.88x` ↔ breathless stuttering panic `1.24x–1.32x`)!
+- **10 Acting Mood Directives (`[NARRATOR | mood=... | acting="..."]`):**
+  - `calm_omen` (`0.86x`, `0.0 dB`): trầm lắng, chắc nhịp đặt điềm báo.
+  - `curious` (`0.88x → 0.76x`, `-1.0 dB`): **tò mò, dò xét, nghi hoặc** — tự chèn micro-pause `0.18s` trước từ khóa + uốn giọng **vút lên `+2.25 st`** cuối câu hỏi!
+  - `tense` (`1.10x → 1.22x`, `+0.5 dB`): căng thẳng, tăng tốc dần về cuối câu.
+  - `whisper` (`0.74x`, `-5.2 dB`): **thì thầm hơi gió thật sát tai** (8-band Formant Whisper Vocoder chạy hậu kỳ sau So-VITS-SVC!).
+  - `fear_tremble` (`0.78x` đứt quãng, `-1.5 dB`): **sợ hãi, run giọng 6.2 Hz (AM+FM tremor)** + tự chèn 1–2 nhịp khựng run giữa câu + hít hơi run!
+  - `stutter_panic` (`1.26x → 1.32x`, `+3.0 dB`): **lắp bắp + hoảng loạn tột độ** — nói gấp gáp, giọng vút cao + cắt lặp âm tiết đầu thật!
+  - `dread` (`0.84x → 0.68x`, `-2.0 dB`): nặng nề, rợn gáy — tự **chậm dần hẳn xuống `0.68x`** và chìm giọng ở 2–3 chữ cuối câu!
+  - `panic` (`1.24x → 1.32x`, `+3.0 dB`): hối hả, kêu cứu, tăng tốc gấp gáp.
+  - `cold_twist` (`0.72x`, `-1.5 dB`): lạnh ngắt, vô hồn + tiếng **nuốt nước bọt khan (`swallow`)** + đuôi vang phòng lạnh.
+  - `ghost_entity` (`0.70x`, `-0.5 dB`, `-2.55 st`): giọng ma ám trầm kéo dài + tiền-vang hút ngược (`reverse-reverb pre-swell`).
+- **Inline Word/Phrase Director Tags (Use Directly Inside Dialogue Lines!):**
+  - **Real Acoustic Stuttering:** Write `[STUTTER] cái gì` OR natural Vietnamese onset hyphens **`K-không`**, **`C-cái gì`**, **`Đ-đừng`** (TTS reads the clean word while the Acoustic Stutter Engine slices & repeats the true 95–125 ms consonant-vowel onset with choked glottal cuts — never pronounced as "K" or "C"!).
+  - **Mid-Sentence Tempo Shifts:** `[SLOW]...[/SLOW]` (`0.74×`), `[FAST]...[/FAST]` (`1.32×`).
+  - **Local Tremor & Upward Inflection:** `[TREMBLE]...[/TREMBLE]` (6.2 Hz frightened voice quiver on specific phrases), `[UP]` (rising curious inflection).
+  - **Organic Human Body Cues & Micro-Beats:** `[BEAT]` (`0.22s` dramatic freeze), `[GASP]`, `[TREMBLE_GASP]`, `[SWALLOW]` (tense throat gulp), `[SIGH]`, `[WHISPER_BREATH]`.
+- **Multi-Speaker Dialogue:** `[SPEAKER: TÊN | voice=vi-VN-NamMinhNeural|vi-VN-HoaiMyNeural | mood=... | pitch=... | speed=... | fx=dry|room|phone|ghost]`.
 - **TRUE Psychoacoustic Silence & Hesitation:**
-  - Write `[PAUSE 0.35s]` for dramatic phrasing beats and `[DEAD SILENCE 0.65s]` immediately before major reveals/twists — `mix_base.py` hard-mutes BOTH music and ambient SFX to **`-48 dB` vacuum** across every `[DEAD SILENCE]` span!
-  - Use `...` (`…`) naturally inside tense sentences: `gen_horror_voice.py` automatically splits on `...` into real `0.42 s` breathless pauses instead of swallowing punctuation.
-  - Clock & date formats (`01:06`, `22/11`) are normalized automatically to natural spoken Vietnamese (`"một giờ sáu phút"`) while keeping original display tokens (`"01:06"`) in `words.json` for `Phone3D` / `HorrorHUD`.
-- **Example `SCRIPT.md` Excerpt:**
+  - Write `[PAUSE 0.35s]` and `[DEAD SILENCE 0.65s]` before major reveals/twists — `mix_base.py` hard-mutes BOTH music and ambient SFX to **`-48 dB` vacuum** across every `[DEAD SILENCE]` span!
+  - Use `...` (`…`) naturally inside tense sentences (auto-split into `0.42 s` pauses); clock/date formats (`01:06`, `22/11`) normalize automatically for TTS while preserving display tokens in `words.json`.
+- **Example v5.5 `SCRIPT.md` Excerpt:**
   ```markdown
   [NARRATOR | mood=calm_omen]
-  Đêm canh linh cữu lúc 01:06, bà nội dặn tuyệt đối không được trả lời tiếng gọi ngoài cửa.
-  [PAUSE 0.35s]
+  Đêm canh linh cữu lúc 01:06, cả ngôi nhà tối om.
+  [NARRATOR | mood=curious]
+  Ơ... tiếng cào gì phát ra từ trong chiếc tủ gỗ vậy?
   [NARRATOR | mood=whisper]
-  Nhưng rồi... ngọn đèn dầu bỗng tắt phụt.
-  [DEAD SILENCE 0.70s]
-  [SPEAKER: BÓNG NGƯỜI | voice=vi-VN-NamMinhNeural | mood=ghost_entity | fx=ghost]
-  Mở cửa ra... cháu ơi.
-  [NARRATOR | mood=panic]
-  Cánh cửa gỗ rung bần bật ngay trước mặt tôi!
+  Suỵt... đừng thở mạnh... hình như nó đang nghe thấy chúng ta.
+  [DEAD SILENCE 0.75s]
+  [NARRATOR | mood=fear_tremble]
+  [GASP] Tay tôi lạnh cóng... [TREMBLE] cánh cửa tủ đang từ từ hé mở ra! [/TREMBLE]
+  [NARRATOR | mood=stutter_panic]
+  K-không... c-cái gì ngoài đó vậy?! [FAST] Chạy ngay đi, đừng ngoái lại! [/FAST]
+  [NARRATOR | mood=cold_twist]
+  [SWALLOW] [SLOW] Nhưng khi tôi quay đầu lại... [/SLOW] [BEAT] thứ đó đã đứng sẵn sau lưng tôi.
   ```
 - **No On-Screen Captions by Default:** Keep `HorrorHUD` captions opt-in via `hudFromManifest(MANIFEST)` unless requested (`GEMINI.md`).
 
 ---
 
-## 2. Generating Expressive Voice (2-Machine So-VITS-SVC 1-File VC-Pack OR Offline/Edge)
+## 2. Generating Expressive Acting Voice (Pluggable `auto|edge|gemini` + 1-File So-VITS-SVC VC-Pack)
 
-### Recommended 2-Machine So-VITS-SVC Narrator Workflow (Preserves ALL Horror Mood Intonation!)
-1. **This PC — Export 1 Expressive Guide WAV + Helper Scripts:**
+- **Acting Intensity & TTS Engine Flags:**
+  - `--acting subtle|cinematic|extreme` (default **`cinematic`** — wide `0.68x..1.32x` tempo spread, acoustic stuttering, 6.2 Hz tremor, true breathy whisper).
+  - `--tts-engine auto|edge|gemini`: automatically uses **Gemini 2.5 Flash Preview TTS** (Free Tier REST API with Vietnamese acting prompts, 0 extra pip deps) if `GEMINI_API_KEY` is set, and falls back smoothly to `edge-tts` + full Word-Level Micro-Prosody Acting DSP when offline/no key!
+  - Optional `--export-acting-pack <dir>` exports `acting_pack.json` for local GPU zero-shot emotional cloning (`F5-TTS-Vietnamese` / `VieNeu-TTS`) on your So-VITS-SVC PC.
+
+### Recommended 2-Machine So-VITS-SVC Narrator Workflow (Preserves ALL Acting Rhythm, Stuttering, Tremor & Intonation!)
+1. **This PC — Export 1 Expressive Acting Guide WAV + Helper Scripts:**
    ```bash
-   python3 scripts/gen_horror_voice.py --script out/<project>/SCRIPT.md --export-vc-pack out/<project>/vc_pack
+   python3 scripts/gen_horror_voice.py --script out/<project>/SCRIPT.md --acting cinematic --export-vc-pack out/<project>/vc_pack
    ```
-   Generates `narrator_guide_44k.wav` (all `[NARRATOR]` lines with mood F0 contours & normalized RMS), `vc_pack_manifest.json`, `run_svc_win.bat`, and `run_svc_unix.sh`.
+   Generates `narrator_guide_44k.wav` (already carrying full `0.68x..1.32x` tempo swings, real acoustic stutters, FM tremor & curious rising F0 — while deferring whisper air noise to Step 3 so So-VITS-SVC tracks clean F0!), `vc_pack_manifest.json`, `run_svc_win.bat`, and `run_svc_unix.sh`.
 2. **Your So-VITS-SVC Machine — Convert 1 File Using `-na` (`--no-auto-predict-f0`):**
-   - Run `run_svc_win.bat` / `run_svc_unix.sh` (CRITICAL: always pass **`-na`** so So-VITS-SVC preserves the whisper/dread/panic F0 pitch curve instead of flattening it into a monotone drone!) → produces `narrator_svc_out.wav`.
-3. **This PC — Exact 1:1 Re-Assembly + Multi-Speaker Dialogue + Breaths + Post-SVC Mood EQ:**
+   - Run `run_svc_win.bat` / `run_svc_unix.sh` (**CRITICAL:** always use **`-na`** so So-VITS-SVC mirrors 100% of the tempo, stutter, tremor, and F0 acting!) → produces `narrator_svc_out.wav`.
+3. **This PC — Exact 1:1 Re-Assembly + True Breathy Whisper Vocoder + Multi-Speaker Dialogue + Human Cues:**
    ```bash
    python3 scripts/gen_horror_voice.py --script out/<project>/SCRIPT.md \
+     --acting cinematic \
      --vc-pack out/<project>/vc_pack \
      --narrator-vc-wav out/<project>/vc_pack/narrator_svc_out.wav \
      --out-dir out/<project>/voice
    ```
-   Outputs 48 kHz mono `voice.wav` + `words.json` (complete with `speaker`, `mood`, and `dead_silences` spans).
-- *Quick preview / no SVC needed:* Pass `--no-vc` (uses expressive multi-mood `edge-tts` + procedural breaths + character FX). Toggle breaths off with `--no-auto-breath` if desired.
-- *Pre-recorded human/external WAVs:* Also supports `--export-narrator-script`, `--narrator-dir <folder>` (`001.wav..`), and `--narrator-audio <full.wav>` (auto VAD split).
+   Outputs 48 kHz mono `voice.wav` + `words.json` (with `speaker`, `mood`, `wps`, and `dead_silences`).
+- *Quick preview / no SVC needed:* Pass `--no-vc`. Toggle automatic breaths with `--no-auto-breath`.
+- *External human / F5-TTS / VieNeu-TTS clips:* Also supports `--export-narrator-script`, `--export-acting-pack`, `--narrator-dir <folder>` (`N01.wav..`), and `--narrator-audio <full.wav>` (auto VAD split).
 
 ---
 

@@ -150,7 +150,7 @@ class TestPhase2Pipeline(unittest.TestCase):
             ])
             final_wav, words_json, payload = ghv.assemble_voice(items, args3, td, synth_fn=make_synthetic_speech_fn(240.0))
 
-            self.assertEqual(payload["engine"], "horror-voice-v5")
+            self.assertTrue(payload["engine"].startswith("horror-voice-v5"))
             self.assertEqual(payload["narrator_source"], "vc_pack_external")
             self.assertEqual(len(payload["dead_silences"]), 1)
             ds = payload["dead_silences"][0]
@@ -467,6 +467,185 @@ class TestPhase2Pipeline(unittest.TestCase):
                 line_no = txt.count("\n", 0, m.start()) + 1
                 hits.append(f"{os.path.relpath(dp, REPO_ROOT)}:{line_no}: {m.group(0)!r}")
         self.assertEqual(hits, [], "Found stale legacy v2 references in docs:\n" + "\n".join(hits))
+
+    def test_v55_inline_director_tags_and_stutter_parser(self):
+        script = (
+            "[NARRATOR | mood=curious]\n"
+            "Ơ... tiếng gì trong tủ gỗ vậy?\n"
+            "[NARRATOR | mood=fear_tremble]\n"
+            "[GASP] Tay tôi run quá [TREMBLE] nó đang mở cửa! [/TREMBLE]\n"
+            "[NARRATOR | mood=stutter_panic]\n"
+            "K-không... [STUTTER] cái gì ngoài đó vậy?! [FAST] Chạy ngay đi! [/FAST]\n"
+            "[NARRATOR | mood=cold_twist]\n"
+            "[SWALLOW] [SLOW] Nó đứng sau lưng tôi. [/SLOW] [BEAT]\n"
+        )
+        with tempfile.TemporaryDirectory() as td:
+            sp = os.path.join(td, "SCRIPT.md")
+            with open(sp, "w", encoding="utf-8") as fp:
+                fp.write(script)
+            items = ghv.parse_script(sp)
+
+        cues = [it["cue"] for it in items if it["kind"] == "cue"]
+        self.assertIn("gasp", cues)
+        self.assertIn("swallow", cues)
+        self.assertTrue(any(it["kind"] == "pause" and it.get("from_beat") for it in items))
+
+        speech = [it for it in items if it["kind"] == "speech"]
+        # Curious question must auto-set force_up
+        cur_items = [it for it in speech if it["mood"] == "curious" and "?" in it["text"]]
+        self.assertTrue(cur_items and cur_items[0]["force_up"])
+
+        # Hyphen stutter `K-không` sends clean `"không"` to TTS while keeping `"K-không"` display & stutter_map!
+        k_items = [it for it in speech if "K-không" in it["text"]]
+        self.assertTrue(k_items)
+        self.assertNotIn("K-", k_items[0]["tts_text"])
+        self.assertIn("không", k_items[0]["tts_text"])
+        self.assertIn(0, k_items[0]["stutter_map"])
+
+        # Explicit `[STUTTER] cái gì` strips tag cleanly and marks word 0
+        st_items = [it for it in speech if "cái gì" in it["text"]]
+        self.assertTrue(st_items)
+        self.assertNotIn("[STUTTER]", st_items[0]["text"])
+        self.assertNotIn("[STUTTER]", st_items[0]["tts_text"])
+        self.assertIn(0, st_items[0]["stutter_map"])
+
+        # Inline [FAST], [SLOW], [TREMBLE] flags preserved
+        self.assertTrue(any(it["inline_speed_mult"] > 1.2 for it in speech))
+        self.assertTrue(any(it["inline_speed_mult"] < 0.8 for it in speech))
+        self.assertTrue(any(it["force_tremble"] for it in speech))
+
+    def test_v55_wide_tempo_spread_and_intra_sentence_pacing(self):
+        line_text = "Cánh cửa gỗ cũ cuối hành lang đột ngột bật mở ngay trước mắt tôi."
+        synth = make_synthetic_speech_fn(190.0)
+        args = ghv.build_parser().parse_args(["--script", "dummy.md", "--acting", "cinematic"])
+        it_slow = {
+            "kind": "speech", "text": line_text, "tts_text": line_text,
+            "speaker": "NARRATOR", "is_narrator": True, "voice": "v", "mood": "cold_twist",
+            "pitch": None, "rate": None, "speed": None, "inline_speed_mult": 1.0,
+            "force_tremble": False, "force_up": False, "stutter_map": {}, "fx": "dry",
+        }
+        it_fast = {**it_slow, "mood": "panic"}
+        seg_slow, w_slow = ghv.synth_line_auto(it_slow, ghv.SR_VC, None, 0, args, synth_fn=synth)
+        seg_fast, w_fast = ghv.synth_line_auto(it_fast, ghv.SR_VC, None, 1, args, synth_fn=synth)
+
+        dur_slow = len(seg_slow) / float(ghv.SR_VC)
+        dur_fast = len(seg_fast) / float(ghv.SR_VC)
+        # Panic must be at least 38% shorter (much faster!) than cold_twist on identical text!
+        self.assertLessEqual(dur_fast, dur_slow * 0.62, f"Expected wide tempo contrast: fast={dur_fast:.2f}s vs slow={dur_slow:.2f}s")
+        self.assertEqual(len(w_slow), len(w_fast))
+
+    def test_v55_true_whisper_vocoder_hf_air_and_envelope_preservation(self):
+        sr = ghv.SR_VC
+        t = np.arange(sr, dtype=np.float64) / float(sr)
+        # Modulated voiced speech proxy (syllable envelope at 4 Hz, fundamental 160 Hz)
+        syll_env = 0.5 + 0.5 * np.sin(2.0 * np.pi * 4.0 * t)
+        voiced = (0.7 * np.sin(2.0 * np.pi * 160.0 * t) + 0.3 * np.sin(2.0 * np.pi * 480.0 * t)) * syll_env
+        wh = ghv.apply_true_whisper(voiced, sr, mix=0.58)
+        self.assertEqual(len(wh), len(voiced))
+        self.assertTrue(np.all(np.isfinite(wh)))
+        # High-frequency breathy air band (2500-7000 Hz) must increase dramatically compared to pure tonal voiced input!
+        hf_in = float(np.sqrt(np.mean(ghv._bp(voiced, 2500.0, 7000.0, sr, 2) ** 2)))
+        hf_out = float(np.sqrt(np.mean(ghv._bp(wh, 2500.0, 7000.0, sr, 2) ** 2)))
+        self.assertGreater(hf_out, hf_in * 8.0 + 0.01)
+
+    def test_v55_vocal_tremor_6hz_and_curious_pitch_ramp(self):
+        sr = ghv.SR_VC
+        t = np.arange(int(1.2 * sr), dtype=np.float64) / float(sr)
+        src = 0.35 * np.sin(2.0 * np.pi * 210.0 * t)
+        trem = ghv.apply_vocal_tremor(src, sr, rate_hz=6.2, fm_semi=0.45, am_depth=0.28, strength=1.0)
+        self.assertEqual(len(trem), len(src))
+        self.assertTrue(np.all(np.isfinite(trem)))
+        # Envelope modulation energy around 5-8 Hz must be substantially higher than flat sine input
+        env_in = ghv._lp(np.abs(src), 20.0, sr, 2)
+        env_tr = ghv._lp(np.abs(trem), 20.0, sr, 2)
+        self.assertGreater(float(np.std(env_tr[4000:-4000])), float(np.std(env_in[4000:-4000])) * 4.0)
+
+        ramped = ghv.apply_pitch_ramp(src, sr, tail_sec=0.45, end_semi=2.4)
+        self.assertEqual(len(ramped), len(src))
+        self.assertTrue(np.all(np.isfinite(ramped)))
+        self.assertGreater(float(np.max(np.abs(ramped))), 0.15)
+
+    def test_v55_acoustic_syllable_stutter_and_word_timestamp_shift(self):
+        sr = ghv.SR_VC
+        t = np.arange(int(1.0 * sr), dtype=np.float64) / float(sr)
+        seg = 0.30 * np.sin(2.0 * np.pi * 220.0 * t)
+        words = [
+            {"w": "K-không", "s": 0.05, "e": 0.45, "speaker": "NARRATOR", "mood": "stutter_panic"},
+            {"w": "phải!", "s": 0.48, "e": 0.92, "speaker": "NARRATOR", "mood": "stutter_panic"},
+        ]
+        stut_seg, stut_words = ghv.apply_syllable_stutter(seg, words, {0: 2}, sr, acting_scale=1.0)
+        added_s = (len(stut_seg) - len(seg)) / float(sr)
+        self.assertGreater(added_s, 0.25)
+        self.assertLess(added_s, 0.65)
+        # Downstream word shifted accurately by +added_s
+        self.assertAlmostEqual(stut_words[1]["s"] - words[1]["s"], added_s, places=2)
+        self.assertLess(stut_words[0]["s"], stut_words[0]["e"])
+        self.assertLess(stut_words[0]["e"], stut_words[1]["s"] + 0.06)
+
+    def test_v55_gemini_tts_mock_and_automatic_edge_fallback(self):
+        import base64
+        from unittest import mock
+
+        # Build mock Gemini REST response carrying 24kHz PCM16 sine wave
+        pcm_t = np.arange(12000, dtype=np.float64) / 24000.0
+        pcm_i16 = np.round(0.35 * np.sin(2.0 * np.pi * 200.0 * pcm_t) * 32767.0).astype("<i2").tobytes()
+        mock_payload = json.dumps({
+            "candidates": [{
+                "content": {
+                    "parts": [{
+                        "inlineData": {
+                            "mimeType": "audio/L16;rate=24000",
+                            "data": base64.b64encode(pcm_i16).decode("ascii"),
+                        }
+                    }]
+                }
+            }]
+        }).encode("utf-8")
+
+        class _FakeResp:
+            def __enter__(self): return self
+            def __exit__(self, *a): return False
+            def read(self): return mock_payload
+
+        item = {
+            "kind": "speech", "text": "Ai ngoài đó vậy?", "tts_text": "Ai ngoài đó vậy?",
+            "speaker": "NARRATOR", "is_narrator": True, "voice": "v", "mood": "curious",
+            "acting": None, "pitch": None, "rate": None, "speed": None,
+            "inline_speed_mult": 1.0, "force_tremble": False, "force_up": True, "stutter_map": {}, "fx": "dry",
+        }
+        with tempfile.TemporaryDirectory() as td:
+            with mock.patch("urllib.request.urlopen", return_value=_FakeResp()):
+                x, w = ghv.synth_gemini_chunk(item, ghv.SR_VC, td, 0, api_key="fake-key", cache_dir=td)
+            self.assertGreater(len(x), 15000)
+            self.assertEqual(len(w), 4)
+
+            # Verify automatic fallback from failing Gemini -> edge chunk on cache miss when urlopen raises
+            miss_cache = os.path.join(td, "miss_cache")
+            args = ghv.build_parser().parse_args(["--script", "dummy.md", "--tts-engine", "gemini", "--gemini-api-key", "fake"])
+            with mock.patch("urllib.request.urlopen", side_effect=RuntimeError("429 quota")), \
+                 mock.patch.object(ghv, "synth_edge_chunk", return_value=(np.ones(8000) * 0.2, w)) as m_edge:
+                x2, w2 = ghv.synth_line_auto(item, ghv.SR_VC, td, 0, args, cache_dir=miss_cache)
+            m_edge.assert_called_once()
+            self.assertEqual(len(x2), 8000)
+
+    def test_v55_export_acting_pack_and_human_cues(self):
+        for cue in ("soft_inhale", "short_inhale", "sharp_gasp", "tremble_gasp", "shaky_exhale", "whisper_breath", "swallow", "sigh"):
+            arr = ghv.synth_human_cue(cue, ghv.SR_VC, seed=7)
+            self.assertGreater(len(arr), 1000)
+            self.assertTrue(np.all(np.isfinite(arr)))
+            self.assertGreater(float(np.max(np.abs(arr))), 0.05)
+
+        with tempfile.TemporaryDirectory() as td:
+            sp = os.path.join(td, "SCRIPT.md")
+            with open(sp, "w", encoding="utf-8") as fp:
+                fp.write(SAMPLE_EXPRESSIVE_SCRIPT)
+            items = ghv.parse_script(sp)
+            ap_json = ghv.export_acting_pack(items, os.path.join(td, "acting_pack"))
+            with open(ap_json, encoding="utf-8") as fp:
+                ap_data = json.load(fp)
+            self.assertEqual(ap_data["version"], "v5.5-acting-pack")
+            self.assertGreaterEqual(len(ap_data["lines"]), 5)
+            self.assertTrue(all("ref_emotion_clip" in ln and "acting_prompt" in ln for ln in ap_data["lines"]))
 
 
 if __name__ == "__main__":
