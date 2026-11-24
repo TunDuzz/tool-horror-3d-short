@@ -5,10 +5,14 @@
 1. **Story-Driven Setting Bed (`<= 1 Bed Only` — NEVER hardcode one bed for every video!):**
    - Pick **exactly ONE** subtle ambience matching the story's location/weather (rainy rural house → indoor rain from Openverse; empty hospital ward → sterile low room tone; midnight alley → faint wind; closed attic → near-silent dark room tone).
    - Carve the vocal band (`voice_notch_db: -4.0`, `lp_hz: 2400`) and automatically duck `-12..-16 dB` during `mood == "whisper"` acts.
-2. **Sparse Horror Spotting (`4–6 Hero Cues` per 45–60 s):**
-   - Place SFX **only** where the story or visual shot has a physical action or dread reveal.
-   - **Anti-Crowding:** One hero sound per moment; never start `>= 2` spot SFX inside `0.60 s` (unless explicitly marked `allow_layer: true` across separate frequency bands).
-   - **Silent Whisper Rule:** Keep `mood == "whisper"` acts completely free of intrusive spot SFX so breathy narration dominates.
+2. **Cinema Horror Spotting (`8–12 Well-Spaced Hero Cues` per 45–60 s, Calibrated by Measurement):**
+   - Place SFX **only** where the story or visual shot has a physical action or dread beat — never pile cues into mud, and never bury them so softly that they disappear under `-15 LUFS` narration!
+   - **Measurement-Calibrated Levels (NEVER guess raw `gain_db`!):**
+     - Bed: set `"target_rms_dbfs": -32.0 .. -35.0` (post-EQ, audible atmospheric mood ~16 dB under voice; ducks `-4 dB` under speech and `-9 dB` under whispers).
+     - Shock / Impact SFX (`cinematic_boom`, `heavy_door_slam`, `door_bolt_latch`): `"target_peak_dbfs": -3.0 .. -4.5` so they genuinely startle!
+     - Atmospheric / Foley SFX (`wooden_door_creak`, `wood_footsteps_slow`, `distant_thunder`, `cello_dread_sting`): `"target_peak_dbfs": -6.0 .. -9.0`, panned left/right (`±0.3..0.5`) to surround the narrator cleanly.
+   - **Anti-Crowding:** One hero sound per moment (or at most 1 cross-band pair like low `cinematic_boom` + high `door_bolt_latch` marked `allow_layer: true`); never pile `>= 3` cues inside `1.50 s`.
+   - **Silent Whisper Rule:** Keep `mood == "whisper"` acts free of distracting spot Foley (only ultra-low `< 70 Hz` `sub_drone` pressure swell or pre-silence `reverse_suck` marked `allow_in_whisper: true`).
 3. **Exact `onset` / `peak` / `end` Alignment via `cues.json`:**
    - Hits / door latches / flashlight clicks → `"align": "onset"` anchored to `at_act`, `at_word`, or `at_dead_silence`.
    - Whip-pan whooshes → `"align": "peak"` on the cut midpoint.

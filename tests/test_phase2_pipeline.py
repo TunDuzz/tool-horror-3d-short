@@ -829,10 +829,10 @@ class TestPhase2Pipeline(unittest.TestCase):
                 "words": words_p,
                 "library_dir": lib,
                 "skip_history": True,
-                "beds": [{"sound": "rain_bed", "gain_db": -22.0, "hp_hz": 120, "lp_hz": 2400, "voice_notch_db": -4.0, "whisper_duck_db": -14.0}],
+                "beds": [{"sound": "rain_bed", "target_rms_dbfs": -33.0, "hp_hz": 120, "lp_hz": 2400, "voice_notch_db": -4.0, "whisper_duck_db": -10.0}],
                 "events": [
-                    {"synth": "reverse_suck", "bus": "score", "at_dead_silence": 0, "edge": "start", "align": "end", "dur_s": 0.60, "gain_db": -12.0, "allow_in_whisper": True, "label": "pull into void"},
-                    {"sound": "door_click", "bus": "sfx", "at_dead_silence": 0, "edge": "end", "offset_s": 0.05, "align": "onset", "gain_db": -8.0, "label": "latch after void"},
+                    {"synth": "reverse_suck", "bus": "score", "at_dead_silence": 0, "edge": "start", "align": "end", "dur_s": 0.60, "target_peak_dbfs": -6.0, "allow_in_whisper": True, "label": "pull into void"},
+                    {"sound": "door_click", "bus": "sfx", "at_dead_silence": 0, "edge": "end", "offset_s": 0.05, "align": "onset", "target_peak_dbfs": -4.0, "label": "latch after void"},
                 ],
             }
             cues_p = os.path.join(td, "cues.json")

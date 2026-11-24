@@ -4,7 +4,7 @@
 Combines Openverse/CC0 real Foley assets with sparse, story-driven horror mixing rules inspired by
 `openverse-sfx` & `claude-add-sound-skill`, specialized for Vietnamese horror narration:
   1. MAX_BEDS_EXCEEDED     : Enforce <= 1 ambience bed (story-setting-driven, NEVER stack 3-4 beds!)
-  2. SFX_SPARSITY_WARN     : Warn if spot SFX density exceeds sparse horror budget (> max(6, dur/6.5))
+  2. SFX_SPARSITY_WARN     : Warn if spot SFX density exceeds calibrated horror budget (> max(12, dur/3.8))
   3. SFX_CROWDING_WARN     : Warn if >= 2 SFX land within 0.60s (unless `allow_layer: true`) or >= 3 in 1.50s
   4. WHISPER_INTRUSION_WARN: Warn if any spot SFX intrudes on a `mood == "whisper"` span (unless `allow_in_whisper: true`)
   5. DEAD_SILENCE_VACUUM   : Carve TRUE -48 dB vacuum across every `[DEAD SILENCE]` and verify >= 38 dB drop
@@ -156,7 +156,7 @@ def audit_cues(cfg: dict, resolved_events: list[dict], wdata: dict, dur: float) 
         })
 
     sfx_only = [e for e in resolved_events if e.get("bus", "sfx") == "sfx"]
-    max_sparse = max(6, int(math.ceil(dur / 6.5)))
+    max_sparse = max(12, int(math.ceil(dur / 3.8)))
     if len(sfx_only) > max_sparse:
         warnings.append({
             "code": "SFX_SPARSITY_WARN",
@@ -301,31 +301,43 @@ def render_cues_mix(cues_path: str, out_wav: str, library_dir: str | None = None
                 raise FileNotFoundError(f"Bed SFX asset not found in {lib_dir}: {b['sound']}")
             _record_usage(b["sound"])
         arr = _apply_dialog_safe_eq(arr, hp_hz=b.get("hp_hz"), lp_hz=b.get("lp_hz"), voice_notch_db=float(b.get("voice_notch_db", 0.0)))
-        bed_duck = float(b.get("duck_db", -5.5))
+        # Measurement-calibrated bed loudness (post-EQ) so every Openverse/CC0 bed sits at exact audible horror floor!
+        if b.get("target_rms_dbfs") is not None:
+            cur_rms = float(np.sqrt(np.mean(np.square(arr)) + 1e-18))
+            if cur_rms > 1e-7:
+                arr = arr * (dbg(float(b["target_rms_dbfs"])) / cur_rms)
+                pk_b = float(np.max(np.abs(arr)))
+                if pk_b > dbg(-6.0):
+                    arr *= dbg(-6.0) / pk_b
+        bed_duck = float(b.get("duck_db", -4.5))
         if bed_duck < -0.1:
             arr *= dbg(duck_db(spans, dur, depth=bed_duck, pre=0.08, post=0.14, att=0.06, rel=0.45))[None, :]
         # Extra silence carving on whisper acts so whispered speech stays razor-clear!
-        wh_duck = float(b.get("whisper_duck_db", -12.0))
+        wh_duck = float(b.get("whisper_duck_db", -9.0))
         if whisper_spans and wh_duck < -0.1:
             arr *= dbg(duck_db(whisper_spans, dur, depth=wh_duck, pre=0.15, post=0.18, att=0.12, rel=0.45))[None, :]
         place(sfx_bed, arr, 0.0)
 
-    # 2. Surgical story-driven spot cues (onset/peak/end aligned)
+    # 2. Surgical story-driven spot cues (onset/peak/end aligned + measurement-calibrated peak/RMS!)
     for ev in resolved_events:
         if ev.get("synth") == "reverse_suck":
-            arr = reverse_suck(dur=float(ev.get("dur_s", 0.78)), vel=float(ev.get("vel", 0.38)), r=r, f_base=float(ev.get("f_base", 280.0)))
+            arr = reverse_suck(dur=float(ev.get("dur_s", 0.78)), vel=float(ev.get("vel", 0.55)), r=r, f_base=float(ev.get("f_base", 280.0)))
             if ev.get("gain_db"):
                 arr = arr * dbg(float(ev["gain_db"]))
+            if ev.get("fade_in") or ev.get("fade_out"):
+                arr = fades(arr, float(ev.get("fade_in", 0.02)), float(ev.get("fade_out", 0.02)))
         elif ev.get("synth") == "sub_drone":
-            arr = sub_drone(f=float(ev.get("freq_hz", 43.65)), dur=float(ev.get("dur_s", 5.0)), vel=float(ev.get("vel", 0.22)), r=r)
+            arr = sub_drone(f=float(ev.get("freq_hz", 43.65)), dur=float(ev.get("dur_s", 5.0)), vel=float(ev.get("vel", 0.35)), r=r)
             if ev.get("gain_db"):
                 arr = arr * dbg(float(ev["gain_db"]))
+            arr = fades(arr, float(ev.get("fade_in", 0.35)), float(ev.get("fade_out", 0.12)))
         else:
+            raw_gain = 0.0 if (ev.get("target_peak_dbfs") is not None or ev.get("target_rms_dbfs") is not None) else float(ev.get("gain_db", -10.0))
             arr = load_sfx_asset(
                 ev["sound"],
                 library_dir=lib_dir,
                 dur_sec=ev.get("dur_s"),
-                gain_db=float(ev.get("gain_db", -10.0)),
+                gain_db=raw_gain,
                 pan_pos=ev.get("pan"),
                 loop=bool(ev.get("loop", False)),
                 fade_in=float(ev.get("fade_in", 0.012)),
@@ -339,6 +351,17 @@ def render_cues_mix(cues_path: str, out_wav: str, library_dir: str | None = None
         reverb_wet = float(ev.get("reverb", 0.0))
         if reverb_wet > 0.01:
             arr = arr + reverb_wet * convolve_st(arr, room_ir)
+
+        # Measurement-calibrated event leveling (post-EQ & reverb) so SFX hit with unmistakable cinema presence!
+        if ev.get("target_rms_dbfs") is not None:
+            cur_rms = float(np.sqrt(np.mean(np.square(arr)) + 1e-18))
+            if cur_rms > 1e-7:
+                arr = arr * (dbg(float(ev["target_rms_dbfs"])) / cur_rms)
+        if ev.get("target_peak_dbfs") is not None:
+            cur_pk = float(np.max(np.abs(arr)))
+            if cur_pk > 1e-7:
+                arr = arr * (dbg(float(ev["target_peak_dbfs"])) / cur_pk)
+        ev["measured_peak_dbfs"] = round(20.0 * math.log10(max(float(np.max(np.abs(arr))), 1e-9)), 1)
 
         bus = str(ev.get("bus", "sfx")).lower()
         target_buf = music if bus in ("score", "music") else sfx_spot
@@ -417,14 +440,34 @@ def render_cues_mix(cues_path: str, out_wav: str, library_dir: str | None = None
         "## 5 Mốc Thời Gian Đề Xuất Đeo Tai Nghe Kiểm Tra",
     ])
     check_pts = []
+    # 1. Early story cue (first event in opening half)
+    if resolved_events:
+        first_ev = min(resolved_events, key=lambda e: e["target_t"])
+        check_pts.append((first_ev["target_t"], f"`{first_ev['label']}` (mốc `{first_ev['target_t']:.2f}s`, căn `{first_ev['align']}`, peak `{first_ev.get('measured_peak_dbfs', 0.0):.1f} dBFS`)"))
+    # 2. Whisper span verification
     if whisper_spans:
         ws, we = whisper_spans[0]
-        check_pts.append((ws, f"Hồi thì thầm (`{ws:.2f}s..{we:.2f}s`) — kiểm tra nền có thực sự tĩnh và không có SFX chen ngang không"))
+        check_pts.append((ws, f"Hồi thì thầm (`{ws:.2f}s..{we:.2f}s`) — kiểm tra nền có tự hạ tĩnh và giọng thì thầm rõ nét không"))
+    # 3. Dead Silence climax verification
     for d in ds_reports[:1]:
         check_pts.append((max(0.0, d["s"] - 0.8), f"Khoảng lặng chết (`{d['s']:.2f}s..{d['e']:.2f}s`) — kiểm tra sườn hút ngược → chân không `-48 dB` → cú nổ sau im lặng"))
+    # 4. Loudest hero impact cue in second half (if distinct)
+    hero_cands = [e for e in resolved_events if e["target_t"] > 0.45 * dur and not any(abs(e["target_t"] - t0) < 2.0 for t0, _ in check_pts)]
+    if hero_cands:
+        loudest = max(hero_cands, key=lambda e: e.get("measured_peak_dbfs", -99.0))
+        check_pts.append((loudest["target_t"], f"`{loudest['label']}` (mốc `{loudest['target_t']:.2f}s`, căn `{loudest['align']}`, peak `{loudest.get('measured_peak_dbfs', 0.0):.1f} dBFS`)"))
+    # 5. Closing twist cue (last event if distinct)
+    if resolved_events:
+        last_ev = max(resolved_events, key=lambda e: e["target_t"])
+        if not any(abs(last_ev["target_t"] - t0) < 1.5 for t0, _ in check_pts):
+            check_pts.append((last_ev["target_t"], f"`{last_ev['label']}` (mốc `{last_ev['target_t']:.2f}s`, căn `{last_ev['align']}`, peak `{last_ev.get('measured_peak_dbfs', 0.0):.1f} dBFS`)"))
+    # Backfill to 5 checkpoints if track has fewer special sections
     for ev in resolved_events:
-        check_pts.append((ev["target_t"], f"`{ev['label']}` (mốc `{ev['target_t']:.2f}s`, căn `{ev['align']}`, gain `{ev.get('gain_db', 0):+.1f} dB`)"))
-    for t_chk, desc in sorted(check_pts, key=lambda x: x[0])[:6]:
+        if len(check_pts) >= 5:
+            break
+        if not any(abs(ev["target_t"] - t0) < 2.0 for t0, _ in check_pts):
+            check_pts.append((ev["target_t"], f"`{ev['label']}` (mốc `{ev['target_t']:.2f}s`, căn `{ev['align']}`, peak `{ev.get('measured_peak_dbfs', 0.0):.1f} dBFS`)"))
+    for t_chk, desc in sorted(check_pts, key=lambda x: x[0])[:5]:
         report_lines.append(f"- **`{t_chk:05.2f}s`** — {desc}")
 
     report_lines.extend([
@@ -437,7 +480,7 @@ def render_cues_mix(cues_path: str, out_wav: str, library_dir: str | None = None
         src_lbl = ev.get("sound") or f"synth:{ev.get('synth')}"
         report_lines.append(
             f"| {ev['idx']} | `{ev.get('bus', 'sfx')}` | `{src_lbl}` | `{ev['target_t']:.2f}s` | `{ev['place_t']:.2f}s` | "
-            f"`{ev['align']}` (-{ev['align_off']:.2f}s) | `{ev.get('gain_db', 0):+.1f} dB` · pan `{ev.get('pan', 0.0)}` | {ev['label']} |"
+            f"`{ev['align']}` (-{ev['align_off']:.2f}s) | peak `{ev.get('measured_peak_dbfs', 0.0):.1f} dBFS` · pan `{ev.get('pan', 0.0)}` | {ev['label']} |"
         )
 
     report_path = os.path.join(out_dir, "mix_report.md")
