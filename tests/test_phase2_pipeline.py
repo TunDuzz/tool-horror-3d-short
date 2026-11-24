@@ -22,6 +22,7 @@ for p in (SCRIPTS_DIR, AUDIO_DIR):
 
 import gen_horror_voice as ghv  # noqa: E402
 import prepare_emotion_refs as per  # noqa: E402
+import curate_emotion_candidates as cec  # noqa: E402
 import sfx_manager as sm  # noqa: E402
 import align_manifest as am  # noqa: E402
 import horror_instruments as hi  # noqa: E402
@@ -554,6 +555,75 @@ class TestPhase2Pipeline(unittest.TestCase):
                 line_no = txt.count("\n", 0, m.start()) + 1
                 hits.append(f"{os.path.relpath(dp, REPO_ROOT)}:{line_no}: {m.group(0)!r}")
         self.assertEqual(hits, [], "Found stale legacy v2 references:\n" + "\n".join(hits))
+
+    def test_v62_curate_emotion_candidates_scoring_and_apply_gate(self):
+        sr = per.SR_REF
+        # 1. Acoustic quality gate: clean 5.0s speech passes; noisy/clipped/short fail
+        t_clean = np.arange(int(5.0 * sr), dtype=np.float64) / sr
+        env = np.where((t_clean % 1.0) < 0.72, 1.0, 0.005)
+        clean_sig = env * (0.28 * np.sin(2.0 * np.pi * 190.0 * t_clean))
+        m_clean = cec.measure_audio_metrics(clean_sig, sr, text="Đêm hôm đó trời mưa rất to ngoài sân nhà")
+        ok, sc, reason = cec.score_candidate(m_clean, "calm", {"lang": "vi", "gender": "male", "dialect": "northern dialect"})
+        self.assertTrue(ok, reason)
+        self.assertGreater(sc, 10.0)
+
+        # Too short (<2.6s) rejected
+        short_sig = clean_sig[: int(1.4 * sr)]
+        ok_s, _, _ = cec.score_candidate(cec.measure_audio_metrics(short_sig, sr), "calm", {"lang": "vi"})
+        self.assertFalse(ok_s)
+
+        # Heavy constant BGM / flat noise (low SNR) rejected
+        rng = np.random.default_rng(7)
+        bgm_sig = 0.25 * rng.normal(0.0, 1.0, len(t_clean))
+        ok_n, _, _ = cec.score_candidate(cec.measure_audio_metrics(bgm_sig, sr), "fear", {"lang": "vi"})
+        self.assertFalse(ok_n)
+
+        # Clipped signal rejected
+        clipped_sig = np.clip(clean_sig * 12.0, -1.0, 1.0)
+        ok_c, _, _ = cec.score_candidate(cec.measure_audio_metrics(clipped_sig, sr), "panic", {"lang": "vi"})
+        self.assertFalse(ok_c)
+
+        # 2. Staging audition catalog + explicit apply gate (NEVER touches emotion_refs until apply!)
+        with tempfile.TemporaryDirectory() as td:
+            aud_dir = os.path.join(td, "emotion_audition")
+            refs_dir = os.path.join(td, "emotion_refs")
+            os.makedirs(os.path.join(aud_dir, "raw_candidates"), exist_ok=True)
+            selected = {}
+            for idx, mood in enumerate(cec.MOOD_SPEC):
+                selected[mood] = []
+                for slot, lang in (("A", "vi"), ("B", "en")):
+                    rel = os.path.join("raw_candidates", f"{mood}_{slot}.wav")
+                    abs_p = os.path.join(aud_dir, rel)
+                    per.write_wav_mono16(abs_p, clean_sig, sr)
+                    selected[mood].append({
+                        "slot": slot,
+                        "mood": mood,
+                        "dataset": "doof-ferb/LSVSC" if lang == "vi" else "ylacombe/expresso",
+                        "license": "test-open",
+                        "split": "validation",
+                        "row_idx": idx * 10 + (0 if slot == "A" else 1),
+                        "lang": lang,
+                        "emotion": mood,
+                        "gender": "male",
+                        "text": "test sample",
+                        "raw_wav": rel,
+                        "raw_wav_abs": abs_p,
+                        "metrics": m_clean,
+                        "score": 18.5,
+                    })
+
+            cec.render_vieneu_previews(selected, aud_dir, synth_fn=lambda txt, ref, sp, tmp: clean_sig[: int(4.0 * sr)])
+            mf_path, cat_path = cec.write_audition_catalog(selected, aud_dir)
+            self.assertTrue(os.path.isfile(mf_path))
+            self.assertTrue(os.path.isfile(cat_path))
+            self.assertTrue(os.path.isfile(os.path.join(aud_dir, "audition_reel.wav")))
+            self.assertFalse(os.path.exists(refs_dir))  # Staging NEVER modifies emotion_refs!
+
+            picks = cec.parse_picks(["calm=A", "curious=A", "whisper=B", "fear=A", "panic=A", "dread=A"])
+            applied = cec.apply_approved_picks(aud_dir, refs_dir, picks)
+            self.assertEqual(len(applied), 6)
+            for mood in cec.MOOD_SPEC:
+                self.assertTrue(os.path.isfile(os.path.join(refs_dir, f"{mood}.wav")))
 
 
 if __name__ == "__main__":
