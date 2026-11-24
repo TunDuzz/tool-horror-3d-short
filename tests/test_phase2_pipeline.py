@@ -848,6 +848,42 @@ class TestPhase2Pipeline(unittest.TestCase):
             with open(res["credits"], encoding="utf-8") as fp:
                 self.assertIn('"Rain Bed" by Test (CC0)', fp.read())
 
+            # C. v7.1 Multi-Style Jumpscare Engine: Fatigue Gate (>2 blocked) + 3-band startle contrast & micro-vacuum PASS!
+            spam_events = [
+                {"label": "j1", "jumpscare": "cinema_stab", "bus": "sfx", "target_t": 1.0},
+                {"label": "j2", "jumpscare": "metal_dread", "bus": "sfx", "target_t": 5.3},
+                {"label": "j3", "jumpscare": "vhs_psx_glitch", "bus": "sfx", "target_t": 7.4},
+            ]
+            spam_warns = mc.audit_cues({"beds": [{"sound": "rain_bed"}]}, spam_events, wdata, dur)
+            self.assertIn("JUMPSCARE_FATIGUE_WARN", {w["code"] for w in spam_warns})
+
+            js_cues = {
+                "voice": voice_p,
+                "words": words_p,
+                "library_dir": lib,
+                "tail_pad_s": 2.0,
+                "skip_history": True,
+                "beds": [{"sound": "rain_bed", "target_rms_dbfs": -33.0, "hp_hz": 120, "lp_hz": 2400}],
+                "events": [
+                    {"synth": "reverse_suck", "bus": "score", "at_dead_silence": 0, "edge": "start", "align": "end", "dur_s": 0.60, "target_peak_dbfs": -6.0, "allow_in_whisper": True, "label": "pull into void"},
+                    {"jumpscare": "cinema_stab", "at_dead_silence": 0, "edge": "end", "target_peak_dbfs": -1.5, "tinnitus": True, "label": "climax stab"},
+                    {"jumpscare": "vhs_psx_glitch", "at_act": 3, "edge": "end", "offset_s": 0.30, "micro_silence_s": 0.22, "target_peak_dbfs": -1.5, "label": "final VHS lunge"},
+                ],
+            }
+            js_cues_p = os.path.join(td, "js_cues.json")
+            with open(js_cues_p, "w", encoding="utf-8") as fp:
+                json.dump(js_cues, fp)
+            js_res = mc.render_cues_mix(js_cues_p, os.path.join(td, "out_js", "mix_js.wav"), library_dir=lib, strict=True)
+            self.assertEqual(js_res["verdict"], "PASS")
+            self.assertEqual(js_res["clips"], 0)
+            self.assertEqual(len(js_res["jumpscares"]), 2)
+            for j in js_res["jumpscares"]:
+                self.assertGreaterEqual(j["jump_contrast_db"], 18.0)
+                self.assertGreater(j["bite_1400_6500_dbfs"], -35.0)
+            with open(js_res["report"], encoding="utf-8") as fp:
+                rep_txt = fp.read()
+            self.assertIn("Kiểm Định Jumpscare Thực Đo", rep_txt)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -1,14 +1,15 @@
 #!/usr/bin/env python3
-"""Horror Engine v7.0: Declarative `cues.json` Horror Audio Mixer + 6 Anti-Clutter QA Gates.
+"""Horror Engine v7.1: Declarative `cues.json` Horror Audio Mixer + Multi-Style Jumpscare Engine + 7 Anti-Clutter QA Gates.
 
-Combines Openverse/CC0 real Foley assets with sparse, story-driven horror mixing rules inspired by
-`openverse-sfx` & `claude-add-sound-skill`, specialized for Vietnamese horror narration:
+Combines Openverse/CC0 real Foley assets with sparse, story-driven horror mixing & psychoacoustic
+3-band Jumpscare design inspired by `openverse-sfx` & `claude-add-sound-skill`, specialized for Vietnamese horror:
   1. MAX_BEDS_EXCEEDED     : Enforce <= 1 ambience bed (story-setting-driven, NEVER stack 3-4 beds!)
   2. SFX_SPARSITY_WARN     : Warn if spot SFX density exceeds calibrated horror budget (> max(12, dur/3.8))
   3. SFX_CROWDING_WARN     : Warn if >= 2 SFX land within 0.60s (unless `allow_layer: true`) or >= 3 in 1.50s
   4. WHISPER_INTRUSION_WARN: Warn if any spot SFX intrudes on a `mood == "whisper"` span (unless `allow_in_whisper: true`)
-  5. DEAD_SILENCE_VACUUM   : Carve TRUE -48 dB vacuum across every `[DEAD SILENCE]` and verify >= 38 dB drop
-  6. LOUDNESS_AND_CLIPS    : Verify -15.0 LUFS, <= -1.2 dBTP, 0 clips, write `mix_report.md` (5 headphone check timestamps) & `credits.txt`
+  5. JUMPSCARE_FATIGUE_WARN: Enforce <= 2 Jumpscares per 45-60s video (`max_jumpscares`) so viewers never go numb
+  6. DEAD_SILENCE_VACUUM   : Carve TRUE -48 dB vacuum across every `[DEAD SILENCE]` and verify >= 38 dB drop
+  7. LOUDNESS_AND_CLIPS    : Verify -15.0 LUFS, <= -1.2 dBTP, 0 clips, measure Jumpscare contrast & 1.4-6.5kHz bite, write `mix_report.md` & `credits.txt`
 
 Usage:
   python3 scripts/mix_cues.py --cues out/<project>/cues.json --out out/<project>/mix.wav --strict
@@ -31,7 +32,17 @@ for p in (SCRIPT_DIR, AUDIO_DIR):
 
 import sfx_manager as sm  # noqa: E402
 from dsp import SR, ns, st, rng, place, make_ir, convolve_st, dbg, pan, fades, write_wav  # noqa: E402
-from horror_instruments import sub_drone, reverse_suck  # noqa: E402
+from horror_instruments import (  # noqa: E402
+    sub_drone,
+    reverse_suck,
+    stinger,
+    riser,
+    tinnitus_ring,
+    vhs_static_burst,
+    neck_crack_wet,
+    entity_rattle,
+    bowed_metal,
+)
 from mix_base import (  # noqa: E402
     load_voice,
     load_words,
@@ -43,6 +54,47 @@ from mix_base import (  # noqa: E402
     write_mix_and_stems,
     ffmpeg_ebur,
 )
+
+# Story-driven multi-style Jumpscare presets: every style layers <10ms synchronized
+# Sub Chest-Punch (35-190 Hz) + High-Mid Startle Bite (1.4-6.5 kHz) with graceful fallback.
+JUMPSCARE_STYLES = {
+    "cinema_stab": {
+        "sub_candidates": ["jumpscare_classic_sfx_ov", "cinematic_boom"],
+        "bite_candidates": ["jumpscare_string_stab_ov", "jumpscare_shock_stab_ov"],
+        "synth_bite": "shriek",
+        "bite_hp_hz": 280.0,
+        "sub_lp_hz": 185.0,
+        "synth_edge_db": -5.5,
+        "default_dur": 2.4,
+    },
+    "entity_shriek": {
+        "sub_candidates": ["jumpscare_classic_sfx_ov", "cinematic_boom"],
+        "bite_candidates": ["jumpscare_scream_ov", "jumpscare_entity_shriek_ov"],
+        "synth_bite": "entity_shriek",
+        "bite_hp_hz": 320.0,
+        "sub_lp_hz": 190.0,
+        "synth_edge_db": -6.5,
+        "default_dur": 2.3,
+    },
+    "metal_dread": {
+        "sub_candidates": ["cinematic_boom", "jumpscare_classic_sfx_ov"],
+        "bite_candidates": ["jumpscare_metal_screech_ov", "jumpscare_shock_stab_ov"],
+        "synth_bite": "braam",
+        "bite_hp_hz": 300.0,
+        "sub_lp_hz": 180.0,
+        "synth_edge_db": -5.0,
+        "default_dur": 2.5,
+    },
+    "vhs_psx_glitch": {
+        "sub_candidates": ["jumpscare_classic_sfx_ov", "cinematic_boom"],
+        "bite_candidates": ["jumpscare_scream_ov", "jumpscare_metal_screech_ov"],
+        "synth_bite": "vhs_shriek",
+        "bite_hp_hz": 420.0,
+        "sub_lp_hz": 200.0,
+        "synth_edge_db": -3.5,
+        "default_dur": 1.9,
+    },
+}
 
 
 def rms_db(arr: np.ndarray) -> float:
@@ -199,7 +251,131 @@ def audit_cues(cfg: dict, resolved_events: list[dict], wdata: dict, dur: float) 
                     "severity": "ERROR",
                     "detail": f"Event '{ev['label']}' at {t:.2f}s intrudes into quiet WHISPER act [{ws:.2f}s..{we:.2f}s]!",
                 })
+
+    js_events = [e for e in resolved_events if e.get("jumpscare") or e.get("is_jumpscare")]
+    max_js = int(cfg.get("max_jumpscares", 2))
+    if len(js_events) > max_js:
+        warnings.append({
+            "code": "JUMPSCARE_FATIGUE_WARN",
+            "severity": "ERROR",
+            "detail": f"Found {len(js_events)} jumpscares (max recommended: {max_js} per 45-60s video). Too many jumpscares desensitize the viewer!",
+        })
     return warnings
+
+
+def _trim_to_onset(arr: np.ndarray, onset_s: float, pre_s: float = 0.006, max_dur_s: float | None = None) -> np.ndarray:
+    """Trim leading silence right up to `onset_s` so stacked jumpscare bands strike on the exact same <10 ms transient."""
+    k0 = max(0, ns(max(0.0, onset_s - pre_s)))
+    out = arr[:, k0:] if k0 < arr.shape[1] - 64 else arr.copy()
+    if max_dur_s is not None and out.shape[1] > ns(max_dur_s):
+        out = out[:, : ns(max_dur_s)]
+    return fades(out, 0.004, min(0.08, max(0.015, out.shape[1] / SR * 0.12)))
+
+
+def _fit_add(dst: np.ndarray, src: np.ndarray, gain: float = 1.0) -> np.ndarray:
+    s2 = st(src)
+    n = min(dst.shape[1], s2.shape[1])
+    dst[:, :n] += s2[:, :n] * gain
+    return dst
+
+
+def _build_jumpscare_composite(ev: dict, lib_dir: str, mf_assets: dict, r, record_usage_fn) -> tuple[np.ndarray, np.ndarray | None]:
+    """Build a synchronized 3-band psychoacoustic Jumpscare (Sub Chest-Punch + 1.4-6.5 kHz Startle Bite + optional Aftershock)."""
+    style = str(ev.get("jumpscare", "cinema_stab")).strip().lower()
+    if style not in JUMPSCARE_STYLES:
+        raise ValueError(f"Unknown jumpscare style {style!r}; valid: {sorted(JUMPSCARE_STYLES)}")
+    spec = JUMPSCARE_STYLES[style]
+    dur_s = float(ev.get("dur_s", spec["default_dur"]))
+    out = np.zeros((2, ns(dur_s)), dtype=np.float64)
+
+    def _load_trimmed_first(candidates: list[str], target_pk_db: float, hp_hz=None, lp_hz=None) -> bool:
+        for slug in candidates:
+            if not slug:
+                continue
+            raw = load_sfx_asset(slug, library_dir=lib_dir, gain_db=0.0, loop=False, fade_in=0.002, fade_out=0.04)
+            if raw is None:
+                continue
+            env = _get_asset_envelope(slug, lib_dir, mf_assets)
+            seg = _trim_to_onset(raw, float(env.get("onset_s", 0.0)), pre_s=0.006, max_dur_s=dur_s)
+            seg = _apply_dialog_safe_eq(seg, hp_hz=hp_hz, lp_hz=lp_hz)
+            pk = float(np.max(np.abs(seg)))
+            if pk > 1e-7:
+                seg = seg * (dbg(target_pk_db) / pk)
+                _fit_add(out, seg, 1.0)
+                record_usage_fn(slug)
+                return True
+        return False
+
+    # 1. Sub Chest-Punch (35-190 Hz): exact <10ms strike
+    sub_cands = [ev["sub_sound"]] + spec["sub_candidates"] if ev.get("sub_sound") else spec["sub_candidates"]
+    if not _load_trimmed_first(sub_cands, target_pk_db=-2.0, lp_hz=spec["sub_lp_hz"]):
+        sub_syn = _apply_dialog_safe_eq(stinger("boom", vel=0.95, r=r, dur=min(dur_s, 2.2), f0=46.0), lp_hz=spec["sub_lp_hz"])
+        _fit_add(out, sub_syn, dbg(-2.0) / max(float(np.max(np.abs(sub_syn))), 1e-7))
+
+    # 2. High-Mid Startle Bite (1.4-6.5 kHz — triggers acoustic startle reflex!)
+    bite_cands = [ev["sound"]] + spec["bite_candidates"] if ev.get("sound") else spec["bite_candidates"]
+    got_real_bite = _load_trimmed_first(bite_cands, target_pk_db=-1.5, hp_hz=spec["bite_hp_hz"])
+    edge_db = float(ev.get("edge_db", spec["synth_edge_db"] if got_real_bite else -1.5))
+
+    # Style-specific psychoacoustic razor edge (<10ms dissonant screech / VHS tape tear / metallic slam)
+    sb = spec["synth_bite"]
+    if sb == "shriek":
+        edge = _apply_dialog_safe_eq(stinger("shriek", vel=0.95, r=r, dur=min(dur_s, 1.5)), hp_hz=1200.0)
+    elif sb == "entity_shriek":
+        edge = _apply_dialog_safe_eq(entity_rattle(dur=min(dur_s, 1.6), vel=0.92, r=r, kind="shriek_gasp"), hp_hz=550.0)
+        edge = _fit_add(edge.copy(), _apply_dialog_safe_eq(stinger("shriek", vel=0.8, r=r, dur=min(dur_s, 1.2)), hp_hz=1600.0), 0.55)
+    elif sb == "braam":
+        edge = _apply_dialog_safe_eq(stinger("braam", vel=0.92, r=r, dur=min(dur_s, 1.8), f0=73.4), hp_hz=260.0)
+        edge = _fit_add(edge.copy(), pan(bowed_metal(f=620.0, dur=min(dur_s, 1.4), vel=0.75, r=r, att=0.015), 0.2), 0.65)
+    else:  # vhs_psx_glitch
+        vhs = vhs_static_burst(dur=min(dur_s, 0.55), vel=0.95, r=r)
+        shr = _apply_dialog_safe_eq(stinger("shriek", vel=0.9, r=r, dur=min(dur_s, 1.15)), hp_hz=1350.0)
+        edge = np.zeros((2, max(vhs.shape[1], shr.shape[1])), dtype=np.float64)
+        _fit_add(edge, vhs, 1.0)
+        _fit_add(edge, shr, 0.72)
+        edge = np.tanh(edge * 1.65)
+
+    epk = float(np.max(np.abs(edge)))
+    if epk > 1e-7:
+        _fit_add(out, edge * (dbg(edge_db) / epk), 1.0)
+
+    # Optional visceral bone/neck crack transient accent
+    if ev.get("body_crack"):
+        crk = neck_crack_wet(dur=0.45, vel=0.9, r=r)
+        _fit_add(out, crk, dbg(-4.0) / max(float(np.max(np.abs(crk))), 1e-7))
+
+    # Optional fragile post-shock ear-ringing aftershock
+    tinn = None
+    if ev.get("tinnitus"):
+        t_dur = float(ev.get("tinnitus_dur_s", 2.8))
+        tinn = tinnitus_ring(dur=t_dur, vel=0.8, f=float(ev.get("tinnitus_hz", 4060.0)), r=r)
+        trms = float(np.sqrt(np.mean(np.square(tinn)) + 1e-18))
+        if trms > 1e-7:
+            tinn = tinn * (dbg(float(ev.get("tinnitus_rms_dbfs", -27.5))) / trms)
+
+    return fades(out, 0.002, 0.08), tinn
+
+
+def _apply_micro_vacuums(buffers: list[np.ndarray], vacuums: list[tuple[float, float]], floor_db: float = -36.0):
+    """Carve brief pre-jumpscare micro-silence drops on ambience/score so ears dilate right before impact."""
+    if not vacuums:
+        return
+    n = buffers[0].shape[1]
+    env = np.ones(n, dtype=np.float64)
+    floor_lin = dbg(floor_db)
+    for t_start, t_end in vacuums:
+        a = max(0, min(n, ns(t_start)))
+        b = max(a, min(n, ns(t_end)))
+        if b - a < 32:
+            continue
+        fa = min(ns(0.020), max(1, (b - a) // 4))
+        fb = min(ns(0.004), max(1, (b - a) // 8))
+        env[a : a + fa] = np.minimum(env[a : a + fa], floor_lin + (1.0 - floor_lin) * 0.5 * (1.0 + np.cos(np.pi * np.linspace(0.0, 1.0, fa))))
+        if b - fb > a + fa:
+            env[a + fa : b - fb] = np.minimum(env[a + fa : b - fb], floor_lin)
+        env[b - fb : b] = np.minimum(env[b - fb : b], floor_lin + (1.0 - floor_lin) * 0.5 * (1.0 - np.cos(np.pi * np.linspace(0.0, 1.0, fb))))
+    for buf in buffers:
+        buf *= env[None, : buf.shape[1]]
 
 
 def render_cues_mix(cues_path: str, out_wav: str, library_dir: str | None = None, strict: bool = False) -> dict:
@@ -232,8 +408,13 @@ def render_cues_mix(cues_path: str, out_wav: str, library_dir: str | None = None
     for idx, ev in enumerate(cfg.get("events") or []):
         target_t = _resolve_event_anchor_time(ev, wdata, dur)
         align = str(ev.get("align", "onset")).lower()
+        js_style = ev.get("jumpscare")
         synth_kind = ev.get("synth")
-        if synth_kind:
+        if js_style:
+            # Jumpscare composites trim internal layers to <10ms onset, so place right at target_t
+            align = "onset"
+            align_off = 0.004
+        elif synth_kind:
             ev_dur = float(ev.get("dur_s", 0.80))
             align_off = ev_dur if align == "end" else (0.5 * ev_dur if align == "peak" else 0.0)
         else:
@@ -254,7 +435,7 @@ def render_cues_mix(cues_path: str, out_wav: str, library_dir: str | None = None
             "place_t": round(place_t, 4),
             "align": align,
             "align_off": round(align_off, 4),
-            "label": ev.get("label") or ev.get("sound") or ev.get("synth") or f"cue_{idx+1}",
+            "label": ev.get("label") or (f"jumpscare:{js_style}" if js_style else None) or ev.get("sound") or ev.get("synth") or f"cue_{idx+1}",
         })
 
     # Run pre-mix Anti-Clutter QA Gates
@@ -318,9 +499,20 @@ def render_cues_mix(cues_path: str, out_wav: str, library_dir: str | None = None
             arr *= dbg(duck_db(whisper_spans, dur, depth=wh_duck, pre=0.15, post=0.18, att=0.12, rel=0.45))[None, :]
         place(sfx_bed, arr, 0.0)
 
-    # 2. Surgical story-driven spot cues (onset/peak/end aligned + measurement-calibrated peak/RMS!)
+    # 2. Surgical story-driven spot cues + Multi-Style Jumpscare Composites
+    micro_vacuums = []
+    jumpscare_items = []
     for ev in resolved_events:
-        if ev.get("synth") == "reverse_suck":
+        tinn_arr = None
+        if ev.get("jumpscare"):
+            arr, tinn_arr = _build_jumpscare_composite(ev, lib_dir, mf_assets, r, _record_usage)
+            ev.setdefault("target_peak_dbfs", -1.5)
+            ev.setdefault("reverb", 0.22)
+            ms_s = float(ev.get("micro_silence_s", 0.0))
+            if ms_s > 0.02:
+                micro_vacuums.append((max(0.0, ev["target_t"] - ms_s), ev["target_t"]))
+            jumpscare_items.append(ev)
+        elif ev.get("synth") == "reverse_suck":
             arr = reverse_suck(dur=float(ev.get("dur_s", 0.78)), vel=float(ev.get("vel", 0.55)), r=r, f_base=float(ev.get("f_base", 280.0)))
             if ev.get("gain_db"):
                 arr = arr * dbg(float(ev["gain_db"]))
@@ -331,6 +523,18 @@ def render_cues_mix(cues_path: str, out_wav: str, library_dir: str | None = None
             if ev.get("gain_db"):
                 arr = arr * dbg(float(ev["gain_db"]))
             arr = fades(arr, float(ev.get("fade_in", 0.35)), float(ev.get("fade_out", 0.12)))
+        elif ev.get("synth") == "stinger":
+            arr = stinger(kind=str(ev.get("kind", "shriek")), vel=float(ev.get("vel", 0.85)), r=r, dur=float(ev.get("dur_s", 1.8)), f0=float(ev.get("freq_hz", 52.0)))
+        elif ev.get("synth") == "riser":
+            arr = riser(dur=float(ev.get("dur_s", 2.4)), f0=float(ev.get("f0", 90.0)), f1=float(ev.get("f1", 950.0)), vel=float(ev.get("vel", 0.7)), r=r, hard_cut=bool(ev.get("hard_cut", True)))
+        elif ev.get("synth") == "vhs_static_burst":
+            arr = vhs_static_burst(dur=float(ev.get("dur_s", 0.45)), vel=float(ev.get("vel", 0.75)), r=r)
+        elif ev.get("synth") == "neck_crack_wet":
+            arr = neck_crack_wet(dur=float(ev.get("dur_s", 0.55)), vel=float(ev.get("vel", 0.8)), r=r)
+        elif ev.get("synth") == "tinnitus_ring":
+            arr = tinnitus_ring(dur=float(ev.get("dur_s", 3.5)), vel=float(ev.get("vel", 0.4)), f=float(ev.get("freq_hz", 4080.0)), r=r)
+        elif ev.get("synth") == "entity_rattle":
+            arr = entity_rattle(dur=float(ev.get("dur_s", 1.8)), vel=float(ev.get("vel", 0.75)), r=r, kind=str(ev.get("kind", "shriek_gasp")))
         else:
             raw_gain = 0.0 if (ev.get("target_peak_dbfs") is not None or ev.get("target_rms_dbfs") is not None) else float(ev.get("gain_db", -10.0))
             arr = load_sfx_asset(
@@ -352,7 +556,7 @@ def render_cues_mix(cues_path: str, out_wav: str, library_dir: str | None = None
         if reverb_wet > 0.01:
             arr = arr + reverb_wet * convolve_st(arr, room_ir)
 
-        # Measurement-calibrated event leveling (post-EQ & reverb) so SFX hit with unmistakable cinema presence!
+        # Measurement-calibrated event leveling (post-EQ & reverb) so SFX & Jumpscares hit with unmistakable cinema presence!
         if ev.get("target_rms_dbfs") is not None:
             cur_rms = float(np.sqrt(np.mean(np.square(arr)) + 1e-18))
             if cur_rms > 1e-7:
@@ -366,6 +570,12 @@ def render_cues_mix(cues_path: str, out_wav: str, library_dir: str | None = None
         bus = str(ev.get("bus", "sfx")).lower()
         target_buf = music if bus in ("score", "music") else sfx_spot
         place(target_buf, arr, ev["place_t"])
+        if tinn_arr is not None:
+            place(music, tinn_arr, min(dur - 0.1, ev["target_t"] + 0.12))
+
+    # Apply pre-jumpscare micro-vacuums to ambience & score (never clipping voice or the strike itself!)
+    if micro_vacuums:
+        _apply_micro_vacuums([sfx_bed, music], micro_vacuums, floor_db=-36.0)
 
     # Gentle music bus ducking under speech
     music *= dbg(duck_db(spans, dur, depth=float(cfg.get("music_duck_db", -4.5)), pre=0.08, post=0.14, att=0.06, rel=0.45))[None, :]
@@ -403,6 +613,27 @@ def render_cues_mix(cues_path: str, out_wav: str, library_dir: str | None = None
     if clips > 0:
         qa_warnings.append({"code": "CLIPPING_FAIL", "severity": "ERROR", "detail": f"Detected {clips} clipped samples in final mix!"})
 
+    # Post-mix Jumpscare startle contrast (measured on post-limiter final_mix peak) & 1.4-6.5 kHz bite measurement
+    js_reports = []
+    sos_bite = signal.butter(2, [1400.0 / (0.5 * SR), 6500.0 / (0.5 * SR)], btype="bandpass", output="sos")
+    for jev in jumpscare_items:
+        t0 = float(jev["target_t"])
+        pre_sl = bed_total[:, max(0, ns(t0 - 0.35)) : max(1, ns(t0 - 0.02))]
+        hit_mix_sl = final_mix[:, max(0, ns(t0)) : min(final_mix.shape[1], ns(t0 + 0.32))]
+        hit_bed_sl = bed_total[:, max(0, ns(t0)) : min(bed_total.shape[1], ns(t0 + 0.32))]
+        pre_rms = rms_db(pre_sl) if pre_sl.shape[1] > 8 else -90.0
+        hit_pk = float(20.0 * np.log10(max(float(np.max(np.abs(hit_mix_sl))), 1e-9))) if hit_mix_sl.shape[1] > 8 else -90.0
+        bite_rms = rms_db(signal.sosfilt(sos_bite, hit_bed_sl, axis=-1)) if hit_bed_sl.shape[1] > 32 else -90.0
+        js_reports.append({
+            "t": round(t0, 2),
+            "style": str(jev["jumpscare"]),
+            "label": jev["label"],
+            "pre_rms_dbfs": round(pre_rms, 1),
+            "hit_peak_dbfs": round(hit_pk, 1),
+            "jump_contrast_db": round(hit_pk - pre_rms, 1),
+            "bite_1400_6500_dbfs": round(bite_rms, 1),
+        })
+
     # Write per-project credits.txt & history.jsonl
     credits_path = os.path.join(out_dir, "credits.txt")
     sm.write_credits_file(credits_path, used_credit_entries)
@@ -419,12 +650,12 @@ def render_cues_mix(cues_path: str, out_wav: str, library_dir: str | None = None
         f"- **Kịch bản cue:** [{os.path.basename(cues_abs)}](file://{cues_abs})",
         f"- **Bản quyền nguồn:** [credits.txt](file://{credits_path})",
         f"- **Loudness thực đo:** `I = {stats['I']:.2f} LUFS` · `TP = {stats['TP']:.2f} dBTP` · `LRA = {stats['LRA']:.2f} LU` · `clips = {clips}`",
-        f"- **Lớp nền (Beds):** `{len(cfg.get('beds') or [])}` *(quy chuẩn <= 1)* · **SFX điểm (Events):** `{len(resolved_events)}`",
+        f"- **Lớp nền (Beds):** `{len(cfg.get('beds') or [])}` *(quy chuẩn <= 1)* · **SFX điểm:** `{len(resolved_events)}` · **Jumpscare:** `{len(jumpscare_items)}` *(quy chuẩn <= {int(cfg.get('max_jumpscares', 2))})*",
         "",
-        "## Cổng Kiểm Định Chống Rối (6 QA Gates)",
+        "## Cổng Kiểm Định Chống Rối & Jumpscare (7 QA Gates)",
     ]
     if not qa_warnings:
-        report_lines.append("- **PASS 6/6:** `0` lỗi chồng nền, `0` lỗi crowding, `0` lỗi đè hồi thì thầm, `0` clips!")
+        report_lines.append("- **PASS 7/7:** `0` lỗi chồng nền, `0` lỗi crowding, `0` lỗi đè hồi thì thầm, `0` lạm dụng Jumpscare, `0` clips!")
     else:
         for w in qa_warnings:
             report_lines.append(f"- **[{w['severity']}] `{w['code']}`:** {w['detail']}")
@@ -435,33 +666,37 @@ def render_cues_mix(cues_path: str, out_wav: str, library_dir: str | None = None
         for d in ds_reports:
             report_lines.append(f"- `[{d['s']:.2f}s .. {d['e']:.2f}s]`: trong khoảng lặng `{d['inside_dbfs']:.2f} dBFS` vs bên ngoài `{d['outside_dbfs']:.2f} dBFS` (**giảm `{d['drop_db']:.2f} dB`**).")
 
+    if js_reports:
+        report_lines.append("")
+        report_lines.append("## Kiểm Định Jumpscare Thực Đo (Tương Phản Giật Mình + Dải Chói 1.4–6.5 kHz)")
+        for j in js_reports:
+            report_lines.append(
+                f"- **`{j['t']:05.2f}s` (`{j['style']}`)** — Trước đòn `{j['pre_rms_dbfs']:.1f} dBFS` → Đỉnh nổ `{j['hit_peak_dbfs']:.1f} dBFS` "
+                f"(**bật tăng `+{j['jump_contrast_db']:.1f} dB`** · dải chói 1.4–6.5 kHz `{j['bite_1400_6500_dbfs']:.1f} dBFS`) — {j['label']}"
+            )
+
     report_lines.extend([
         "",
         "## 5 Mốc Thời Gian Đề Xuất Đeo Tai Nghe Kiểm Tra",
     ])
     check_pts = []
-    # 1. Early story cue (first event in opening half)
-    if resolved_events:
-        first_ev = min(resolved_events, key=lambda e: e["target_t"])
-        check_pts.append((first_ev["target_t"], f"`{first_ev['label']}` (mốc `{first_ev['target_t']:.2f}s`, căn `{first_ev['align']}`, peak `{first_ev.get('measured_peak_dbfs', 0.0):.1f} dBFS`)"))
-    # 2. Whisper span verification
+    # Always prioritize every Jumpscare checkpoint first!
+    for j in js_reports:
+        check_pts.append((max(0.0, j["t"] - 0.5), f"**JUMPSCARE `{j['style']}`** tại `{j['t']:.2f}s` (bật `+{j['jump_contrast_db']:.1f} dB`, dải chói `{j['bite_1400_6500_dbfs']:.1f} dBFS`) — {j['label']}"))
     if whisper_spans:
         ws, we = whisper_spans[0]
-        check_pts.append((ws, f"Hồi thì thầm (`{ws:.2f}s..{we:.2f}s`) — kiểm tra nền có tự hạ tĩnh và giọng thì thầm rõ nét không"))
-    # 3. Dead Silence climax verification
+        check_pts.append((ws, f"Hồi thì thầm (`{ws:.2f}s..{we:.2f}s`) — kiểm tra nền tự hạ tĩnh và giọng thì thầm rõ nét"))
     for d in ds_reports[:1]:
-        check_pts.append((max(0.0, d["s"] - 0.8), f"Khoảng lặng chết (`{d['s']:.2f}s..{d['e']:.2f}s`) — kiểm tra sườn hút ngược → chân không `-48 dB` → cú nổ sau im lặng"))
-    # 4. Loudest hero impact cue in second half (if distinct)
+        if not any(abs(d["s"] - t0) < 1.5 for t0, _ in check_pts):
+            check_pts.append((max(0.0, d["s"] - 0.8), f"Khoảng lặng chết (`{d['s']:.2f}s..{d['e']:.2f}s`) — kiểm tra sườn hút ngược → chân không `-48 dB` → cú nổ sau im lặng"))
+    if resolved_events:
+        first_ev = min(resolved_events, key=lambda e: e["target_t"])
+        if not any(abs(first_ev["target_t"] - t0) < 1.5 for t0, _ in check_pts):
+            check_pts.append((first_ev["target_t"], f"`{first_ev['label']}` (mốc `{first_ev['target_t']:.2f}s`, căn `{first_ev['align']}`, peak `{first_ev.get('measured_peak_dbfs', 0.0):.1f} dBFS`)"))
     hero_cands = [e for e in resolved_events if e["target_t"] > 0.45 * dur and not any(abs(e["target_t"] - t0) < 2.0 for t0, _ in check_pts)]
     if hero_cands:
         loudest = max(hero_cands, key=lambda e: e.get("measured_peak_dbfs", -99.0))
         check_pts.append((loudest["target_t"], f"`{loudest['label']}` (mốc `{loudest['target_t']:.2f}s`, căn `{loudest['align']}`, peak `{loudest.get('measured_peak_dbfs', 0.0):.1f} dBFS`)"))
-    # 5. Closing twist cue (last event if distinct)
-    if resolved_events:
-        last_ev = max(resolved_events, key=lambda e: e["target_t"])
-        if not any(abs(last_ev["target_t"] - t0) < 1.5 for t0, _ in check_pts):
-            check_pts.append((last_ev["target_t"], f"`{last_ev['label']}` (mốc `{last_ev['target_t']:.2f}s`, căn `{last_ev['align']}`, peak `{last_ev.get('measured_peak_dbfs', 0.0):.1f} dBFS`)"))
-    # Backfill to 5 checkpoints if track has fewer special sections
     for ev in resolved_events:
         if len(check_pts) >= 5:
             break
@@ -477,7 +712,7 @@ def render_cues_mix(cues_path: str, out_wav: str, library_dir: str | None = None
         "|---|---|---|---|---|---|---|---|",
     ])
     for ev in resolved_events:
-        src_lbl = ev.get("sound") or f"synth:{ev.get('synth')}"
+        src_lbl = f"jumpscare:{ev['jumpscare']}" if ev.get("jumpscare") else (ev.get("sound") or f"synth:{ev.get('synth')}")
         report_lines.append(
             f"| {ev['idx']} | `{ev.get('bus', 'sfx')}` | `{src_lbl}` | `{ev['target_t']:.2f}s` | `{ev['place_t']:.2f}s` | "
             f"`{ev['align']}` (-{ev['align_off']:.2f}s) | peak `{ev.get('measured_peak_dbfs', 0.0):.1f} dBFS` · pan `{ev.get('pan', 0.0)}` | {ev['label']} |"
@@ -492,7 +727,9 @@ def render_cues_mix(cues_path: str, out_wav: str, library_dir: str | None = None
     print(f"  Credits: {credits_path}")
     for d in ds_reports:
         print(f"  DEAD_SILENCE [{d['s']:.2f}..{d['e']:.2f}s]: drop={d['drop_db']:.2f} dB (inside={d['inside_dbfs']:.2f} dBFS)")
-    return {"verdict": verdict, "out_wav": out_abs, "report": report_path, "credits": credits_path, "warnings": qa_warnings, "stats": stats, "clips": clips, "dead_silences": ds_reports}
+    for j in js_reports:
+        print(f"  JUMPSCARE [{j['t']:.2f}s · {j['style']}]: +{j['jump_contrast_db']:.1f} dB jump (peak={j['hit_peak_dbfs']:.1f} dBFS | bite={j['bite_1400_6500_dbfs']:.1f} dBFS)")
+    return {"verdict": verdict, "out_wav": out_abs, "report": report_path, "credits": credits_path, "warnings": qa_warnings, "stats": stats, "clips": clips, "dead_silences": ds_reports, "jumpscares": js_reports}
 
 
 def build_parser():
