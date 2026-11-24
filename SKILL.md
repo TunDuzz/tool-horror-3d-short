@@ -33,9 +33,10 @@ description: Use when creating a standalone 55-75s horror story video (vertical 
 5. **Physical Lighting (5 Presets), Practical Lights & Whip-Pan Motion Blur:**
    - Use strictly the 5 physical presets (`warmLamp`, `coldMoon`, `fluorescent`, `duskFog`, `flashlight`), smooth `lerpLights`/`getLightBlend` transitions when lamps die, up to **6 real `PointLight`s** (`setLocalLights`) + **1 `SpotLight` cone** (`setSpotLight`), and selective HDR Bloom (`thr: 0.92`).
    - Use deterministic 6–8 frame `whipPan` turns paired with `WhipMotionBlurEffect`, and declare `WHIP_PANS` and `POV_MOTIONS` in `story.ts`.
-6. **Expressive Word-Level Voice Acting v5.5 & TRUE `-48 dB` Dead Silence:**
-   - Author `SCRIPT.md` with **10 acting moods** (`calm_omen`, `curious`, `tense`, `whisper`, `fear_tremble`, `stutter_panic`, `dread`, `panic`, `cold_twist`, `ghost_entity`) + inline word/phrase director tags (`[STUTTER]` / `K-không`, `[SLOW]...[/SLOW]`, `[FAST]...[/FAST]`, `[TREMBLE]...[/TREMBLE]`, `[UP]`, `[BEAT]`, `[GASP]`, `[SWALLOW]`, `[PAUSE Xs]`, `[DEAD SILENCE Xs]`).
-   - Run `gen_horror_voice.py` (`--acting cinematic`, pluggable `--tts-engine auto|edge|gemini`) with the 1-file So-VITS-SVC VC-Pack (`-na` preserves all `0.68x..1.32x` tempo swings, acoustic stutters, 6.2 Hz tremor & rising/falling F0; True Breathy Whisper Vocoder runs post-SVC), and pass `dead_silences=load_dead_silences(words_json)` into `master_mix(...)` for TRUE `-48 dB` vacuum!
+6. **Studio-Clean Neural Voice Acting v6.0 (100% Free & Open-Source), Asset-First Real SFX & TRUE `-48 dB` Dead Silence:**
+   - Author `SCRIPT.md` in **2–4 coherent Act-level paragraphs** (NEVER fragmented into 15+ choppy snippets; NEVER use distorting DSP hacks to fake whisper/tremor/stuttering!).
+   - Generate clean 48 kHz Vietnamese narration via **`VieNeu-TTS v3 Turbo`** (`--tts-engine vieneu`, ONNX CPU + 3–8s emotional voice cloning `--ref-audio`/`--emotion-refs` + native `[thở dài]`/`[hắng giọng]`), OR export a GPU acting pack (`--export-gpu-voice-pack` for **`dinhthuan/index-tts-2-vietnamese`** 8-D emotion vectors / **`F5-TTS-Vietnamese`** → `--import-acts`), OR pass clean guide audio through 1-file **So-VITS-SVC (`-na`)**.
+   - Prefer real recorded CC0 Foley (`sfx_manager.py fetch-freesound` / `import-local`) or GPU neural SFX (`sfx_manager.py export-sfx-pack` for **`declare-lab/TangoFlux`** & **`hkchengrex/MMAudio`**) loaded via `mix_base.load_sfx_asset(...)`, and always pass `dead_silences=load_dead_silences(words_json)` into `master_mix(...)` for TRUE `-48 dB` vacuum!
 
 ## End-to-End 11-Step Pipeline (Engine v5.0)
 

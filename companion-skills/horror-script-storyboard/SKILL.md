@@ -1,87 +1,78 @@
 ---
 name: horror-script-storyboard
-description: Use when writing expressive multi-speaker horror scripts (2.7-3.2 words/s with [NARRATOR | mood=...], [SPEAKER: ... | fx=...], [PAUSE], [DEAD SILENCE]), running the 1-file So-VITS-SVC Expressive VC-Pack workflow, auto-aligning manifest.json to words.json via align_manifest.py, or choreographing POV/cinematic multi-angle shot plans (SHOTS, WHIP_PANS, POV_MOTIONS, CAMS, DOF, KICKS, OVERLAYS) in story.ts.
+description: Use when writing coherent act-level horror narration scripts (2.7-3.2 words/s with [NARRATOR | mood=...], [SPEAKER: ... | fx=...], [PAUSE], [DEAD SILENCE]), generating studio-clean neural voices via VieNeu-TTS 48kHz CPU / IndexTTS-2 Vietnamese / F5-TTS GPU packs / So-VITS-SVC 1-file VC-Pack (-na), auto-aligning manifest.json via align_manifest.py, or choreographing POV/cinematic shot plans in story.ts.
 ---
 
-# Horror Scriptwriting, Expressive Voice & Cinematic Storyboarding v5.0 (`SCRIPT.md` → `manifest.json` → `story.ts`)
+# Horror Scriptwriting, Neural Voice Acting & Storyboarding v6.0 (`SCRIPT.md` → `manifest.json` → `story.ts`)
 
-## 1. Expressive Voice Acting & Multi-Speaker Script Grammar v5.5 (`SCRIPT.md`)
+## 1. Act-Level Coherent Horror Script Grammar (`SCRIPT.md`)
 
-**Never write a flat wall of monochrome narration.** Horror Engine v5.5's `gen_horror_voice.py` synthesizes **per phrase and per word** with **10 distinct acting moods**, wide cinematic tempo contrast (`0.68x .. 1.32x`), **true breathy whisper vocoder**, **6.2 Hz vocal-cord fear tremor**, **real acoustic syllable stuttering**, **curious rising pitch inflection**, and **7 organic human body cues**:
+**NEVER fragment a 60 s script into 15–20 tiny 2-word TTS snippets and NEVER rely on artificial DSP filters to fake emotion.** Write **2–4 continuous, emotionally coherent Acts (paragraphs)** separated ONLY by `[DEAD SILENCE Xs]`, deliberate `[PAUSE Xs]`, or speaker changes — letting the neural TTS model perform natural phrasing, tension, and Vietnamese tonal flow!
 
-- **Speed & Mandatory Tempo Contrast:** Average **`2.7–3.2 words/s`** (~150–185 words per 60 s), but EVERY 60 s short **MUST contain at least 3 distinct pace shifts** (slow suffocating dread/whisper `0.68x–0.74x` ↔ curious probing `0.88x` ↔ breathless stuttering panic `1.24x–1.32x`)!
-- **10 Acting Mood Directives (`[NARRATOR | mood=... | acting="..."]`):**
-  - `calm_omen` (`0.86x`, `0.0 dB`): trầm lắng, chắc nhịp đặt điềm báo.
-  - `curious` (`0.88x → 0.76x`, `-1.0 dB`): **tò mò, dò xét, nghi hoặc** — tự chèn micro-pause `0.18s` trước từ khóa + uốn giọng **vút lên `+2.25 st`** cuối câu hỏi!
-  - `tense` (`1.10x → 1.22x`, `+0.5 dB`): căng thẳng, tăng tốc dần về cuối câu.
-  - `whisper` (`0.74x`, `-5.2 dB`): **thì thầm hơi gió thật sát tai** (8-band Formant Whisper Vocoder chạy hậu kỳ sau So-VITS-SVC!).
-  - `fear_tremble` (`0.78x` đứt quãng, `-1.5 dB`): **sợ hãi, run giọng 6.2 Hz (AM+FM tremor)** + tự chèn 1–2 nhịp khựng run giữa câu + hít hơi run!
-  - `stutter_panic` (`1.26x → 1.32x`, `+3.0 dB`): **lắp bắp + hoảng loạn tột độ** — nói gấp gáp, giọng vút cao + cắt lặp âm tiết đầu thật!
-  - `dread` (`0.84x → 0.68x`, `-2.0 dB`): nặng nề, rợn gáy — tự **chậm dần hẳn xuống `0.68x`** và chìm giọng ở 2–3 chữ cuối câu!
-  - `panic` (`1.24x → 1.32x`, `+3.0 dB`): hối hả, kêu cứu, tăng tốc gấp gáp.
-  - `cold_twist` (`0.72x`, `-1.5 dB`): lạnh ngắt, vô hồn + tiếng **nuốt nước bọt khan (`swallow`)** + đuôi vang phòng lạnh.
-  - `ghost_entity` (`0.70x`, `-0.5 dB`, `-2.55 st`): giọng ma ám trầm kéo dài + tiền-vang hút ngược (`reverse-reverb pre-swell`).
-- **Inline Word/Phrase Director Tags (Use Directly Inside Dialogue Lines!):**
-  - **Real Acoustic Stuttering:** Write `[STUTTER] cái gì` OR natural Vietnamese onset hyphens **`K-không`**, **`C-cái gì`**, **`Đ-đừng`** (TTS reads the clean word while the Acoustic Stutter Engine slices & repeats the true 95–125 ms consonant-vowel onset with choked glottal cuts — never pronounced as "K" or "C"!).
-  - **Mid-Sentence Tempo Shifts:** `[SLOW]...[/SLOW]` (`0.74×`), `[FAST]...[/FAST]` (`1.32×`).
-  - **Local Tremor & Upward Inflection:** `[TREMBLE]...[/TREMBLE]` (6.2 Hz frightened voice quiver on specific phrases), `[UP]` (rising curious inflection).
-  - **Organic Human Body Cues & Micro-Beats:** `[BEAT]` (`0.22s` dramatic freeze), `[GASP]`, `[TREMBLE_GASP]`, `[SWALLOW]` (tense throat gulp), `[SIGH]`, `[WHISPER_BREATH]`.
-- **Multi-Speaker Dialogue:** `[SPEAKER: TÊN | voice=vi-VN-NamMinhNeural|vi-VN-HoaiMyNeural | mood=... | pitch=... | speed=... | fx=dry|room|phone|ghost]`.
-- **TRUE Psychoacoustic Silence & Hesitation:**
-  - Write `[PAUSE 0.35s]` and `[DEAD SILENCE 0.65s]` before major reveals/twists — `mix_base.py` hard-mutes BOTH music and ambient SFX to **`-48 dB` vacuum** across every `[DEAD SILENCE]` span!
-  - Use `...` (`…`) naturally inside tense sentences (auto-split into `0.42 s` pauses); clock/date formats (`01:06`, `22/11`) normalize automatically for TTS while preserving display tokens in `words.json`.
-- **Example v5.5 `SCRIPT.md` Excerpt:**
+- **Speed & Pacing:** Average **`2.7–3.2 words/s`** (~150–185 words per 60 s). Build pace contrast through **sentence rhythm & structure** (long lingering clauses in calm/dread acts vs short breathless punchy sentences in climax acts) combined with neural emotion conditioning (`VieNeu-TTS` reference clips or `IndexTTS-2` 8-D emotion vectors).
+- **Act-Level Mood Directives (`[NARRATOR | mood=...]`):**
+  - `calm_omen`: trầm lắng, chắc nhịp đặt bối cảnh & điềm báo (`0.0 dB`).
+  - `curious`: tò mò, dò xét, nghi hoặc (`-0.5 dB`; IndexTTS-2 vector `surprised+calm`).
+  - `tense`: căng thẳng, cảnh giác (`+0.5 dB`).
+  - `whisper`: thì thầm, gần gũi, nhỏ giọng (`-3.5 dB`; pair with `refs/whisper.wav` on VieNeu/F5-TTS or `afraid+calm` on IndexTTS-2 — **zero white-noise distortion!**).
+  - `fear`: sợ hãi, hoảng hốt, nghẹn giọng (`-0.5 dB`; IndexTTS-2 vector `afraid: 0.85`).
+  - `dread`: nặng nề, rờn rợn (`-1.5 dB`; IndexTTS-2 vector `melancholic+afraid`).
+  - `panic`: gấp gáp, kêu cứu, cao trào (`+2.0 dB`; IndexTTS-2 vector `afraid: 0.95, angry: 0.30`).
+  - `cold_twist`: lạnh gáy, chậm rãi chốt cú lật (`-1.0 dB`).
+  - `ghost_entity`: thực thể siêu nhiên (`fx=ghost` reverse-reverb pre-swell on `[SPEAKER: ...]`).
+- **Native Neural Non-Verbal Tags (Supported directly by `VieNeu-TTS v3 Turbo`):**
+  - You may place natural Vietnamese cues **`[thở dài]`** (sigh) and **`[hắng giọng]`** (throat clear) directly in text when using `VieNeu-TTS` (automatically stripped cleanly for non-VieNeu backends).
+  - Use natural punctuation (`...`, `,`, `?`, `!`) inside continuous paragraphs — `gen_horror_voice.py` v6.0 keeps the paragraph intact so the neural model handles ellipses and question inflections organically!
+  - Clock & date strings (`01:06`, `22/11`) normalize automatically for TTS while preserving verbatim display tokens (`01:06`) in `words.json`.
+- **TRUE Psychoacoustic Silence:**
+  - Place `[DEAD SILENCE 0.70s]` immediately before major reveals/twists — `mix_base.py` hard-cuts BOTH music and ambient SFX to **`-48 dB` vacuum** across every `[DEAD SILENCE]` window!
+- **Multi-Speaker Dialogue:** `[SPEAKER: TÊN | voice=... | mood=... | fx=dry|room|phone|ghost]`.
+- **Example v6.0 Act-Level `SCRIPT.md`:**
   ```markdown
   [NARRATOR | mood=calm_omen]
-  Đêm canh linh cữu lúc 01:06, cả ngôi nhà tối om.
+  Đêm canh nhà lúc 01:06, ngoài sân gió rít qua từng khe gỗ. Bà nội dặn tôi tuyệt đối không được mở chiếc tủ cổ cuối gian nhà nếu nghe thấy tiếng động.
+  [PAUSE 0.35s]
   [NARRATOR | mood=curious]
-  Ơ... tiếng cào gì phát ra từ trong chiếc tủ gỗ vậy?
-  [NARRATOR | mood=whisper]
-  Suỵt... đừng thở mạnh... hình như nó đang nghe thấy chúng ta.
+  Nhưng rồi, một tiếng cào rất khẽ vang lên từ bên trong. Ai lại ở trong tủ gỗ giờ này? [thở dài] Tôi nín thở bước lại gần.
   [DEAD SILENCE 0.75s]
-  [NARRATOR | mood=fear_tremble]
-  [GASP] Tay tôi lạnh cóng... [TREMBLE] cánh cửa tủ đang từ từ hé mở ra! [/TREMBLE]
-  [NARRATOR | mood=stutter_panic]
-  K-không... c-cái gì ngoài đó vậy?! [FAST] Chạy ngay đi, đừng ngoái lại! [/FAST]
+  [SPEAKER: BÓNG NGƯỜI | mood=ghost_entity | fx=ghost]
+  Mở cửa ra... cháu ơi.
+  [NARRATOR | mood=panic]
+  Cánh cửa gỗ rung bần bật ngay trước mặt! Tôi vùng chạy ra cửa chính, nhưng chốt gỗ đã bị khóa chặt từ bên ngoài!
+  [PAUSE 0.40s]
   [NARRATOR | mood=cold_twist]
-  [SWALLOW] [SLOW] Nhưng khi tôi quay đầu lại... [/SLOW] [BEAT] thứ đó đã đứng sẵn sau lưng tôi.
+  Và khi tôi từ từ quay đầu lại, thứ đó đã đứng sẵn sau lưng tôi từ lúc nào.
   ```
-- **No On-Screen Captions by Default:** Keep `HorrorHUD` captions opt-in via `hudFromManifest(MANIFEST)` unless requested (`GEMINI.md`).
+- **No On-Screen Captions by Default:** Keep `HorrorHUD` captions opt-in via `hudFromManifest(MANIFEST)` (`GEMINI.md`).
 
 ---
 
-## 2. Generating Expressive Acting Voice (Pluggable `auto|edge|gemini` + 1-File So-VITS-SVC VC-Pack)
+## 2. Generating Studio-Clean Neural Voice (100% Free & Open-Source)
 
-- **Acting Intensity & TTS Engine Flags:**
-  - `--acting subtle|cinematic|extreme` (default **`cinematic`** — wide `0.68x..1.32x` tempo spread, acoustic stuttering, 6.2 Hz tremor, true breathy whisper).
-  - `--tts-engine auto|edge|gemini`: automatically uses **Gemini 2.5 Flash Preview TTS** (Free Tier REST API with Vietnamese acting prompts, 0 extra pip deps) if `GEMINI_API_KEY` is set, and falls back smoothly to `edge-tts` + full Word-Level Micro-Prosody Acting DSP when offline/no key!
-  - Optional `--export-acting-pack <dir>` exports `acting_pack.json` for local GPU zero-shot emotional cloning (`F5-TTS-Vietnamese` / `VieNeu-TTS`) on your So-VITS-SVC PC.
+### Option A — Local CPU 48 kHz (`VieNeu-TTS v3 Turbo`, Runs Right Here!)
+```bash
+# Built-in 48 kHz Vietnamese voice (or pass --ref-audio narrator.wav / --emotion-refs refs/ for 3-8s instant cloning!)
+python3 scripts/gen_horror_voice.py --script out/<project>/SCRIPT.md \
+  --tts-engine vieneu --out-dir out/<project>/voice --no-vc
+```
 
-### Recommended 2-Machine So-VITS-SVC Narrator Workflow (Preserves ALL Acting Rhythm, Stuttering, Tremor & Intonation!)
-1. **This PC — Export 1 Expressive Acting Guide WAV + Helper Scripts:**
+### Option B — Local GPU Acting Pack (`IndexTTS-2 Vietnamese` / `F5-TTS-Vietnamese`) + Optional So-VITS-SVC (`-na`)
+1. **This PC — Export Act-Level GPU Pack (`acts.json` with 8-D emotion vectors + ready scripts):**
    ```bash
-   python3 scripts/gen_horror_voice.py --script out/<project>/SCRIPT.md --acting cinematic --export-vc-pack out/<project>/vc_pack
+   python3 scripts/gen_horror_voice.py --script out/<project>/SCRIPT.md --export-gpu-voice-pack out/<project>/gpu_voice_pack
    ```
-   Generates `narrator_guide_44k.wav` (already carrying full `0.68x..1.32x` tempo swings, real acoustic stutters, FM tremor & curious rising F0 — while deferring whisper air noise to Step 3 so So-VITS-SVC tracks clean F0!), `vc_pack_manifest.json`, `run_svc_win.bat`, and `run_svc_unix.sh`.
-2. **Your So-VITS-SVC Machine — Convert 1 File Using `-na` (`--no-auto-predict-f0`):**
-   - Run `run_svc_win.bat` / `run_svc_unix.sh` (**CRITICAL:** always use **`-na`** so So-VITS-SVC mirrors 100% of the tempo, stutter, tremor, and F0 acting!) → produces `narrator_svc_out.wav`.
-3. **This PC — Exact 1:1 Re-Assembly + True Breathy Whisper Vocoder + Multi-Speaker Dialogue + Human Cues:**
+2. **Your GPU PC — Run `run_indextts2_vi.py` (or `run_f5tts_vi.py`):** Renders studio-clean `act_01.wav`, `act_02.wav`... with real neural fear/curiosity/dread in your cloned voice!
+3. **This PC — Re-Assemble Around Exact `[DEAD SILENCE]` Windows:**
    ```bash
    python3 scripts/gen_horror_voice.py --script out/<project>/SCRIPT.md \
-     --acting cinematic \
-     --vc-pack out/<project>/vc_pack \
-     --narrator-vc-wav out/<project>/vc_pack/narrator_svc_out.wav \
+     --import-acts out/<project>/gpu_voice_pack/rendered_acts \
      --out-dir out/<project>/voice
    ```
-   Outputs 48 kHz mono `voice.wav` + `words.json` (with `speaker`, `mood`, `wps`, and `dead_silences`).
-- *Quick preview / no SVC needed:* Pass `--no-vc`. Toggle automatic breaths with `--no-auto-breath`.
-- *External human / F5-TTS / VieNeu-TTS clips:* Also supports `--export-narrator-script`, `--export-acting-pack`, `--narrator-dir <folder>` (`N01.wav..`), and `--narrator-audio <full.wav>` (auto VAD split).
+- *Using your So-VITS-SVC model directly?* The 1-file VC-Pack workflow (`--export-vc-pack` → run `run_svc_win.bat` using **`-na`** on clean act-level `narrator_guide_44k.wav` → `--vc-pack ... --narrator-vc-wav ...`) remains 100% supported with **zero DSP distortion**!
 
 ---
 
 ## 3. Auto-Locking `manifest.json` ↔ `words.json` (`align_manifest.py`)
-
-Never calculate beat frames by hand! Draft `manifest.json` with each beat's `spokenLine.text`, then lock exact contiguous `[a, b)`, `peakFrame`, `blendRange`, and `totalFrames` automatically:
 
 ```bash
 python3 scripts/align_manifest.py src/<project>/manifest.json --words out/<project>/voice/words.json --in-place
@@ -98,10 +89,10 @@ python3 scripts/validate_manifest.py src/<project>/manifest.json \
 ## 4. The 8-Beat Dark-Horror POV Standalone Formula (55–75 s)
 
 1. **Cold Hook (`0–8 s`, `POV` or `WS`, `mood=calm_omen`):** Establish the chilling rule/atmosphere and unique `LocationBlueprint` — **DO NOT spoil the entity's full face here!** Optional subtle distant `addCornerLurker3D` (`breathing: false`).
-2. **POV Interaction / Inciting Cue (`8–16 s`, `POV_TURN` → `POV_PROP`, `mood=tense`):** 6–8f deterministic `whipPan` toward a diegetic 3D prop (`Phone3D` lockscreen alert synced with `HorrorHUD`, `PaperProp3D`, or `HandheldOilLamp3D`).
+2. **POV Interaction / Inciting Cue (`8–16 s`, `POV_TURN` → `POV_PROP`, `mood=curious`):** 6–8f deterministic `whipPan` toward a diegetic 3D prop (`Phone3D` lockscreen alert synced with `HorrorHUD`, `PaperProp3D`, or `HandheldOilLamp3D`).
 3. **First Uncanny Anomaly (`16–25 s`, `POV_DOWN` or `LOW`, `mood=whisper`):** Look down or toward a threshold (`addDoubleDoorWithCracks` moonlight + 2 foot shadows, subtle `doorwayPeek` stage `0`, dying oil lamp `warmLamp → coldMoon` via `getLightBlend`).
 4. **Investigation (`25–32 s`, `MCU` or `POV`, `mood=dread`):** `peerForward` / `dollyZoom` compression + `Flashlight3D` SpotLight sweep across grimy walls & creeping `beat.fogOverride`.
-5. **Threat Tease & TRUE Dead Silence (`32–38 s`, `ECU` / `POV_CU`, `[DEAD SILENCE 0.65s]`):** Close sensory cue (claw fingers gripping doorframe, `torchMalfunction` flashlight sputter) → `{ kind: "blackout", a, b }` + `-48 dB` audio vacuum.
+5. **Threat Tease & TRUE Dead Silence (`32–38 s`, `ECU` / `POV_CU`, `[DEAD SILENCE 0.70s]`):** Close sensory cue (claw fingers gripping doorframe, `torchMalfunction` flashlight sputter) → `{ kind: "blackout", a, b }` + `-48 dB` audio vacuum.
 6. **Staged Climax Reveal (`38–46 s`, `LOW` → `CU`, `mood=panic`):** 3-stage monster escalation (`doorwayPeek` → `stalkLoom` → `lungeCloseUp`) + `{ kind: "aberration", a, b, strength }` VHS `tapeTear` surge + optional 3D `lightning` flash + protagonist `recoil`.
 7. **Escape / Sanctuary Shift (`46–64 s`, `POV_TURN` Dutch tilt → `Reverse WS` → `MS`):** Dynamic confrontation / frantic `whipPan` escape → `{ kind: "dipBlack", at, dur: 10, hold: 2 }` into a second unique `LocationBlueprint` or bolted interior.
 8. **Lingering Psychological Twist (`64–74 s`, `OTS` / `POV_DOWN`, `mood=cold_twist`):** False safety → slow `turnHead` + subtle `vignettePulse` revealing the unmistakable physical evidence that the entity is already inside.
@@ -110,7 +101,7 @@ python3 scripts/validate_manifest.py src/<project>/manifest.json \
 
 ## 5. Mandatory Cinematography & Transition Rules (`story.ts`)
 
-1. **Zero Repeated Camera Angles:** Every shot in `SHOTS` MUST declare a valid v5.0 `ShotScale` (`POV`, `POV_PROP`, `POV_TURN`, `POV_DOWN`, `POV_CU`, `WS`, `MS`, `OTS`, `MCU`, `CU`, `ECU`, `LOW`) and valid physical `LightKey` (`warmLamp | coldMoon | fluorescent | duskFog | flashlight`). Never perform static-layout filter jump-cuts (`corr > 0.88`).
+1. **Zero Repeated Camera Angles:** Every shot in `SHOTS` MUST declare a valid `ShotScale` (`POV`, `POV_PROP`, `POV_TURN`, `POV_DOWN`, `POV_CU`, `WS`, `MS`, `OTS`, `MCU`, `CU`, `ECU`, `LOW`) and valid physical `LightKey` (`warmLamp | coldMoon | fluorescent | duskFog | flashlight`). Never perform static-layout filter jump-cuts (`corr > 0.88`).
 2. **Engine Camera & Motion Archetypes (`camera.ts`):** Combine `whipPan`, `povBreath`, `camOTS`, `camArc`, `camPOV`, `camECU`, `dollyZoom`, `handheld`, `snapZoom`, `pushK`, and `rolled` (`0.06–0.095` rad Dutch tilt). Declare all fast head-snaps in `WHIP_PANS` and close prop raises in `POV_MOTIONS` for `extract_shots.py`.
 3. **Purposeful Transitions (`OVERLAYS`):**
    - `{ kind: "dipBlack", at, dur: 10, hold: 2 }` for location/time jumps.

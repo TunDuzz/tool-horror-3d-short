@@ -1,75 +1,84 @@
 ---
 name: horror-audio-sfx
-description: Use when synthesizing expressive multi-speaker horror voices (7 MOOD_PROFILES, 1-file So-VITS-SVC Expressive VC-Pack with -na F0 preservation, procedural human breaths, character FX), building procedural copyright-free horror sound design & 27 stereo SFX in Python (numpy/scipy), carving TRUE -48 dB Dead Silence vacuums via mix_base.py, and mastering -15 LUFS audio mixes aligned to words.json.
+description: Use when building studio-clean horror voice tracks (100% open-source VieNeu-TTS 48kHz CPU, IndexTTS-2 Vietnamese / F5-TTS-Vietnamese GPU packs, So-VITS-SVC 1-file VC-Pack -na), managing real CC0 & neural horror SFX assets (sfx_manager.py: Freesound CC0 Foley, TangoFlux text-to-SFX, MMAudio video-to-audio), carving TRUE -48 dB Dead Silence vacuums via mix_base.py, and mastering -15 LUFS mixes aligned to words.json.
 ---
 
-# Expressive Horror Voice, TRUE Dead Silence & Procedural SFX v5.0 (`shorts-project/audio/` + `scripts/gen_horror_voice.py`)
+# Studio-Clean Neural Horror Voice, Real Cinema SFX & TRUE Dead Silence v6.0
 
-Zero-copyright, 100% deterministic horror voice & sound synthesis powered by `numpy` and `scipy` at `48 kHz` stereo, 24-bit WAV (`dsp.py`, `horror_instruments.py`, `mix_base.py`, `gen_horror_voice.py`).
-
----
-
-## 1. Core Horror Sound & Voice Principles
-
-1. **Expressive Word-Level Voice Acting v5.5 — Never Flat Monotone:**
-   - Synthesize via `gen_horror_voice.py` using **10 calibrated `MOOD_PROFILES`** (`calm_omen`, `curious`, `tense`, `whisper`, `fear_tremble`, `stutter_panic`, `dread`, `panic`, `cold_twist`, `ghost_entity`) spanning a wide **`0.68x .. 1.32x` tempo arc** and **`8.2 dB` loudness range** (`-5.2 dB` whisper → `+3.0 dB` stutter_panic), tunable via `--acting subtle|cinematic|extreme`.
-   - Combine 5 pure-Python/ffmpeg vocal-tract acting DSP engines: **8-band Formant True Breathy Whisper Vocoder** (deferred post-SVC so F0 stays clean), **AM+FM 6.2 Hz Vocal-Cord Fear Tremor**, **Acoustic Syllable-Onset Stuttering** (`[STUTTER]` / `K-không`), **WSOLA Curious Rising / Dread Falling Pitch Ramp**, and **Word-Boundary Intra-Sentence Pacing** (`[SLOW]`/`[FAST]`, curious pre-keyword micro-pauses, fear-tremble mid-phrase halts) + **7 organic human cues** (`soft_inhale`, `short_inhale`, `sharp_gasp`, `tremble_gasp`, `shaky_exhale`, `whisper_breath`, `swallow`).
-   - Pluggable `--tts-engine auto|edge|gemini`: automatically leverages **Gemini 2.5 Flash Preview TTS** (Free Tier REST API via `GEMINI_API_KEY`) with Vietnamese acting prompts, falling back seamlessly to cached 20-retry `edge-tts` + full acting DSP.
-   - Normalize Vietnamese clock & date strings (`01:06` → `"một giờ sáu phút"`) strictly for TTS while keeping verbatim display tokens in `words.json`, and route `[SPEAKER: NAME | fx=dry|room|phone|ghost]` through dedicated Character DSP.
-2. **So-VITS-SVC 1-File Expressive VC-Pack (`-na` F0 Preservation):**
-   - **CRITICAL:** Never pass `-a` (`--auto-predict-f0`) on horror narration — `-a` erases all emotional whisper/curious/tremor/panic pitch contours!
-   - Use the effortless 3-step 2-machine VC-Pack workflow (`--export-vc-pack` → run `run_svc_win.bat`/`run_svc_unix.sh` using **`-na`** on 1 file `narrator_guide_44k.wav` carrying full tempo swings, stutters, FM tremor & curious F0 → copy back `narrator_svc_out.wav` → `--vc-pack ... --narrator-vc-wav ...`) for exact 1:1 sample re-assembly + post-SVC True Breathy Whisper Vocoder + dynamic loudness + character voices! (Also supports `--export-acting-pack` for local GPU `F5-TTS-Vietnamese` / `VieNeu-TTS`.)
-3. **TRUE Psychoacoustic Dead Silence (`-48 dB` Vacuum):**
-   - `[DEAD SILENCE Xs]` in `SCRIPT.md` is NO LONGER cosmetic! `words.json` exports exact `dead_silences: [{ s, e }]` spans.
-   - Pass `dead_silences=load_dead_silences(words_json)` directly into `master_mix(...)` (or call `apply_dead_silences(music, sfx, dead_silences, floor_db=-48.0)`): BOTH music and ambient SFX drop cleanly (`22 ms` pre-fade, `10 ms` post-fade) into an eerie **`-48 dB` vacuum**, making the ensuing `stinger` or whisper hit with physical shock!
-4. **Voice-First Sparse Scoring & Dynamic Range (`LRA ~6–10 LU`):**
-   - Keep horror beds below `180 Hz` (`sub_drone`) or above `2.5 kHz` (`whisper_ghost` / sparse `bowed_metal`) so `300 Hz – 2.2 kHz` stays crystal clear.
-   - Let quiet creepy ambience sit at `-28..-22 LUFS` while `stinger` impacts hit `-10..-8 LUFS` momentary, averaging `-15.0 LUFS` integrated (`<= -1.2 dBTP`, `gr.max < 3.0 dB`).
-5. **Series Continuity (`drone_hz` Lock):**
-   - For multi-part episodes (`8–10` Parts), fix one `drone_hz` (e.g. `43.65 Hz`) and one `make_ir(rt60=2.4, seed=404)` across all Parts in `OUTLINE.json` / `CONTINUITY.json`.
+Zero-distortion, act-level coherent Vietnamese horror voice + **Asset-First Real Cinema SFX** + **TRUE `-48 dB` Dead Silence** mastering at `48 kHz` stereo 24-bit WAV (`mix_base.py`, `dsp.py`, `sfx_manager.py`, `gen_horror_voice.py`).
 
 ---
 
-## 2. Shared Modules (`shorts-project/audio/`)
+## 1. Golden Rules of Studio Horror Audio v6.0
 
-- `dsp.py`: `SR`, `ns`, `tt`, `rng`, `lp`, `hp`, `bp`, `peq`, `shelf`, `reson`, `resbank`, `colored`, `smooth_noise`, `ramp`, `fades`, `curve`, `shape`, `phase`, `modal`, `pan`, `st`, `place`, `widen`, `make_ir`, `convolve_st`.
-- `horror_instruments.py` (**27 procedural stereo horror instruments & Foley SFX**):
-  - **Core Score & Ambience (9):** `sub_drone`, `bowed_metal`, `scary_musicbox`, `riser`, `stinger` (`boom|braam|shriek|cluster_stab`), `heartbeat`, `horror_strings`, `ambience_night` (`wind|rain|room_tone|creak|thunder|clock`), `whisper_ghost`.
-  - **Action Foley Pack (6):** `footsteps_wood`, `rope_strain`, `door_slam_bolt`, `wet_drip`, `nail_scrape`, `lantern_sputter`.
-  - **Build-Up, Climax & Folk Horror Pack (8):** `reverse_suck`, `shepard_tension`, `tinnitus_ring`, `whoosh_dark`, `entity_rattle` (`drowned|shriek_gasp`), `lightning_close`, `folk_wail` (*đàn nhị*), `woodblock_omen` (*mõ gỗ*).
-  - **v5.0 PSX / Analog VHS & Visceral Dread Pack (4):**
-    - `vhs_static_burst(dur, vel, r)`: Analog tape head tracking snow & electrical crackle synced to `aberration` / `RetroPsxEffect.dreadLevel` tape-tear bursts.
-    - `flashlight_click_sputter(dur, vel, r, kind="off"|"on")`: Tactile mechanical button click + failing bulb electrical sputter.
-    - `neck_crack_wet(dur, vel, r)`: Visceral brittle bone-snap + subtle wet tissue crunch for `neckTilt` / jaw dislocation beats.
-    - `fly_buzz_loop(dur, vel, r)`: Stereo erratic darting fly hum paired with `addSwarmingFlies3D` decay props.
-- `mix_base.py`: `cached`, `load_voice`, `load_words`, `load_dead_silences`, `speech_spans`, `duck_db`, `apply_dead_silences`, `master_mix(..., dead_silences=..., ds_floor_db=-48.0)`, `write_mix_and_stems`, `ffmpeg_ebur`.
+1. **NEVER Fake Human Emotion With Distorting DSP:**
+   - Do **NOT** apply white-noise whisper vocoders, artificial 6 Hz vibrato, or raw waveform stutter-slicing onto flat TTS — those cause radio static and unnatural glitches.
+   - Do **NOT** chop a 60 s script into 15–20 tiny disconnected TTS calls. Group contiguous narrator lines into **2–4 coherent contextual Acts** (splitting ONLY on `[DEAD SILENCE Xs]`, explicit `[PAUSE Xs]`, or speaker/act changes) so the neural voice model delivers natural storytelling rhythm and smooth tonal transitions!
+2. **Real Neural Acting Sources (100% Free & Open-Source):**
+   - **Local CPU 48 kHz (`--tts-engine vieneu`):** [`pnnbao97/VieNeu-TTS`](https://github.com/pnnbao97/VieNeu-TTS) (`pip install vieneu`, ONNX CPU torch-free) — native 48 kHz Vietnamese storytelling, supports `[thở dài]` / `[hắng giọng]` natively AND **3–8s zero-shot emotional voice cloning** (`--ref-audio` or `--emotion-refs <dir>` with `calm.wav`, `fear.wav`, `whisper.wav`, `curious.wav`, `panic.wav`).
+   - **Local GPU Acting Pack (`--export-gpu-voice-pack` → `--import-acts`):**
+     - **[`dinhthuan/index-tts-2-vietnamese`](https://huggingface.co/dinhthuan/index-tts-2-vietnamese)** (`iamdinhthuan/index-tts-finetune-vietnamese`): Disentangles speaker timbre (`spk_audio_prompt`) from **8-D emotion vectors** (`[happy, angry, sad, afraid, disgusted, melancholic, surprised, calm]`) or emotional reference clips — genuine neural fear, curiosity, and dread in your narrator's own voice!
+     - **[`nguyenthienhy/F5-TTS-Vietnamese`](https://github.com/nguyenthienhy/F5-TTS-Vietnamese):** Flow-matching zero-shot emotional reference cloning.
+   - **2-Machine So-VITS-SVC 1-File VC-Pack (`--export-vc-pack` → `-na` → `--vc-pack` + `--narrator-vc-wav`):** Exports a clean, distortion-free act-level `narrator_guide_44k.wav` and always runs So-VITS-SVC with **`-na` (`--no-auto-predict-f0`)** so natural pitch & pacing are preserved 100%.
+   - **Clean Fallbacks:** `--tts-engine edge` (whole-act distortion-free `edge-tts`) or `--tts-engine gemini` (Gemini 2.5 Flash TTS Free Tier via `GEMINI_API_KEY`).
+3. **Asset-First Real Cinema Foley (`sfx_manager.py` + `mix_base.load_sfx_asset`):**
+   - Prefer **real recorded CC0 Foley** or **neural generated SFX** over synthetic math Foley for doors, footsteps, rain, glass scrapes, gasps, and room ambiences.
+   - Use procedural `horror_instruments.py` primarily for clean sub-bass & musical tension reinforcement (`sub_drone`, `riser`, `stinger("boom")`, `folk_wail`, `woodblock_omen`).
+4. **TRUE Psychoacoustic Dead Silence (`-48 dB` Vacuum):**
+   - Pass `dead_silences=load_dead_silences(words_json)` directly into `master_mix(..., dead_silences=..., ds_floor_db=-48.0)` so BOTH music and ambient SFX drop smoothly (`22 ms / 10 ms` cosine edges) into a **`-48 dB` vacuum** across every `[DEAD SILENCE Xs]` span.
+5. **Voice-First Sparse Scoring & Dynamic Range (`-15.0 LUFS`, `LRA ~5–9 LU`, `<= -1.2 dBTP`):**
+   - Keep music beds below `180 Hz` or above `2.5 kHz`, duck music `-4.5..-5.5 dB` under speech, and lock one `drone_hz` + reverb IR across multi-part series.
 
 ---
 
-## 3. Standard Mixing Pipeline (Per Video or Per Part)
+## 2. Managing Real Cinema SFX (`scripts/sfx_manager.py`)
 
-1. **Lock Voice & Picture Timing First:** Generate `voice.wav` + `words.json` (with `dead_silences`), run `align_manifest.py`, and read exact `KICKS` / `OVERLAYS` / `words.json` timestamps.
-2. **Generate 3 Stems** in `out/<project>/audio/build_audio.py`:
-   - `voice` (`load_voice(voice_wav, total_sec)` — gain-only; expressive mood loudness, breaths & speaker FX are already sculpted in `gen_horror_voice.py`).
-   - `music` (`sub_drone` + sparse `scary_musicbox` / `horror_strings` / `folk_wail`, ducked `-3.5..-5.0 dB` under `speech_spans(words)` via `duck_db`).
-   - `sfx` (`ambience_night` bed + event-timed `riser` / `reverse_suck` → TRUE Dead Silence → `stinger` / `vhs_static_burst` / `neck_crack_wet` / `flashlight_click_sputter` / `fly_buzz_loop`, routed into per-setting `make_ir()` reverb with interior `lp(420 Hz)` occlusion behind closed doors).
-3. **Master with Automatic TRUE Dead Silence & Verify:**
-   ```python
-   dead_silences = load_dead_silences(words_json_path)
-   final_mix, stems, stats = master_mix(
-       voice, music, sfx,
-       target_lufs=-15.0, ceil_db=-1.2,
-       dead_silences=dead_silences, ds_floor_db=-48.0,
-   )
-   write_mix_and_stems(audio_out_dir, final_mix, stems)
-   print(ffmpeg_ebur(os.path.join(audio_out_dir, "mix.wav")))
-   ```
-   Verify `I` near `-15.0 LUFS`, `Peak <= -1.2 dBTP`, `gr.max < 3.0 dB`, and audible `-48 dB` vacuum during every `[DEAD SILENCE]` span.
-4. **Mux Video:**
-   ```bash
-   ffmpeg -y -i out/<project>/video.mp4 -i out/<project>/audio/mix.wav -c:v copy -c:a aac -b:a 192k -map 0:v:0 -map 1:a:0 out/<project>/final.mp4
-   ```
+### A. Free Real Recorded CC0 Horror Foley (Freesound API / Local Folder)
+```bash
+# 1. Fetch 16 essential CC0 real-recorded horror Foley clips (free key: https://freesound.org/apiv2/apply/)
+export FREESOUND_API_KEY="your_free_key"
+python3 scripts/sfx_manager.py fetch-freesound --preset horror-starter --library audio/sfx_library
+
+# 2. Or import your own local WAV/MP3/FLAC Foley folder (normalized cleanly to 48kHz stereo 24-bit WAV)
+python3 scripts/sfx_manager.py import-local --src /path/to/my_foley --library audio/sfx_library
+
+# 3. Inspect available assets
+python3 scripts/sfx_manager.py list --library audio/sfx_library
+```
+
+### B. Open-Source Local GPU Neural SFX Packs (`TangoFlux` & `MMAudio`)
+```bash
+# Export ready-to-run GPU scripts for declare-lab/TangoFlux (text-to-SFX 44.1kHz stereo) & hkchengrex/MMAudio (video-to-audio Foley)
+python3 scripts/sfx_manager.py export-sfx-pack --out-dir out/<project>/gpu_sfx_pack --video out/<project>/video.mp4
+```
+- On your RTX GPU PC (`>= 6 GB VRAM`): run `run_tangoflux_sfx.py` (`tangoflux` generates 30s stereo 44.1 kHz SFX in ~3.7s/clip) or `run_mmaudio_video.py` (`MMAudio` generates frame-locked Foley straight from `video.mp4`!), then copy `generated_sfx/` back and run `sfx_manager.py import-local`.
+- *Optional Cloud GitHub Skill:* [`github.com/elevenlabs/skills`](https://github.com/elevenlabs/skills) also provides official agent skills for both `sound-effects` and `text-to-speech` (Eleven v3) if desired.
+
+---
+
+## 3. Standard Asset-First Mixing Pipeline (`out/<project>/audio/build_audio.py`)
+
+```python
+from mix_base import (
+    load_voice, load_words, load_dead_silences, load_sfx_asset,
+    speech_spans, duck_db, master_mix, write_mix_and_stems, ffmpeg_ebur,
+)
+from horror_instruments import sub_drone, riser, stinger, reverse_suck
+
+# Load real recorded / TangoFlux WAV assets first (returns None if missing so you can fallback cleanly)
+rain = load_sfx_asset("rain_on_roof", dur_sec=total_dur, gain_db=-16.0, loop=True)
+creak = load_sfx_asset("wooden_door_creak", gain_db=-6.0, pan_pos=-0.35)
+# Layer clean procedural sub-bass tension + TRUE -48 dB Dead Silence!
+dead_silences = load_dead_silences(words_json_path)
+final_mix, stems, stats = master_mix(
+    voice, music, sfx,
+    target_lufs=-15.0, ceil_db=-1.2,
+    dead_silences=dead_silences, ds_floor_db=-48.0,
+)
+write_mix_and_stems(audio_out_dir, final_mix, stems)
+print(ffmpeg_ebur(os.path.join(audio_out_dir, "mix.wav")))
+```
 
 ## Cookbook Reference
 
-See [SOUND_CUES_COOKBOOK.md](./references/SOUND_CUES_COOKBOOK.md) for concrete Python recipes mapped to visual horror cues, TRUE Dead Silence mixing, and multi-part audio bridging.
+See [SOUND_CUES_COOKBOOK.md](./references/SOUND_CUES_COOKBOOK.md) for concrete cue timing recipes and multi-part audio bridging.

@@ -6,9 +6,98 @@ import subprocess
 import numpy as np
 from scipy import ndimage, signal
 from dsp import (
-    SR, ns, st, dbg, read_wav, write_wav,
+    SR, ns, st, dbg, pan, read_wav, write_wav,
     integrated, momentary, short_term, lra, true_peak, fades,
 )
+
+
+def load_sfx_asset(
+    name_or_path,
+    library_dir=None,
+    dur_sec=None,
+    gain_db=0.0,
+    pan_pos=None,
+    loop=False,
+    fade_in=0.015,
+    fade_out=0.04,
+):
+    """Horror Engine v6.0: Load a real recorded CC0 / Neural SFX WAV asset as 48 kHz stereo float64.
+
+    Searches direct path first, then `library_dir/<name>.wav` (defaulting to `<audio_dir>/sfx_library/`).
+    Supports clean looping with cosine crossfade, trimming to `dur_sec`, gain scaling, and optional stereo pan.
+    Returns `None` if not found so callers can choose an explicit fallback.
+    """
+    candidates = []
+    if os.path.isfile(name_or_path):
+        candidates.append(name_or_path)
+    base = name_or_path if name_or_path.lower().endswith(".wav") else f"{name_or_path}.wav"
+    if library_dir:
+        candidates.append(os.path.join(library_dir, base))
+    default_lib = os.path.join(os.path.dirname(os.path.abspath(__file__)), "sfx_library")
+    candidates.append(os.path.join(default_lib, base))
+
+    resolved = next((p for p in candidates if os.path.isfile(p)), None)
+    if resolved is None:
+        return None
+
+    try:
+        x, sr = read_wav(resolved)
+    except Exception:
+        # Handle 24-bit WAVE_FORMAT_EXTENSIBLE / float WAVs transparently via scipy.io.wavfile
+        from scipy.io import wavfile
+        sr, raw = wavfile.read(resolved)
+        if raw.dtype == np.int16:
+            xf = raw.astype(np.float64) / 32768.0
+        elif raw.dtype == np.int32:
+            xf = raw.astype(np.float64) / float(1 << 31)
+        elif raw.dtype == np.uint8:
+            xf = (raw.astype(np.float64) - 128.0) / 128.0
+        else:
+            xf = raw.astype(np.float64)
+        x = xf.T if xf.ndim == 2 else xf[None, :]
+    if x.ndim == 1:
+        x = st(x)
+    elif x.shape[0] == 1:
+        x = st(x[0])
+    elif x.shape[0] > 2:
+        x = x[:2]
+
+    if sr != SR:
+        g = math.gcd(SR, sr)
+        x = np.stack([signal.resample_poly(x[0], SR // g, sr // g), signal.resample_poly(x[1], SR // g, sr // g)])
+
+    if dur_sec is not None:
+        target_n = ns(dur_sec)
+        if x.shape[1] >= target_n:
+            x = x[:, :target_n]
+        elif loop and x.shape[1] > 64:
+            xf = min(ns(0.08), x.shape[1] // 4)
+            step = max(1, x.shape[1] - xf)
+            out = np.zeros((2, target_n), dtype=np.float64)
+            pos = 0
+            while pos < target_n:
+                seg = x.copy()
+                if pos > 0 and xf > 1:
+                    ramp_in = np.linspace(0.0, 1.0, xf)
+                    seg[:, :xf] *= ramp_in[None, :]
+                rem = target_n - pos
+                take = min(seg.shape[1], rem)
+                if pos > 0 and xf > 1:
+                    ramp_out = np.linspace(1.0, 0.0, xf)
+                    out[:, pos : pos + min(xf, rem)] *= ramp_out[: min(xf, rem)][None, :]
+                out[:, pos : pos + take] += seg[:, :take]
+                pos += step
+            x = out
+        else:
+            pad = np.zeros((2, target_n), dtype=np.float64)
+            pad[:, : x.shape[1]] = x
+            x = pad
+
+    if pan_pos is not None:
+        x = pan(x.mean(0), float(pan_pos))
+    if gain_db != 0.0:
+        x = x * dbg(gain_db)
+    return fades(x, fade_in, fade_out)
 
 
 def cached(cache_dir, name, fn):
