@@ -1,0 +1,168 @@
+{
+  "soundscape_mode": "psychological",
+  "voice": "voice_v14/voice.wav",
+  "words": "voice_v14/words.json",
+  "tail_pad_s": 0.45,
+  "target_lufs": -16.0,
+  "ceil_db": -1.2,
+  "silence_drop_floor_db": -42.0,
+  "dead_silence_floor_db": -48.0,
+  "max_jumpscares": 0,
+  "seed": 2044,
+  "beds": [
+    {
+      "sound": "wind_howl_night",
+      "role": "far",
+      "target_rms_dbfs": -31.5,
+      "hp_hz": 95,
+      "lp_hz": 3200,
+      "voice_notch_db": -3.0,
+      "duck_db": -3.5,
+      "whisper_duck_db": -9.5,
+      "automation": [
+        {
+          "at_word": "chốt",
+          "occurrence": 2,
+          "gain_delta_db": -6.5,
+          "lp_hz": 520,
+          "transition_s": 0.65
+        }
+      ],
+      "label": "Gió bấc ngoài hành lang tự đục trầm xuống 520 Hz ngay khi gài chốt sắt"
+    },
+    {
+      "sound": "fluorescent_buzz",
+      "role": "near",
+      "target_rms_dbfs": -38.5,
+      "hp_hz": 85,
+      "lp_hz": 2200,
+      "duck_db": -3.0,
+      "whisper_duck_db": -9.0,
+      "label": "Chấn lưu đèn tuýp cũ rè rất khẽ trong phòng trực đêm"
+    }
+  ],
+  "motifs": [
+    {
+      "id": "m_pendulum_clock",
+      "sound": "clock_ticking",
+      "start": { "at": 4.8 },
+      "end": { "at_word": "khựng", "edge": "start" },
+      "interval_s": 1.0,
+      "mode": "decelerate",
+      "space": "room",
+      "pan_from": -0.38,
+      "pan_to": -0.30,
+      "target_peak_dbfs": -16.5,
+      "label": "Đồng hồ quả lắc tường trái đếm nhịp rồi chậm dần và chết đứng đúng lúc 02:15"
+    }
+  ],
+  "events": [
+    {
+      "id": "hook_cold_open_ring",
+      "sound": "old_phone_ring",
+      "bus": "sfx",
+      "role": "tension",
+      "space": "room",
+      "at": 0.14,
+      "align": "onset",
+      "dur_s": 0.65,
+      "target_peak_dbfs": -9.0,
+      "pan": 0.16,
+      "label": "Một hồi chuông ngắn chói ngay 0.14s mở màn đánh thức sự chú ý cùng Cold Hook"
+    },
+    {
+      "id": "bahanh_receding_steps",
+      "sound": "wood_footsteps_slow",
+      "bus": "sfx",
+      "role": "foley",
+      "space": "adjacent_muffled",
+      "at_word": "bóng",
+      "edge": "start",
+      "offset_s": -0.25,
+      "align": "onset",
+      "dur_s": 2.4,
+      "target_peak_dbfs": -12.0,
+      "pan_from": 0.22,
+      "pan_to": -0.78,
+      "label": "Tiếng bước chân Bà Hạnh xa dần ngoài hành lang gạch bông"
+    },
+    {
+      "id": "corridor_bolt_lock",
+      "sound": "door_bolt_latch",
+      "bus": "sfx",
+      "role": "tension",
+      "space": "room",
+      "at_word": "chốt",
+      "occurrence": 2,
+      "edge": "start",
+      "offset_s": -0.04,
+      "align": "onset",
+      "target_peak_dbfs": -6.2,
+      "hp_hz": 180,
+      "pan": 0.34,
+      "label": "Tiếng chốt sắt cửa hành lang sập khóa"
+    },
+    {
+      "id": "corridor_wood_settle",
+      "synth": "wood_settle_subtle",
+      "bus": "sfx",
+      "role": "subliminal",
+      "space": "adjacent_muffled",
+      "at_word": "Đúng",
+      "edge": "start",
+      "offset_s": -0.85,
+      "dur_s": 1.15,
+      "pan": 0.42,
+      "label": "Khung gỗ hành lang kẽo kẹt khẽ ngay trước mốc 02:15"
+    },
+    {
+      "id": "abrupt_half_ring",
+      "sound": "old_phone_ring",
+      "bus": "sfx",
+      "role": "tension",
+      "space": "room",
+      "at_word": "chuông",
+      "occurrence": 2,
+      "edge": "start",
+      "offset_s": -0.15,
+      "align": "onset",
+      "dur_s": 0.85,
+      "target_peak_dbfs": -7.5,
+      "pan": 0.14,
+      "label": "Điện thoại đen cắt dây nảy lên đúng một hồi chuông cụt lủn lúc 02:15"
+    },
+    {
+      "id": "receiver_lift_breath",
+      "synth": "breath_close_ear",
+      "kind": "held_exhale",
+      "bus": "sfx",
+      "role": "subliminal",
+      "space": "close_ear",
+      "survive_hush": true,
+      "at_silence_drop": 0,
+      "edge": "start",
+      "offset_s": 0.25,
+      "dur_s": 0.85,
+      "target_peak_dbfs": -21.0,
+      "pan_from": 0.56,
+      "pan_to": 0.78,
+      "label": "Hơi thở sát tai phải giữa khoảng lặng [SILENCE_DROP]"
+    },
+    {
+      "id": "severed_cord_undertone",
+      "sound": "cello_dread_sting",
+      "bus": "score",
+      "role": "subliminal",
+      "space": "otherworld",
+      "allow_in_whisper": true,
+      "at_word": "bụi",
+      "edge": "start",
+      "offset_s": 0.05,
+      "align": "onset",
+      "dur_s": 4.2,
+      "target_peak_dbfs": -15.8,
+      "lp_hz": 660,
+      "label": "Âm trầm u tịch dưới sợi dây điện thoại cắt đứt phủ bụi và chìa khóa 204 lắc lư"
+    }
+  ]
+}

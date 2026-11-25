@@ -1,11 +1,11 @@
 ---
 name: horror-audio-sfx
-description: Use when building studio-clean horror voice tracks (VieNeu-TTS 48kHz --speaker-lock + faster-whisper Forced Word Alignment <35ms + [VISUAL Xs] breathing beats), managing Openverse CC0 & neural horror SFX assets (sfx_manager.py + mix_cues.py --strict), carving TRUE -48 dB Dead Silence vacuums, and mastering -15 LUFS mixes locked to words.json.
+description: Use when building crisp studio-clean horror voice tracks (VieNeu-TTS 48kHz --speaker-lock --strict-hook + faster-whisper Forced Word Alignment <35ms at 3.10-3.55 words/s spoken / 2.55-3.05 effective), managing Openverse CC0 & neural horror SFX assets (sfx_manager.py + mix_cues.py --strict), carving [SILENCE_DROP Xs] Uncanny Hush / TRUE -48 dB Dead Silence vacuums, dual occluded beds, rhythmic motifs, and mastering -16.0 LUFS mixes locked to words.json.
 ---
 
-# Studio-Clean Neural Horror Voice, Forced Word Alignment, Real Cinema SFX & TRUE Dead Silence v11.0
+# Psychological Horror Voice, Crisp Oral Tempo & Narrative Soundscape Engine v14.0
 
-Zero-distortion, act-level coherent Vietnamese horror voice + **Asset-First Real Cinema SFX** + **TRUE `-48 dB` Dead Silence** mastering at `48 kHz` stereo 24-bit WAV (`mix_base.py`, `dsp.py`, `sfx_manager.py`, `gen_horror_voice.py`).
+Soul-first Vietnamese psychological horror audio at `48 kHz` stereo 24-bit WAV (`-16.0 LUFS`, `LRA 7–12 LU`, **`max_jumpscares = 0` by default**): fear emerges from colloquial oral subtext, 0.05s Cold Hook entry (`--strict-hook`, `first_word <= 0.45s`), crisp spoken cadence (`3.10–3.55 words/s`, hard ceiling `3.65`), clause/pitch/proximity shifts (`[BEAT Xs]`, `[PACE]`, `[PITCH]`, `[PROX=close]`), pure-Vietnamese 8-mood prosody (`prepare_emotion_refs.py build-vn-horror-bank`), 25-voice NPC auto-casting, dual-layer occluded beds (`near` + `far` with `automation`), recurring `motifs[]` (`steady_then_stop`, `approach`, `stutter_break`), 4-zone binaural space, and `[SILENCE_DROP Xs]` uncanny hush (`mix_base.py`, `dsp.py`, `sfx_manager.py`, `gen_horror_voice.py`, `mix_cues.py`).
 
 ---
 
@@ -36,7 +36,7 @@ Zero-distortion, act-level coherent Vietnamese horror voice + **Asset-First Real
    - `gen_horror_voice.py --word-aligner auto` runs **`faster-whisper` forced word alignment** anchored via Needleman-Wunsch sequence alignment to exact `SCRIPT.md` tokens (`< 35ms` precision, with built-in `Acoustic Pause-Island` `< 80ms` fallback) — eliminating intra-paragraph pause drift so shots, lip-sync, and 4–8 word subtitles lock to true spoken audio!
    - **`[VISUAL Xs]`** inserts `X` seconds of vocal breathing room (`visual_beats[]` in `words.json`) while keeping ambient rain, wind, and Foley alive for Master Establishing shots and physical hand interactions (`20–35%` of chapter duration), and word-level timestamps in `words.json` drive v12.0 phrase-anchored `stillKeyframes` (`mustShow` / `storyboard_proof.html` via `render-stills.mjs --strict-audit`).
    - **`[DEAD SILENCE Xs]`** records `dead_silences[]` and drops **BOTH** music and ambient SFX into a **`-48 dB` psychoacoustic vacuum** right before major dread/jumpscare reveals.
-5. **Voice-First Sparse Scoring & Dynamic Range (`-15.0 LUFS`, `LRA ~5–9 LU`, `<= -1.2 dBTP`):**
+5. **Voice-First Sparse Scoring & Dynamic Range (`-16.0 LUFS`, `LRA 7–12 LU`, `<= -1.2 dBTP`):**
    - Keep music beds below `180 Hz` or above `2.5 kHz`, duck music `-4.5..-5.5 dB` under speech, and lock one `drone_hz` + reverb IR across multi-part series.
 
 ---

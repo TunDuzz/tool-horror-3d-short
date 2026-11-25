@@ -245,6 +245,102 @@ def convolve_st(x, ir):
     return np.stack([signal.fftconvolve(x[c], ir[c])[:n] for c in range(2)])
 
 
+def time_varying_lp(x, pts, order=2):
+    """Smooth click-free time-varying Butterworth low-pass filter across `pts = [(time_s, cutoff_hz), ...]`.
+    Accepts mono `(N,)` or stereo `(2, N)` arrays — ideal for muffling exterior rain/wind when a door bolts shut!"""
+    arr = np.asarray(x, dtype=np.float64)
+    if not pts:
+        return arr.copy()
+    xs = np.array([float(p[0]) for p in pts], dtype=np.float64)
+    log_fs = np.log2(np.clip([float(p[1]) for p in pts], 70.0, SR * 0.45))
+
+    def _gain_fn(T, F):
+        fc_t = 2.0 ** np.interp(T, xs, log_fs)
+        f_col = np.maximum(F[:, None], 1.0)
+        return 1.0 / np.sqrt(1.0 + (f_col / fc_t[None, :]) ** (2.0 * max(1, order)))
+
+    if arr.ndim == 1:
+        return shape(arr, _gain_fn, nper=1024, hop=256)
+    return np.stack([shape(arr[ch], _gain_fn, nper=1024, hop=256) for ch in range(arr.shape[0])])
+
+
+def pan_trajectory(x, pts, itd_binaural=True):
+    """Move a sound smoothly across `pts = [(time_s, pan_-1_to_1), ...]` with optional binaural ITD & head-shadowing."""
+    arr = np.asarray(x, dtype=np.float64)
+    mono = arr if arr.ndim == 1 else arr.mean(axis=0)
+    n = len(mono)
+    if n == 0:
+        return np.zeros((2, 0), dtype=np.float64)
+    t = np.arange(n, dtype=np.float64) / SR
+    if not pts:
+        p_t = np.zeros(n, dtype=np.float64)
+    else:
+        xs = np.array([float(p[0]) for p in pts], dtype=np.float64)
+        ps = np.clip([float(p[1]) for p in pts], -1.0, 1.0)
+        p_t = np.interp(t, xs, ps)
+
+    th = (p_t + 1.0) * (np.pi * 0.25)
+    gL = np.cos(th) * np.sqrt(2.0)
+    gR = np.sin(th) * np.sqrt(2.0)
+
+    if not itd_binaural or n < 32:
+        return np.stack([mono * gL, mono * gR])
+
+    # Subtle head-shadowing + fractional interaural delay (up to 0.42 ms) on contralateral ear
+    shadowed = lp(mono, 2500.0, order=2)
+    max_itd_s = 0.00042
+    delay_L = np.maximum(0.0, p_t) * max_itd_s * SR
+    delay_R = np.maximum(0.0, -p_t) * max_itd_s * SR
+    idx = np.arange(n, dtype=np.float64)
+    sig_L_raw = np.interp(np.clip(idx - delay_L, 0.0, n - 1.0), idx, mono)
+    sig_R_raw = np.interp(np.clip(idx - delay_R, 0.0, n - 1.0), idx, mono)
+    sh_L = np.interp(np.clip(idx - delay_L, 0.0, n - 1.0), idx, shadowed)
+    sh_R = np.interp(np.clip(idx - delay_R, 0.0, n - 1.0), idx, shadowed)
+    w_sh_L = 0.45 * np.maximum(0.0, p_t)
+    w_sh_R = 0.45 * np.maximum(0.0, -p_t)
+    L = ((1.0 - w_sh_L) * sig_L_raw + w_sh_L * sh_L) * gL
+    R = ((1.0 - w_sh_R) * sig_R_raw + w_sh_R * sh_R) * gR
+    return np.stack([L, R])
+
+
+def build_space_irs(seed=70, room_rt60=0.95):
+    """Build 4 physical horror acoustic zone IRs (`room`, `adjacent_muffled`, `exterior_occluded`, `otherworld`)."""
+    return {
+        "room": make_ir(
+            rt60=max(0.45, float(room_rt60)),
+            seed=seed,
+            pre=0.011,
+            hf=1.35,
+            early=[(0.014, 0.22, -0.32), (0.029, 0.14, 0.36)],
+            density_lp=3800,
+        ),
+        "adjacent_muffled": make_ir(
+            rt60=0.68,
+            seed=seed + 11,
+            pre=0.008,
+            hf=1.8,
+            early=[(0.012, 0.28, -0.20), (0.026, 0.18, 0.22)],
+            density_lp=1050,
+        ),
+        "exterior_occluded": make_ir(
+            rt60=1.75,
+            seed=seed + 23,
+            pre=0.024,
+            hf=1.5,
+            early=[(0.032, 0.16, -0.45), (0.058, 0.12, 0.45)],
+            density_lp=2100,
+        ),
+        "otherworld": make_ir(
+            rt60=2.55,
+            seed=seed + 37,
+            pre=0.030,
+            hf=0.95,
+            early=[(0.028, 0.20, -0.55), (0.064, 0.16, 0.55)],
+            density_lp=3200,
+        ),
+    }
+
+
 # ---------------------------------------------------------------- loudness (ITU-R BS.1770-4 / EBU R128)
 _KB1 = np.array([1.53512485958697, -2.69169618940638, 1.19839281085285])
 _KA1 = np.array([1.0, -1.69065929318241, 0.73248077421585])

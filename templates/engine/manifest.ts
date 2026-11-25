@@ -64,7 +64,7 @@ export type CharacterRole = "human" | "entity" | "silhouette" | "lurker";
 
 export type DialogueMode = "directSpeech" | "voiceOver" | "silent";
 
-export type CameraMode = "master" | "pov" | "pov_turn" | "pov_walk" | "pov_interact" | "ots_same_side";
+export type CameraMode = "cold_hook" | "master" | "pov" | "pov_turn" | "pov_walk" | "pov_interact" | "ots_same_side";
 export type AxisSide = "pov_center" | "left" | "right";
 
 export type StillKeyframeSpec = {

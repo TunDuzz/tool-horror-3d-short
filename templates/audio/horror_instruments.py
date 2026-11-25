@@ -763,3 +763,70 @@ def fly_buzz_loop(dur=3.5, vel=0.22, r=None):
         out[0] += wing * prox * np.cos(th)
         out[1] += wing * prox * np.sin(th)
     return _norm_peak(fades(out, 0.15, 0.20), 0.72) * vel
+
+
+# ---------------- Horror Engine v13.0: Subtle Psychological & Intimate Soundscape Pack ----------------
+
+def clock_tick_irregular(dur=6.0, bpm=60.0, vel=0.34, r=None, mode="steady_then_stop", pan_pos=0.18):
+    """Tactile mechanical clock escapement tick-tock supporting psychological pattern breaks."""
+    r = r or rng(1301)
+    n = ns(dur)
+    mono = np.zeros(n, dtype=np.float64)
+    tick_a = fades(modal(0.065, [(1880.0, 0.9, 0.007), (3340.0, 0.48, 0.0038), (620.0, 0.25, 0.012)], r), 0.0002, 0.01)
+    tick_b = fades(modal(0.065, [(1490.0, 0.82, 0.008), (2620.0, 0.42, 0.0042), (540.0, 0.22, 0.014)], r), 0.0002, 0.01)
+    base_dt = 60.0 / max(20.0, float(bpm))
+    limit_t = dur * 0.72 if mode == "steady_then_stop" else dur - 0.08
+    t_cur = 0.06
+    idx = 0
+    while t_cur < limit_t:
+        u = np.clip(t_cur / max(0.1, limit_t), 0.0, 1.0)
+        seg = tick_a if idx % 2 == 0 else tick_b
+        k = ns(t_cur)
+        m = min(len(seg), n - k)
+        if m > 0:
+            mono[k : k + m] += seg[:m] * r.uniform(0.88, 1.05)
+        if mode == "accelerate":
+            dt = base_dt * (1.0 - 0.58 * (u ** 1.3))
+        elif mode == "decelerate":
+            dt = base_dt * (1.0 + 1.35 * (u ** 1.5))
+        elif mode == "stutter_break" and u > 0.72 and idx % 3 == 2:
+            dt = base_dt * 0.34
+        else:
+            dt = base_dt
+        t_cur += max(0.14, dt + r.uniform(-0.006, 0.006))
+        idx += 1
+    return _norm_peak(pan(mono, pan_pos), 0.78) * vel
+
+
+def wood_settle_subtle(dur=1.6, vel=0.28, r=None, pan_pos=-0.35):
+    """Quiet nighttime old-house timber contraction micro-creaks (subtle room presence, never cartoon squeaks)."""
+    r = r or rng(1302)
+    n = ns(dur)
+    mono = np.zeros(n, dtype=np.float64)
+    n_knots = max(2, int(round(dur * 2.5)))
+    for i in range(n_knots):
+        t0 = (i + r.uniform(0.15, 0.85)) * (dur / n_knots) * 0.88
+        k0 = ns(t0)
+        rem = min(ns(0.16), n - k0)
+        if rem > 16:
+            f0 = r.uniform(145.0, 390.0)
+            pop = modal(rem / SR, [(f0, 0.9, 0.022), (f0 * 1.92, 0.52, 0.012), (f0 * 3.4, 0.22, 0.006)], r)[:rem]
+            mono[k0 : k0 + rem] += fades(pop, 0.001, 0.02) * r.uniform(0.45, 1.0)
+    return _norm_peak(pan(mono, pan_pos), 0.72) * vel
+
+
+def breath_close_ear(dur=1.1, vel=0.32, r=None, kind="held_exhale", pan_pos=0.68):
+    """Intimate, zero-static human breath right beside one ear for uncanny hush moments."""
+    r = r or rng(1303)
+    n = ns(dur)
+    t = np.arange(n) / SR
+    u = t / max(dur, 1e-4)
+    nz = colored(n, r, slope=0.55)
+    if kind == "shiver_inhale":
+        env = (u ** 0.55) * np.exp(-np.maximum(0.0, u - 0.72) * 9.0) * (0.82 + 0.18 * np.sin(TAU * 7.5 * t))
+        tract = resbank(nz, [(480.0, 3.8, 0.85), (1380.0, 4.5, 0.65), (2650.0, 5.5, 0.38)])
+    else:
+        env = np.sin(np.pi * u) ** 0.75 * np.exp(-u * 0.9)
+        tract = resbank(nz, [(390.0, 3.2, 0.95), (1120.0, 4.0, 0.62), (2280.0, 5.0, 0.28)])
+    air = lp(hp(tract, 130.0, order=2), 4800.0, order=2) * env
+    return _norm_peak(pan(fades(air, 0.03, 0.06), pan_pos), 0.74) * vel

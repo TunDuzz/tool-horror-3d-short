@@ -41,151 +41,226 @@ SR_VC = 44100
 SR_FINAL = 48000
 VC_PACK_PAD_SEC = 0.35
 
-PAUSE_RE = re.compile(r"(\[(?:PAUSE|VISUAL|DEAD\s+SILENCE)\s+(\d+(?:\.\d+)?)\s*s?\])", re.IGNORECASE)
+PAUSE_RE = re.compile(
+    r"(\[(?:PAUSE|BEAT|KHỰNG|VISUAL|SILENCE_DROP|DEAD\s+SILENCE)\s+(\d+(?:\.\d+)?)\s*s?\])",
+    re.IGNORECASE,
+)
+CLAUSE_MOD_RE = re.compile(
+    r"(\[\s*(?:(?:PACE|PITCH|PROX)\s*=[^\[\]]+?)\])",
+    re.IGNORECASE,
+)
 DIRECTIVE_RE = re.compile(r"^\[\s*(NARRATOR|SPEAKER(?:\s*:\s*[^|\]]+)?)(?:\s*\|\s*(.+?))?\s*\]$", re.IGNORECASE)
 VIENEU_TAG_RE = re.compile(r"\[(?:thở\s+dài|hắng\s+giọng|cười)\]", re.IGNORECASE)
 CLOCK_RE = re.compile(r"\b(\d{1,2}):(\d{2})\b")
 DATE_RE = re.compile(r"\b(\d{1,2})/(\d{1,2})(?:/(\d{2,4}))?\b")
 
-# Clean act-level mood profiles (v6.1):
-#   - `vn_silence_p` / `vn_temp`: native neural phrasing pause & expressiveness inside `VieNeu-TTS v3 Turbo`!
-#   - `clean_tempo`: subtle formant-preserved studio tempo trim via `rubberband` (0.82x..1.08x, 0% distortion!)
-#   - `multi_style_voice`: optional built-in preset variation strictly for `--multi-style-guide` before So-VITS-SVC (-na)
-#   - `gain_db`: clean studio level contour
-#   - `indextts2_emo`: exact 8-D emotion vector [happy, angry, sad, afraid, disgusted, melancholic, surprised, calm]
+PACE_NAMED = {
+    "very_slow": 0.82,
+    "slow": 0.88,
+    "hesitant": 0.91,
+    "normal": 1.00,
+    "urgent": 1.06,
+    "fast": 1.10,
+}
+
+# Clean high-retention oral-horror mood profiles (v14.0):
+#   - `clean_tempo` & `tail_pad`: calibrated from measured VieNeu-TTS cadence so spoken delivery lands cleanly in 3.10-3.55 w/s (~0.5-1.0s snappier per sentence than v13) without rushing into >3.65 w/s garbling
+#   - `target_rms_dbfs`: preserves true 6-8 dB vocal dynamic range (whispers & dread stay genuinely intimate)
 MOOD_PROFILES = {
     "calm_omen": {
-        "speed": 0.90,
-        "clean_tempo": 0.88,
-        "vn_silence_p": 0.28,
+        "speed": 0.94,
+        "clean_tempo": 0.83,
+        "vn_silence_p": 0.24,
         "vn_temp": 0.70,
-        "f0_offset_st": 0.0,
+        "f0_offset_st": -0.3,
         "multi_style_voice": "Thiền Tâm Đức",
         "pitch_semi": -0.35,
+        "target_rms_dbfs": -18.8,
         "gain_db": 0.0,
-        "tail_pad": 0.24,
+        "tail_pad": 0.18,
         "ref_key": "calm",
         "indextts2_emo": [0.0, 0.0, 0.15, 0.15, 0.0, 0.35, 0.0, 0.65],
-        "acting_prompt": "Kể chuyện kinh dị tiếng Việt trầm lắng, chậm rãi, tự nhiên và ẩn chứa điềm báo rờn rợn",
+        "acting_prompt": "Kể chuyện kinh dị truyền miệng tiếng Việt gọn sắc, đời thường, tự nhiên và cuốn hút ngay từ đầu",
     },
     "curious": {
-        "speed": 0.94,
-        "clean_tempo": 0.92,
-        "vn_silence_p": 0.24,
-        "vn_temp": 0.90,
-        "f0_offset_st": +0.6,
+        "speed": 0.96,
+        "clean_tempo": 0.85,
+        "vn_silence_p": 0.22,
+        "vn_temp": 0.84,
+        "f0_offset_st": +0.4,
         "multi_style_voice": "Thiện Minh",
         "pitch_semi": +0.15,
-        "gain_db": -0.5,
-        "tail_pad": 0.24,
+        "target_rms_dbfs": -19.2,
+        "gain_db": 0.0,
+        "tail_pad": 0.18,
         "ref_key": "curious",
         "indextts2_emo": [0.0, 0.0, 0.0, 0.20, 0.0, 0.10, 0.55, 0.45],
-        "acting_prompt": "Đọc tiếng Việt tự nhiên với sắc thái tò mò, dò xét, nghi hoặc, nhấn nhẹ ở câu hỏi",
+        "acting_prompt": "Đọc tiếng Việt tự nhiên với sắc thái tò mò, gạn hỏi, nghi hoặc sắc gọn",
+    },
+    "uneasy": {
+        "speed": 0.94,
+        "clean_tempo": 0.76,
+        "vn_silence_p": 0.26,
+        "vn_temp": 0.76,
+        "f0_offset_st": -0.2,
+        "multi_style_voice": "Thiện Minh",
+        "pitch_semi": -0.25,
+        "target_rms_dbfs": -19.8,
+        "gain_db": 0.0,
+        "tail_pad": 0.20,
+        "ref_key": "uneasy",
+        "indextts2_emo": [0.0, 0.0, 0.15, 0.45, 0.0, 0.30, 0.20, 0.25],
+        "acting_prompt": "Đọc tiếng Việt dè chừng, căng nhẹ như vừa phát hiện chuyện bất thường trước mắt",
     },
     "tense": {
-        "speed": 1.02,
-        "clean_tempo": 1.00,
-        "vn_silence_p": 0.12,
-        "vn_temp": 0.88,
-        "f0_offset_st": +0.5,
+        "speed": 1.00,
+        "clean_tempo": 0.83,
+        "vn_silence_p": 0.14,
+        "vn_temp": 0.86,
+        "f0_offset_st": +0.4,
         "multi_style_voice": "Hải Đăng",
         "pitch_semi": 0.0,
-        "gain_db": +0.5,
+        "target_rms_dbfs": -17.0,
+        "gain_db": 0.0,
         "tail_pad": 0.16,
         "ref_key": "tense",
         "indextts2_emo": [0.0, 0.10, 0.0, 0.55, 0.0, 0.15, 0.30, 0.10],
-        "acting_prompt": "Đọc tiếng Việt với nhịp độ căng thẳng, hồi hộp và cảnh giác tăng dần",
+        "acting_prompt": "Đọc tiếng Việt gắt gọn, nghiêm nghị, cảnh báo dứt khoát",
     },
     "whisper": {
-        "speed": 0.86,
+        "speed": 0.88,
         "clean_tempo": 0.84,
-        "vn_silence_p": 0.40,
-        "vn_temp": 0.74,
-        "f0_offset_st": None,
+        "vn_silence_p": 0.34,
+        "vn_temp": 0.72,
+        "f0_offset_st": -1.0,
         "multi_style_voice": "Thiền Tâm Đức",
-        "pitch_semi": -0.45,
-        "gain_db": -3.5,
-        "tail_pad": 0.28,
+        "pitch_semi": -0.65,
+        "target_rms_dbfs": -24.0,
+        "gain_db": 0.0,
+        "tail_pad": 0.22,
         "ref_key": "whisper",
         "indextts2_emo": [0.0, 0.0, 0.15, 0.60, 0.0, 0.25, 0.10, 0.35],
-        "acting_prompt": "Nói nhỏ nhẹ, thì thầm sát tai đầy cẩn trọng và sợ bị phát hiện trong bóng tối",
+        "acting_prompt": "Nói nhỏ nhẹ, hạ giọng sát tai khẩn trương như sợ thứ bên ngoài nghe thấy",
     },
     "fear": {
-        "speed": 0.96,
-        "clean_tempo": 0.98,
-        "vn_silence_p": 0.18,
-        "vn_temp": 0.92,
-        "f0_offset_st": +1.1,
+        "speed": 0.98,
+        "clean_tempo": 0.77,
+        "vn_silence_p": 0.16,
+        "vn_temp": 0.88,
+        "f0_offset_st": +0.9,
         "multi_style_voice": "Thiện Minh",
         "pitch_semi": +0.35,
-        "gain_db": -0.5,
-        "tail_pad": 0.22,
+        "target_rms_dbfs": -18.0,
+        "gain_db": 0.0,
+        "tail_pad": 0.16,
         "ref_key": "fear",
         "indextts2_emo": [0.0, 0.0, 0.20, 0.85, 0.0, 0.20, 0.35, 0.0],
-        "acting_prompt": "Đọc tiếng Việt với cảm xúc sợ hãi, lo âu và hụt hơi tự nhiên khi chứng kiến điều kinh dị",
+        "acting_prompt": "Đọc tiếng Việt gấp hơn, bàng hoàng và hụt hơi thật khi đụng chuyện tà ma",
     },
     "dread": {
-        "speed": 0.86,
-        "clean_tempo": 0.82,
-        "vn_silence_p": 0.46,
+        "speed": 0.88,
+        "clean_tempo": 0.78,
+        "vn_silence_p": 0.36,
         "vn_temp": 0.68,
-        "f0_offset_st": -0.6,
+        "f0_offset_st": -0.9,
         "multi_style_voice": "Thiền Tâm Đức",
-        "pitch_semi": -0.60,
-        "gain_db": -1.5,
-        "tail_pad": 0.30,
+        "pitch_semi": -0.75,
+        "target_rms_dbfs": -20.6,
+        "gain_db": 0.0,
+        "tail_pad": 0.22,
         "ref_key": "dread",
         "indextts2_emo": [0.0, 0.0, 0.35, 0.65, 0.10, 0.65, 0.0, 0.10],
-        "acting_prompt": "Đọc tiếng Việt chậm rãi, nặng nề và rờn rợn như điềm dữ đang áp sát",
+        "acting_prompt": "Đọc tiếng Việt trầm đục, gai người nhưng giữ nhịp gọn chắc không rề rà",
     },
     "panic": {
-        "speed": 1.08,
-        "clean_tempo": 1.08,
-        "vn_silence_p": 0.05,
-        "vn_temp": 0.94,
-        "f0_offset_st": +1.6,
+        "speed": 1.06,
+        "clean_tempo": 0.89,
+        "vn_silence_p": 0.06,
+        "vn_temp": 0.92,
+        "f0_offset_st": +1.4,
         "multi_style_voice": "Hải Đăng",
-        "pitch_semi": +0.65,
-        "gain_db": +2.0,
+        "pitch_semi": +0.55,
+        "target_rms_dbfs": -16.2,
+        "gain_db": 0.0,
         "tail_pad": 0.12,
         "ref_key": "panic",
         "indextts2_emo": [0.0, 0.30, 0.0, 0.95, 0.0, 0.0, 0.45, 0.0],
-        "acting_prompt": "Đọc tiếng Việt gấp gáp, hoảng loạn và khẩn cấp như đang chạy trốn thực sự",
+        "acting_prompt": "Đọc tiếng Việt dồn dập, hoảng loạn và khẩn cấp thực sự",
     },
     "cold_twist": {
-        "speed": 0.84,
-        "clean_tempo": 0.82,
-        "vn_silence_p": 0.46,
+        "speed": 0.86,
+        "clean_tempo": 0.80,
+        "vn_silence_p": 0.38,
         "vn_temp": 0.64,
-        "f0_offset_st": -0.8,
+        "f0_offset_st": -1.2,
         "multi_style_voice": "Thiền Tâm Đức",
-        "pitch_semi": -0.65,
-        "gain_db": -1.0,
-        "tail_pad": 0.34,
-        "ref_key": "dread",
+        "pitch_semi": -0.90,
+        "target_rms_dbfs": -21.2,
+        "gain_db": 0.0,
+        "tail_pad": 0.23,
+        "ref_key": "cold_twist",
         "indextts2_emo": [0.0, 0.0, 0.25, 0.25, 0.0, 0.55, 0.0, 0.60],
-        "acting_prompt": "Đọc tiếng Việt chậm, lạnh lẽo và điềm tĩnh đến rợn người để chốt cú lật cuối cùng",
+        "acting_prompt": "Đọc tiếng Việt lạnh, sắc gọn, dứt khoát chốt sự thật rợn tóc gáy",
     },
     "ghost_entity": {
-        "speed": 0.84,
-        "clean_tempo": 0.82,
-        "vn_silence_p": 0.42,
-        "vn_temp": 0.68,
+        "speed": 0.86,
+        "clean_tempo": 0.78,
+        "vn_silence_p": 0.36,
+        "vn_temp": 0.66,
         "f0_offset_st": -1.8,
         "multi_style_voice": "Thiền Tâm Đức",
         "pitch_semi": -1.50,
-        "gain_db": -0.5,
-        "tail_pad": 0.28,
-        "ref_key": "ghost",
+        "target_rms_dbfs": -20.2,
+        "gain_db": 0.0,
+        "tail_pad": 0.22,
+        "ref_key": "dread",
         "indextts2_emo": [0.0, 0.0, 0.30, 0.45, 0.10, 0.70, 0.0, 0.20],
-        "acting_prompt": "Đọc tiếng Việt trầm chậm, lạnh lẽo và ma mị như giọng nói vọng từ cõi âm",
+        "acting_prompt": "Đọc tiếng Việt trầm lạnh và xa xăm",
     },
 }
 # Backward-compatible mood aliases
 MOOD_ALIASES = {
     "fear_tremble": "fear",
     "stutter_panic": "panic",
+    "eerie": "uneasy",
 }
+
+
+def resolve_character_voice(
+    speaker_name: str,
+    profile: str = "",
+    explicit_voice: str | None = None,
+    narrator_voice: str = "Thiện Minh",
+) -> tuple[str, float]:
+    """Deterministically map an NPC speaker + optional profile tag onto VieNeu's 25 built-in regional/gender voices."""
+    if explicit_voice and not explicit_voice.lower().startswith("vi-vn-"):
+        return explicit_voice.strip(), 0.0
+    blob = f"{speaker_name} {profile}".lower()
+    is_female = any(k in blob for k in ("female", "woman", "girl", "nữ", "bà", "cô", "chị", "mẹ", "má", "dì", "bé gái"))
+    is_elder = any(k in blob for k in ("elder", "old", "già", "lão", "ông", "bà", "chú", "bác", "cụ"))
+    is_south = any(k in blob for k in ("south", "miền nam", "miền tây", "nam bộ", "chú tư", "má", "tía"))
+    is_central = any(k in blob for k in ("central", "miền trung", "huế"))
+
+    pitch_st = -1.1 if (is_elder and not is_female) else (-0.7 if is_elder else 0.0)
+    if is_female:
+        if is_south:
+            v = "Thục Đoan" if is_elder else "Mỹ Duyên"
+        elif is_central:
+            v = "Ngọc Trân"
+        else:
+            v = "Ngọc Linh" if is_elder else "Trúc Ly"
+    else:
+        if is_south:
+            v = "Thái Sơn" if is_elder else "Đức Trí"
+        elif is_central:
+            v = "Quang Sơn"
+        elif is_elder:
+            v = "Thiền Tâm Đức"
+        else:
+            v = "Thanh Bình" if narrator_voice == "Thiện Minh" else "Thiện Minh"
+    if v == narrator_voice:
+        v = "Thái Sơn" if narrator_voice != "Thái Sơn" else "Thiền Tâm Đức"
+    return v, pitch_st
 
 _VI_NUM_0_19 = [
     "không", "một", "hai", "ba", "bốn", "năm", "sáu", "bảy", "tám", "chín",
@@ -262,12 +337,36 @@ def _resolve_mood(raw_mood: str) -> str:
     return m if m in MOOD_PROFILES else "calm_omen"
 
 
-def parse_script(path: str, default_voice: str = "vi-VN-NamMinhNeural"):
-    """Parse SCRIPT.md into Act-Level coherent speech items, pauses, and dead_silences.
+def _parse_pace_val(raw_p: str | None) -> float | None:
+    if not raw_p:
+        return None
+    s = str(raw_p).strip().lower().rstrip("x")
+    if s in PACE_NAMED:
+        return PACE_NAMED[s]
+    try:
+        return max(0.70, min(1.18, float(s)))
+    except ValueError:
+        return None
 
-    Consecutive speech lines sharing the same speaker/mood/fx are merged into ONE continuous contextual Act
-    (preserving natural Vietnamese punctuation `...`, `?`, `!`, and `[thở dài]`/`[hắng giọng]`) so neural TTS
-    never sounds fragmented or patchy! Splits occur ONLY on `[DEAD SILENCE Xs]`, `[PAUSE Xs]`, or speaker/mood switches.
+
+def _parse_pitch_val(raw_st: str | None) -> float | None:
+    if raw_st is None or str(raw_st).strip() == "":
+        return None
+    s = re.sub(r"(?:st|semi|semitones?)$", "", str(raw_st).strip().lower()).strip()
+    try:
+        return max(-4.0, min(4.0, float(s)))
+    except ValueError:
+        return None
+
+
+def parse_script(path: str, default_voice: str = "vi-VN-NamMinhNeural", narrator_vieneu: str = "Thiện Minh"):
+    """Parse SCRIPT.md into clause-aware speech items, pauses, beat_pauses, visual_beats, silence_drops & dead_silences.
+
+    Supports v13.0 psychological delivery directives:
+      - `[BEAT Xs]` / `[KHỰNG Xs]` : intra-sentence psychological hesitation pause
+      - `[SILENCE_DROP Xs]`        : uncanny environmental hush (beds & motifs drop quiet)
+      - `[PACE=0.82 | PITCH=-1.0 | PROX=close]` : inline clause-level cadence, pitch & mic-proximity shaping
+      - Automatic 25-voice VieNeu character casting via `profile=` or Vietnamese speaker honorifics
     """
     with open(path, encoding="utf-8") as fp:
         raw = fp.read()
@@ -280,12 +379,17 @@ def parse_script(path: str, default_voice: str = "vi-VN-NamMinhNeural"):
         "speaker": "NARRATOR",
         "is_narrator": True,
         "voice": default_voice,
+        "vieneu_voice": narrator_vieneu,
+        "cast_pitch_st": 0.0,
         "mood": "calm_omen",
         "acting": None,
         "ref_audio": None,
         "speed": None,
         "pitch": None,
         "fx": "dry",
+        "prox": "normal",
+        "clause_pace": None,
+        "clause_pitch_st": None,
     }
 
     items = []
@@ -295,7 +399,6 @@ def parse_script(path: str, default_voice: str = "vi-VN-NamMinhNeural"):
         clean_disp = re.sub(r"\s+", " ", clean_disp).strip()
         if not clean_disp:
             return
-        # Merge consecutive lines of identical speaker/mood/fx/voice/ref into ONE continuous Act paragraph!
         if (
             items
             and items[-1]["kind"] == "speech"
@@ -303,7 +406,11 @@ def parse_script(path: str, default_voice: str = "vi-VN-NamMinhNeural"):
             and items[-1]["mood"] == cur["mood"]
             and items[-1]["fx"] == cur["fx"]
             and items[-1]["voice"] == cur["voice"]
+            and items[-1].get("vieneu_voice") == cur["vieneu_voice"]
             and items[-1]["ref_audio"] == cur["ref_audio"]
+            and items[-1].get("prox") == cur["prox"]
+            and items[-1].get("clause_pace") == cur["clause_pace"]
+            and items[-1].get("clause_pitch_st") == cur["clause_pitch_st"]
         ):
             items[-1]["text"] = (items[-1]["text"] + " " + clean_disp).strip()
             items[-1]["raw_text"] = (items[-1]["raw_text"] + " " + line_txt).strip()
@@ -320,13 +427,38 @@ def parse_script(path: str, default_voice: str = "vi-VN-NamMinhNeural"):
             "speaker": cur["speaker"],
             "is_narrator": cur["is_narrator"],
             "voice": cur["voice"],
+            "vieneu_voice": cur["vieneu_voice"],
+            "cast_pitch_st": cur["cast_pitch_st"],
             "mood": cur["mood"],
             "acting": cur["acting"],
             "ref_audio": cur["ref_audio"],
             "speed": cur["speed"],
             "pitch": cur["pitch"],
             "fx": cur["fx"],
+            "prox": cur["prox"],
+            "clause_pace": cur["clause_pace"],
+            "clause_pitch_st": cur["clause_pitch_st"],
         })
+
+    def emit_text_with_clause_mods(chunk_txt: str):
+        sub_parts = CLAUSE_MOD_RE.split(chunk_txt)
+        j = 0
+        while j < len(sub_parts):
+            seg_t = sub_parts[j].strip()
+            if seg_t:
+                append_speech(seg_t)
+            if j + 1 < len(sub_parts):
+                mod_raw = sub_parts[j + 1].strip()[1:-1]
+                mkv = _parse_kv(mod_raw)
+                if "pace" in mkv:
+                    p_raw = str(mkv["pace"]).strip().lower()
+                    cur["clause_pace"] = None if p_raw in ("normal", "reset", "default") else _parse_pace_val(mkv["pace"])
+                if "pitch" in mkv:
+                    p_st_raw = str(mkv["pitch"]).strip().lower()
+                    cur["clause_pitch_st"] = None if p_st_raw in ("0", "normal", "reset", "default") else _parse_pitch_val(mkv["pitch"])
+                if "prox" in mkv:
+                    cur["prox"] = mkv["prox"].strip().lower()
+            j += 2
 
     for raw_line in raw.splitlines():
         s = raw_line.strip()
@@ -343,30 +475,48 @@ def parse_script(path: str, default_voice: str = "vi-VN-NamMinhNeural"):
             head = dm.group(1).strip()
             kv = _parse_kv(dm.group(2) or "")
             if head.upper() == "NARRATOR":
+                resolved_m = _resolve_mood(kv.get("mood", "calm_omen"))
+                default_prox = "close" if resolved_m == "whisper" else "normal"
                 cur = {
                     "speaker": "NARRATOR",
                     "is_narrator": True,
                     "voice": kv.get("voice", default_voice),
-                    "mood": _resolve_mood(kv.get("mood", "calm_omen")),
+                    "vieneu_voice": kv.get("vieneu_voice") or (kv["voice"] if "voice" in kv and not kv["voice"].lower().startswith("vi-vn-") else narrator_vieneu),
+                    "cast_pitch_st": 0.0,
+                    "mood": resolved_m,
                     "acting": kv.get("acting"),
                     "ref_audio": kv.get("ref") or kv.get("ref_audio"),
-                    "speed": float(kv["speed"]) if "speed" in kv else None,
+                    "speed": _parse_pace_val(kv.get("speed") or kv.get("pace")),
                     "pitch": kv.get("pitch"),
                     "fx": kv.get("fx", "dry").lower(),
+                    "prox": kv.get("prox", default_prox).lower(),
+                    "clause_pace": _parse_pace_val(kv.get("pace")),
+                    "clause_pitch_st": _parse_pitch_val(kv.get("pitch")),
                 }
             else:
                 sp_name = head.split(":", 1)[1].strip() if ":" in head else "SPEAKER"
+                is_nar = sp_name.upper() == "NARRATOR"
                 raw_m = kv.get("mood", "ghost_entity" if kv.get("fx", "").lower() == "ghost" else "tense")
+                cast_v, cast_st = (
+                    (narrator_vieneu, 0.0)
+                    if is_nar
+                    else resolve_character_voice(sp_name, kv.get("profile", ""), kv.get("voice"), narrator_voice=narrator_vieneu)
+                )
                 cur = {
                     "speaker": sp_name,
-                    "is_narrator": sp_name.upper() == "NARRATOR",
+                    "is_narrator": is_nar,
                     "voice": kv.get("voice", default_voice),
+                    "vieneu_voice": cast_v,
+                    "cast_pitch_st": cast_st,
                     "mood": _resolve_mood(raw_m),
                     "acting": kv.get("acting"),
                     "ref_audio": kv.get("ref") or kv.get("ref_audio"),
-                    "speed": float(kv["speed"]) if "speed" in kv else None,
+                    "speed": _parse_pace_val(kv.get("speed") or kv.get("pace")),
                     "pitch": kv.get("pitch"),
                     "fx": kv.get("fx", "room").lower(),
+                    "prox": kv.get("prox", "normal").lower(),
+                    "clause_pace": _parse_pace_val(kv.get("pace")),
+                    "clause_pitch_st": _parse_pitch_val(kv.get("pitch")),
                 }
             continue
 
@@ -375,14 +525,18 @@ def parse_script(path: str, default_voice: str = "vi-VN-NamMinhNeural"):
         while i < len(parts):
             txt = parts[i].strip()
             if txt:
-                append_speech(txt)
+                emit_text_with_clause_mods(txt)
             if i + 2 < len(parts):
                 tag = parts[i + 1].upper()
                 dur = max(0.05, float(parts[i + 2]))
                 if "DEAD" in tag:
                     kind = "dead_silence"
+                elif "SILENCE_DROP" in tag:
+                    kind = "silence_drop"
                 elif "VISUAL" in tag:
                     kind = "visual"
+                elif "BEAT" in tag or "KHỰNG" in tag:
+                    kind = "beat_pause"
                 else:
                     kind = "pause"
                 items.append({"kind": kind, "dur": dur})
@@ -498,18 +652,48 @@ def normalize_rms(x: np.ndarray, target_dbfs: float = -19.0, max_peak: float = 0
     return y
 
 
-def apply_voice_fx(x: np.ndarray, sr: int, fx: str = "dry", mood: str = "calm_omen") -> np.ndarray:
-    """Studio-clean voice hygiene + optional spatial character FX (`dry`, `room`, `phone`, `ghost`).
+def _shelf(x: np.ndarray, f0: float, gain_db: float, sr: int, kind: str = "low") -> np.ndarray:
+    A = 10.0 ** (gain_db / 40.0)
+    w = 2.0 * math.pi * f0 / sr
+    cw, sw = math.cos(w), math.sin(w)
+    al = sw / (2.0 * 0.707)
+    sa = 2.0 * math.sqrt(A) * al
+    if kind == "low":
+        b = np.array([A * ((A + 1) - (A - 1) * cw + sa), 2 * A * ((A - 1) - (A + 1) * cw), A * ((A + 1) - (A - 1) * cw - sa)])
+        a = np.array([(A + 1) + (A - 1) * cw + sa, -2 * ((A - 1) + (A + 1) * cw), (A + 1) + (A - 1) * cw - sa])
+    else:
+        b = np.array([A * ((A + 1) + (A - 1) * cw + sa), -2 * A * ((A - 1) + (A + 1) * cw), A * ((A + 1) + (A - 1) * cw - sa)])
+        a = np.array([(A + 1) - (A - 1) * cw + sa, 2 * ((A - 1) - (A + 1) * cw), (A + 1) - (A - 1) * cw - sa])
+    return signal.lfilter(b / a[0], a / a[0], x)
+
+
+def apply_voice_fx(x: np.ndarray, sr: int, fx: str = "dry", mood: str = "calm_omen", prox: str = "normal") -> np.ndarray:
+    """Studio-clean voice hygiene + physical proximity & multi-zone character FX (`dry`, `close_ear`, `room`, `adjacent_muffled`, `outside_rain`, `phone`, `ghost`).
     NEVER applies artificial noise vocoders, vibrato tremor, or harsh overdrive onto narration!"""
     if len(x) < 16:
         return x.copy()
     y = _hp(x.astype(np.float64), 45.0, sr, order=2)
 
+    is_close = prox in ("close", "close_ear") or fx == "close_ear"
+    if is_close and fx not in ("phone", "adjacent_muffled", "outside_rain"):
+        # Studio cardioid close-mic proximity warmth + delicate breath air, 0% room echo
+        y = _shelf(y, 155.0, +2.2, sr, kind="low")
+        y = _shelf(y, 6200.0, +1.5, sr, kind="high")
+    elif prox == "distant" and fx == "dry":
+        y = _hp(_lp(y, 3400.0, sr, order=2), 130.0, sr, order=2)
+
     if fx == "phone":
-        # Clean telephone voiceband filter (320-3200 Hz)
         y = _bp(y, 320.0, 3200.0, sr, order=3)
-        y = normalize_rms(y, target_dbfs=-19.0, max_peak=0.82)
-    elif fx == "room":
+    elif fx in ("adjacent_muffled", "outside_rain"):
+        # Physical occlusion through wooden door / rain-streaked glass + tight damp wall reflections
+        occ = _lp(y, 1180.0 if fx == "adjacent_muffled" else 1550.0, sr, order=3)
+        wet = np.zeros(len(occ) + int(0.05 * sr), dtype=np.float64)
+        wet[: len(occ)] += occ * 0.85
+        for d_ms, amp in ((11.0, 0.22), (24.0, 0.14)):
+            d = int(round((d_ms / 1000.0) * sr))
+            wet[d : d + len(occ)] += _lp(occ, 900.0, sr, 2) * amp
+        y = wet[: len(occ)]
+    elif fx == "room" and not is_close:
         # Subtle interior room early reflections (14ms, 28ms, 45ms)
         wet = np.zeros(len(y) + int(0.06 * sr), dtype=np.float64)
         wet[: len(y)] += y
@@ -1152,9 +1336,12 @@ def _discover_emotion_refs_dir(args) -> str | None:
 
 
 def resolve_emotion_ref(item: dict, args) -> str | None:
-    """Resolve optional 3-8s reference audio clip for zero-shot voice/emotion cloning (`VieNeu-TTS`)."""
+    """Resolve optional 3-8s reference audio clip for zero-shot voice/emotion cloning (`VieNeu-TTS`).
+    v13.0: Non-narrator NPCs keep their distinct cast `vieneu_voice` unless an explicit `ref_audio` was set on that speaker!"""
     if item.get("ref_audio") and os.path.isfile(item["ref_audio"]):
         return item["ref_audio"]
+    if not item.get("is_narrator", True):
+        return None
     emo_dir = _discover_emotion_refs_dir(args)
     if emo_dir:
         mood = item["mood"]
@@ -1170,16 +1357,33 @@ def resolve_emotion_ref(item: dict, args) -> str | None:
     return None
 
 
-def apply_clean_tempo(samples: np.ndarray, sr: int, tempo: float, tmp_dir: str | None = None) -> np.ndarray:
-    """Transparent studio-grade formant-preserved tempo trim via `ffmpeg rubberband` (strictly [0.80..1.12], 0% noise/distortion)."""
-    t = max(0.80, min(1.12, float(tempo)))
-    if len(samples) < 256 or abs(t - 1.0) < 0.015 or not shutil.which("ffmpeg"):
+def apply_clean_tempo(
+    samples: np.ndarray,
+    sr: int,
+    tempo: float,
+    tmp_dir: str | None = None,
+    pitch_st: float = 0.0,
+) -> np.ndarray:
+    """Transparent studio-grade formant-preserved tempo & pitch shaping via `ffmpeg rubberband` (0% noise/distortion)."""
+    t = max(0.68, min(1.16, float(tempo)))
+    pst = max(-4.0, min(4.0, float(pitch_st)))
+    if len(samples) < 256 or (abs(t - 1.0) < 0.015 and abs(pst) < 0.08) or not shutil.which("ffmpeg"):
         return samples
     in_w = os.path.join(tmp_dir or tempfile.gettempdir(), f"ct_in_{os.getpid()}_{int(time.time()*1e6)%1000000}.wav")
     out_w = in_w.replace("_in_", "_out_")
     try:
         write_wav_mono16(in_w, samples, sr)
-        af = f"rubberband=tempo={t:.5f}:formant=preserved" if _ffmpeg_has_rubberband() else _atempo_chain(t)
+        p_ratio = 2.0 ** (pst / 12.0)
+        if _ffmpeg_has_rubberband():
+            if abs(pst) >= 0.08:
+                af = f"rubberband=tempo={t:.5f}:pitch={p_ratio:.5f}:formant=preserved"
+            else:
+                af = f"rubberband=tempo={t:.5f}:formant=preserved"
+        else:
+            if abs(pst) >= 0.08:
+                af = f"asetrate={sr}*{p_ratio:.5f},aresample={sr},{_atempo_chain(t / p_ratio)}"
+            else:
+                af = _atempo_chain(t)
         subprocess.run(
             ["ffmpeg", "-y", "-v", "error", "-i", in_w, "-af", af, "-ar", str(sr), "-ac", "1", "-c:a", "pcm_s16le", out_w],
             check=True,
@@ -1193,28 +1397,34 @@ def apply_clean_tempo(samples: np.ndarray, sr: int, tempo: float, tmp_dir: str |
 
 
 def synth_vieneu_chunk(item: dict, sr: int, args, cache_dir: str | None = None, tmp_dir: str | None = None):
-    """Synthesize ONE coherent act paragraph via `pnnbao97/VieNeu-TTS` (48 kHz native Vietnamese ONNX CPU!).
-    Uses per-mood native `silence_p`, `temperature`, optional 3-8s `emotion_refs` cloning with v6.3 Speaker-Locked
-    Disentanglement (`speaker_emb` locked to ONE narrator anchor + Baseline F0 Alignment), and clean tempo trim."""
+    """Synthesize ONE coherent act/clause via `pnnbao97/VieNeu-TTS` (48 kHz native Vietnamese ONNX CPU!).
+    Uses per-mood native `silence_p`, `temperature`, 84-frame pure-Vietnamese `emotion_refs` prosody with Speaker-Locked
+    Disentanglement for narrator, distinct 25-voice casting for NPCs, and clause-level tempo/pitch shaping."""
     mode = getattr(args, "vieneu_mode", "v3turbo")
     mood = item["mood"]
     prof = MOOD_PROFILES.get(mood, MOOD_PROFILES["calm_omen"])
     use_multi = bool(getattr(args, "multi_style_guide", False))
-    voice_name = (prof.get("multi_style_voice") if use_multi else None) or getattr(args, "vieneu_voice", None) or "Thiện Minh"
+    is_nar = bool(item.get("is_narrator", True))
+    voice_name = (
+        (prof.get("multi_style_voice") if (use_multi and is_nar) else None)
+        or item.get("vieneu_voice")
+        or getattr(args, "vieneu_voice", None)
+        or "Thiện Minh"
+    )
     ref_audio = resolve_emotion_ref(item, args)
-    silence_p = float(prof.get("vn_silence_p", 0.22))
-    temp = float(prof.get("vn_temp", 0.80))
+    silence_p = float(prof.get("vn_silence_p", 0.26))
+    temp = float(prof.get("vn_temp", 0.76))
     text = item.get("vieneu_text") or normalize_vi_for_tts(item["text"], keep_vieneu_tags=True)
 
-    use_speaker_lock = bool(getattr(args, "speaker_lock", True)) and bool(item.get("is_narrator", True)) and bool(ref_audio) and (not use_multi)
-    base_max_frames = int(getattr(args, "ref_codes_max_frames", 36))
+    use_speaker_lock = bool(getattr(args, "speaker_lock", True)) and is_nar and bool(ref_audio) and (not use_multi)
+    base_max_frames = int(getattr(args, "ref_codes_max_frames", 84))
     eff_max_frames = max(base_max_frames, 48) if (mood == "whisper" and base_max_frames > 0) else base_max_frames
     lock_src = getattr(args, "speaker_lock_source", "auto") or "auto"
     anchor_wav_sig = _discover_narrator_anchor_wav(args) or f"preset:{voice_name}"
 
     ref_sig = f"{os.path.abspath(ref_audio)}:{os.path.getmtime(ref_audio):.0f}" if ref_audio else f"preset:{voice_name}"
-    lock_sig = f"lock={lock_src}:{anchor_wav_sig}:mf={eff_max_frames}" if use_speaker_lock else "unlocked"
-    key = hashlib.sha256(f"vieneu63|{mode}|{ref_sig}|{lock_sig}|sp={silence_p:.2f}|t={temp:.2f}|{text}".encode("utf-8")).hexdigest()[:16]
+    lock_sig = f"lock={lock_src}:{anchor_wav_sig}:mf={eff_max_frames}" if use_speaker_lock else f"cast={voice_name}"
+    key = hashlib.sha256(f"vieneu130|{mode}|{ref_sig}|{lock_sig}|sp={silence_p:.2f}|t={temp:.2f}|{text}".encode("utf-8")).hexdigest()[:16]
     wav_cache = os.path.join(cache_dir, f"vn_{key}.wav") if cache_dir else None
 
     if wav_cache and os.path.isfile(wav_cache) and os.path.getsize(wav_cache) >= 512:
@@ -1247,12 +1457,11 @@ def synth_vieneu_chunk(item: dict, sr: int, args, cache_dir: str | None = None, 
                     )
                 else:
                     infer_kw["ref_audio"] = ref_audio
-                    print(f"  [VieNeu-TTS] mood={mood} using emotion ref: {os.path.basename(ref_audio)} (silence_p={silence_p}, temp={temp})")
             elif ref_audio:
                 infer_kw["ref_audio"] = ref_audio
-                print(f"  [VieNeu-TTS] mood={mood} using emotion ref: {os.path.basename(ref_audio)} (silence_p={silence_p}, temp={temp})")
-            elif voice_name:
+            else:
                 infer_kw["voice"] = voice_name
+                print(f"  [VieNeu-TTS] speaker={item['speaker']} cast_voice={voice_name} mood={mood} (silence_p={silence_p}, temp={temp})")
             raw = tts.infer(**infer_kw)
         finally:
             if tmp_shifted and os.path.exists(tmp_shifted):
@@ -1265,15 +1474,23 @@ def synth_vieneu_chunk(item: dict, sr: int, args, cache_dir: str | None = None, 
             os.makedirs(cache_dir, exist_ok=True)
             write_wav_mono16(wav_cache, samples, sr)
 
-    # Subtle, transparent formant-preserved tempo shaping (0.82x slow dread <-> 1.08x urgent panic, 0% distortion!)
+    eff_tempo = 1.0
+    pitch_st = 0.0
     if not getattr(args, "no_tempo_trim", False):
-        target_tempo = float(item["speed"]) if item.get("speed") is not None else float(prof.get("clean_tempo", 1.0)) * float(getattr(args, "speed_scale", 1.0))
-        if abs(target_tempo - 1.0) >= 0.02:
-            samples = apply_clean_tempo(samples, sr, target_tempo, tmp_dir=tmp_dir)
+        base_tempo = float(item["speed"]) if item.get("speed") is not None else float(prof.get("clean_tempo", 1.0)) * float(getattr(args, "speed_scale", 1.0))
+        if item.get("clause_pace") is not None:
+            cp = float(item["clause_pace"])
+            base_tempo = (min(base_tempo, cp * 0.94) if cp < 1.0 else base_tempo * cp) * float(getattr(args, "speed_scale", 1.0))
+        eff_tempo = max(0.68, min(1.16, base_tempo))
+        pitch_st = float(item.get("cast_pitch_st") or 0.0) + float(item.get("clause_pitch_st") or 0.0)
+        if abs(eff_tempo - 1.0) >= 0.02 or abs(pitch_st) >= 0.08:
+            samples = apply_clean_tempo(samples, sr, eff_tempo, tmp_dir=tmp_dir, pitch_st=pitch_st)
+            item["_clause_shaped_in_synth"] = True
 
     aligner_mode = getattr(args, "word_aligner", "auto")
     whisper_model = getattr(args, "whisper_model", "base")
-    w_cache = (wav_cache + f".{whisper_model}.words_v11.json") if wav_cache else None
+    shape_sig = f"tm={eff_tempo:.3f}:{pitch_st:.2f}"
+    w_cache = (wav_cache + f".{hashlib.md5(shape_sig.encode()).hexdigest()[:6]}.{whisper_model}.words_v13.json") if wav_cache else None
     words, _ = align_audio_words_v11(
         item["text"], samples, sr, 0.0, item["speaker"], item["mood"],
         aligner_mode=aligner_mode, whisper_model=whisper_model, cache_path=w_cache,
@@ -1868,6 +2085,7 @@ def assemble_voice(items: list, args, tmp_dir: str, synth_fn=None):
     all_words = []
     sentences = []
     dead_silences = []
+    silence_drops = []
     visual_beats = []
     pause_total_s = 0.0
     alignment_modes_used = set()
@@ -1880,13 +2098,16 @@ def assemble_voice(items: list, args, tmp_dir: str, synth_fn=None):
 
     act_num = 0
     for idx, it in enumerate(items):
-        if it["kind"] in ("pause", "visual", "dead_silence"):
+        if it["kind"] in ("pause", "beat_pause", "visual", "silence_drop", "dead_silence"):
             n_sil = int(round(it["dur"] * SR_FINAL))
             sil_s = cur_sec
             sil_e = cur_sec + n_sil / float(SR_FINAL)
             timeline.append(np.zeros(n_sil, dtype=np.float64))
             if it["kind"] == "dead_silence":
                 dead_silences.append({"s": round(sil_s, 4), "e": round(sil_e, 4)})
+            elif it["kind"] == "silence_drop":
+                silence_drops.append({"s": round(sil_s, 4), "e": round(sil_e, 4), "dur": round(sil_e - sil_s, 4)})
+                pause_total_s += (sil_e - sil_s)
             elif it["kind"] == "visual":
                 visual_beats.append({"s": round(sil_s, 4), "e": round(sil_e, 4), "dur": round(sil_e - sil_s, 4)})
                 pause_total_s += (sil_e - sil_s)
@@ -1902,9 +2123,32 @@ def assemble_voice(items: list, args, tmp_dir: str, synth_fn=None):
         else:
             raw_seg, rel_words = synth_line_auto(it, SR_FINAL, tmp_dir, idx, args, cache_dir=cache_dir, synth_fn=synth_fn)
 
-        seg = normalize_rms(raw_seg, target_dbfs=-19.0)
-        seg = apply_voice_fx(seg, SR_FINAL, fx=it["fx"], mood=mood)
-        seg = seg * (10.0 ** (float(prof["gain_db"]) / 20.0))
+        # Apply clause-level pace/pitch shaping for external/synth_fn clips when not already shaped inside synth_vieneu_chunk
+        if not it.get("_clause_shaped_in_synth") and not getattr(args, "no_tempo_trim", False):
+            c_pace = float(it["clause_pace"]) if it.get("clause_pace") is not None else 1.0
+            c_pst = float(it.get("clause_pitch_st") or 0.0)
+            if abs(c_pace - 1.0) >= 0.02 or abs(c_pst) >= 0.08:
+                old_dur = max(0.05, len(raw_seg) / float(SR_FINAL))
+                raw_seg = apply_clean_tempo(raw_seg, SR_FINAL, c_pace, tmp_dir=tmp_dir, pitch_st=c_pst)
+                new_dur = max(0.05, len(raw_seg) / float(SR_FINAL))
+                if rel_words:
+                    ratio_t = new_dur / old_dur
+                    rel_words = [
+                        {**rw, "s": round(float(rw["s"]) * ratio_t, 4), "e": round(float(rw["e"]) * ratio_t, 4)}
+                        for rw in rel_words
+                    ]
+
+        prox = str(it.get("prox") or "normal").lower()
+        target_rms = float(prof.get("target_rms_dbfs", -19.0))
+        if prox in ("close", "close_ear") and mood != "whisper":
+            target_rms -= 2.2
+        elif prox == "distant":
+            target_rms -= 3.5
+
+        seg = normalize_rms(raw_seg, target_dbfs=target_rms)
+        seg = apply_voice_fx(seg, SR_FINAL, fx=it["fx"], mood=mood, prox=prox)
+        if float(prof.get("gain_db", 0.0)) != 0.0:
+            seg = seg * (10.0 ** (float(prof["gain_db"]) / 20.0))
 
         fx_pre_s = 0.22 if it["fx"] == "ghost" else 0.0
         seg_start = cur_sec
@@ -1928,6 +2172,7 @@ def assemble_voice(items: list, args, tmp_dir: str, synth_fn=None):
                 "e": round(seg_start + fx_pre_s + float(rw["e"]), 4),
                 "speaker": it["speaker"],
                 "mood": mood,
+                "prox": prox,
             }
             all_words.append(w_obj)
             act_words.append(w_obj)
@@ -1940,6 +2185,8 @@ def assemble_voice(items: list, args, tmp_dir: str, synth_fn=None):
                 "speaker": it["speaker"],
                 "mood": mood,
                 "fx": it["fx"],
+                "prox": prox,
+                "vieneu_voice": it.get("vieneu_voice"),
                 "s": act_words[0]["s"],
                 "e": act_words[-1]["e"],
                 "wps": round(len(act_words) / s_dur, 2),
@@ -1948,10 +2195,11 @@ def assemble_voice(items: list, args, tmp_dir: str, synth_fn=None):
 
         next_it = items[idx + 1] if idx + 1 < len(items) else None
         if next_it and next_it["kind"] == "speech":
-            gap_s = float(prof["tail_pad"]) + (0.12 if next_it["speaker"] != it["speaker"] else 0.0)
+            gap_s = float(prof["tail_pad"]) + (0.10 if next_it["speaker"] != it["speaker"] else 0.0)
             n_gap = int(round(gap_s * SR_FINAL))
             timeline.append(np.zeros(n_gap, dtype=np.float64))
             cur_sec += n_gap / float(SR_FINAL)
+            pause_total_s += gap_s
 
     if args.tail_silence > 0:
         n_tail = int(round(args.tail_silence * SR_FINAL))
@@ -1971,7 +2219,6 @@ def assemble_voice(items: list, args, tmp_dir: str, synth_fn=None):
     final_dur = len(full_48k) / float(SR_FINAL)
     total_frames = int(math.ceil((final_dur + 0.35) * args.fps))
     ds_total = sum(d["e"] - d["s"] for d in dead_silences)
-    vis_total = sum(v["dur"] for v in visual_beats)
     wps = round(len(all_words) / max(0.1, final_dur - ds_total), 2)
     spoken_dur_only = max(0.1, final_dur - ds_total - pause_total_s)
     spoken_wps = round(len(all_words) / spoken_dur_only, 2)
@@ -1999,7 +2246,7 @@ def assemble_voice(items: list, args, tmp_dir: str, synth_fn=None):
 
     payload = {
         "engine": "horror-voice-v6",
-        "version": "11.0.0",
+        "version": "14.0.0",
         "voice": getattr(args, "vieneu_voice", None) or args.base_voice,
         "narrator_source": src_label,
         "alignment_mode": getattr(args, "word_aligner", "auto"),
@@ -2012,6 +2259,7 @@ def assemble_voice(items: list, args, tmp_dir: str, synth_fn=None):
         "words": all_words,
         "sentences": sentences,
         "dead_silences": dead_silences,
+        "silence_drops": silence_drops,
         "visual_beats": visual_beats,
     }
     words_json = os.path.join(args.out_dir, "words.json")
@@ -2021,26 +2269,33 @@ def assemble_voice(items: list, args, tmp_dir: str, synth_fn=None):
     if args.words_ts:
         os.makedirs(os.path.dirname(os.path.abspath(args.words_ts)), exist_ok=True)
         with open(args.words_ts, "w", encoding="utf-8") as fp:
-            fp.write("// Auto-generated by scripts/gen_horror_voice.py (v11.0 Studio-Clean Neural Voice + Forced Word Alignment)\n")
+            fp.write("// Auto-generated by scripts/gen_horror_voice.py (v13.0 Clause-Prosody Neural Voice + Forced Word Alignment)\n")
             fp.write(f"export const VOICE_DUR = {round(final_dur, 4)};\n")
             fp.write(f"export const TOTAL_FRAMES = {total_frames};\n")
-            fp.write("export type WordTiming = { w: string; s: number; e: number; speaker?: string; mood?: string };\n")
+            fp.write("export type WordTiming = { w: string; s: number; e: number; speaker?: string; mood?: string; prox?: string };\n")
             fp.write("export const WORDS: WordTiming[] = " + json.dumps(all_words, ensure_ascii=False) + ";\n")
 
-    print(f"VOICE OK -> {final_wav} ({final_dur:.3f}s, {total_frames}f @ {args.fps}fps, {len(all_words)} words, {wps:.2f} w/s effective [{spoken_wps:.2f} spoken], visual_ratio={visual_ratio:.2f}, src={src_label})")
-    if wps > 2.75:
-        print(f"  [PACING WARN] Effective speech density {wps:.2f} w/s > 2.75 w/s — add [VISUAL Xs] breathing beats in SCRIPT.md!")
+    first_word_s = float(all_words[0]["s"]) if all_words else 0.0
+    print(f"VOICE OK -> {final_wav} ({final_dur:.3f}s, {total_frames}f @ {args.fps}fps, {len(all_words)} words, {wps:.2f} w/s effective [{spoken_wps:.2f} spoken], first_word={first_word_s:.2f}s, visual_ratio={visual_ratio:.2f}, src={src_label})")
+    if wps > 3.20:
+        print(f"  [PACING WARN] Effective speech density {wps:.2f} w/s > 3.20 w/s — add [VISUAL Xs] / [BEAT Xs] breathing in SCRIPT.md!")
+    if spoken_wps > 3.65:
+        print(f"  [CADENCE WARN] Spoken speed {spoken_wps:.2f} w/s > 3.65 w/s — add [PACE=slow] or punctuation pauses!")
+    if getattr(args, "strict_hook", False) and all_words and first_word_s > 0.45:
+        print(f"  [HOOK WARN] First spoken word starts at {first_word_s:.2f}s > 0.45s — cut opening dead air so the 1-5s Cold Hook hits immediately!")
     for sb in sentences:
-        print(f"  Act {sb['sent']:02d} [{sb['speaker']} · {sb['mood']}/{sb['fx']} · {sb['wps']:4.2f}w/s] [{sb['s']:6.2f}s..{sb['e']:6.2f}s] {sb['text'][:62]}")
+        print(f"  Act {sb['sent']:02d} [{sb['speaker']}({sb.get('vieneu_voice') or '-'}) · {sb['mood']}/{sb['fx']}/{sb['prox']} · {sb['wps']:4.2f}w/s] [{sb['s']:6.2f}s..{sb['e']:6.2f}s] {sb['text'][:58]}")
     for vb in visual_beats:
         print(f"  VISUAL_BEAT  [{vb['s']:6.2f}s..{vb['e']:6.2f}s] ({vb['dur']:.2f}s ambient/Foley breathing)")
+    for sd in silence_drops:
+        print(f"  SILENCE_DROP [{sd['s']:6.2f}s..{sd['e']:6.2f}s] ({sd['dur']:.2f}s uncanny hush)")
     for ds in dead_silences:
         print(f"  DEAD_SILENCE [{ds['s']:6.2f}s..{ds['e']:6.2f}s]")
     return final_wav, words_json, payload
 
 
 def build_parser():
-    ap = argparse.ArgumentParser(description="Horror Engine v6.0 Studio-Clean Open-Source Neural Voice Engine.")
+    ap = argparse.ArgumentParser(description="Horror Engine v13.0 Psychological Clause-Prosody & Multi-Cast Neural Voice Engine.")
     ap.add_argument("--script", required=True, help="Path to horror SCRIPT.md / .txt")
     ap.add_argument("--out-dir", default="out/voice", help="Output directory for voice.wav and words.json")
     ap.add_argument("--tts-engine", default="auto", choices=["auto", "vieneu", "edge", "gemini"], help="Neural TTS backend (default: auto -> vieneu 48kHz if installed else edge)")
@@ -2051,7 +2306,7 @@ def build_parser():
     ap.add_argument("--narrator-anchor", default=None, help="Optional 5-15s narrator voice clip (or auto audio/narrator_anchor.wav) to lock speaker identity across all emotions")
     ap.add_argument("--speaker-lock", action=argparse.BooleanOptionalAction, default=True, help="Lock narrator speaker_emb to ONE single voice across all emotion_refs acts (default: True)")
     ap.add_argument("--speaker-lock-source", default="auto", choices=["auto", "preset", "calm", "anchor"], help="Single-voice anchor source when --speaker-lock is enabled (default: auto -> narrator_anchor.wav else --vieneu-voice preset)")
-    ap.add_argument("--ref-codes-max-frames", type=int, default=36, help="Max MOSS codec ref_codes frames for emotion transfer under --speaker-lock (default: 36; 0=full)")
+    ap.add_argument("--ref-codes-max-frames", type=int, default=84, help="Max MOSS codec ref_codes frames for full Vietnamese tonal cadence transfer under --speaker-lock (default: 84; 0=full)")
     ap.add_argument("--no-auto-refs", action="store_true", help="Disable auto-detection of audio/emotion_refs/")
     ap.add_argument("--no-tempo-trim", action="store_true", help="Disable clean rubberband tempo trim (0.82x..1.08x) on VieNeu-TTS acts")
     ap.add_argument("--multi-style-guide", action="store_true", help="Vary built-in VieNeu presets by mood when exporting a So-VITS-SVC VC-Pack guide")
@@ -2061,8 +2316,9 @@ def build_parser():
     ap.add_argument("--gemini-voice", default="Charon")
     ap.add_argument("--gemini-api-key", default=None)
     ap.add_argument("--speed-scale", type=float, default=1.0, help="Global speed multiplier for edge fallback")
-    ap.add_argument("--lead-silence", type=float, default=0.08, help="Lead silence before first act (s)")
-    ap.add_argument("--tail-silence", type=float, default=0.35, help="Trailing silence after last act (s)")
+    ap.add_argument("--lead-silence", type=float, default=0.05, help="Lead silence before first act (s)")
+    ap.add_argument("--tail-silence", type=float, default=0.30, help="Trailing silence after last act (s)")
+    ap.add_argument("--strict-hook", action="store_true", help="Warn if first spoken word starts after 0.45s")
     ap.add_argument("--fps", type=int, default=30, help="Timeline FPS for total_frames")
     ap.add_argument("--out-wav", default="voice.wav", help="Output WAV filename inside --out-dir")
     ap.add_argument("--tts-cache", default=None, help="Optional disk cache directory for TTS acts")
@@ -2098,7 +2354,7 @@ def build_parser():
 
 def main(argv=None):
     args = build_parser().parse_args(argv)
-    items = parse_script(args.script, default_voice=args.base_voice)
+    items = parse_script(args.script, default_voice=args.base_voice, narrator_vieneu=args.vieneu_voice or "Thiện Minh")
 
     if args.export_narrator_script:
         export_narrator_script(items, args.export_narrator_script)

@@ -37,10 +37,61 @@ VALID_ENGINE_POSES = {
 }
 DIALOGUE_QUOTE_RE = re.compile(r'["“”«»「」『』]')
 CHAPTER_RE = re.compile(r"^\s*(?:chương|hồi|phần|tập|chapter)\s+[0-9ivxlcdm]+", re.IGNORECASE | re.MULTILINE)
+EXPOSITION_TELL_RE = re.compile(
+    r"(?:tôi cảm thấy vô cùng (?:sợ hãi|kinh hãi|hoảng sợ)|bầu không khí thật (?:rùng rợn|đáng sợ|ghê rợn)|như có ma quỷ|cảnh tượng thật kinh hoàng)",
+    re.IGNORECASE,
+)
+BORING_CHRONO_HOOK_RE = re.compile(
+    r"^\s*(?:vào\s+một\s+(?:đêm|buổi|ngày)|tháng\s+\d+\s+(?:mùa|năm)|đêm\s+cuối\s+(?:năm|tháng)|mùa\s+(?:đông|mưa|hè|thu)\s+năm|hôm\s+(?:đó|ấy)\s+trời|tôi\s+tên\s+là|xin\s+chào\s+mọi\s+người|câu\s+chuyện\s+(?:này\s+)?bắt\s+đầu)",
+    re.IGNORECASE,
+)
+LITERARY_SLOP_RE = re.compile(
+    r"(?:một\s+cảm\s+giác\s+lạnh\s+lẽo\s+bao\s+trùm|bất\s+giác\s+tôi\s+nhận\s+ra|không\s+gian\s+đặc\s+quánh|tựa\s+hồ\s+như|nỗi\s+sợ\s+hãi\s+vô\s+hình|trái\s+tim\s+tôi\s+như\s+ngừng\s+đập)",
+    re.IGNORECASE,
+)
+BANNED_PLATFORM_SLURS_RE = re.compile(
+    r"\b(?:địt|đụ\s+má|đéo|vãi\s+lồn|con\s+cặc|cái\s+lồn)\b",
+    re.IGNORECASE,
+)
+VALID_MOTIF_MODES = {"steady_then_stop", "accelerate", "decelerate", "approach", "stutter_break"}
+VALID_PACING_PROFILES = {"viral_short", "deep_story"}
+VALID_HOOK_ARCHETYPES = {"paradox_prop", "blunt_taboo_dialogue", "flash_forward_crisis", "raw_confession"}
+VALID_GRIT_LEVELS = {"platform_safe_raw", "clean_folklore"}
+VALID_DIALECT_REGIONS = {"north", "central", "south"}
+
+
+def resolve_vieneu_cast_voice(name: str, voice_profile: str = "", role: str = "", narrator_voice: str = "Thiện Minh") -> str:
+    """Deterministic multi-speaker VieNeu-TTS voice casting from character honorifics, age, gender & dialect."""
+    blob = f"{name} {voice_profile} {role}".lower()
+    is_female = any(k in blob for k in ("nữ", "bà", "cô", "chị", "mẹ", "má", "dì", "thiếu nữ", "bé gái"))
+    is_elder = any(k in blob for k in ("già", "lão", "lớn tuổi", "ông", "bà", "chú", "bác", "cụ", "khàn"))
+    is_south = any(k in blob for k in ("miền nam", "nam bộ", "miền tây", "sài gòn", "sông hậu", "chú tư", "má"))
+    is_central = any(k in blob for k in ("miền trung", "huế", "quảng", "trung bộ"))
+
+    if is_female:
+        if is_south:
+            cand = "Thục Đoan" if is_elder else "Mỹ Duyên"
+        elif is_central:
+            cand = "Ngọc Trân"
+        else:
+            cand = "Ngọc Linh" if is_elder else "Trúc Ly"
+    else:
+        if is_south:
+            cand = "Thái Sơn" if is_elder else "Đức Trí"
+        elif is_central:
+            cand = "Quang Sơn"
+        elif is_elder:
+            cand = "Thiền Tâm Đức"
+        else:
+            cand = "Thanh Bình" if narrator_voice == "Thiện Minh" else "Thiện Minh"
+    if cand == narrator_voice:
+        cand = "Thái Sơn" if narrator_voice != "Thái Sơn" else "Thiền Tâm Đức"
+    return cand
 
 
 def read_text_auto(path):
-    raw = open(path, "rb").read()
+    with open(path, "rb") as fp:
+        raw = fp.read()
     if raw.startswith((b"\xff\xfe", b"\xfe\xff")):
         return raw.decode("utf-16")
     return raw.decode("utf-8-sig")
@@ -73,11 +124,12 @@ def resolve_format(params):
     return "series"
 
 
-def default_thresholds(params):
+def default_thresholds(params, schema_version="3.0"):
     parts_n = int(params.get("parts") or 1)
     fmt = resolve_format(params)
     sec_per_part = float(params.get("secondsPerPart") or (55 if fmt == "short" else 60))
     total_sec = float(params.get("targetTotalSec") or (parts_n * sec_per_part))
+    v31 = str(schema_version or "")[:3] in ("3.1", "3.2")
     if fmt == "micro":
         base = {
             "maxLeads": 5,
@@ -86,7 +138,7 @@ def default_thresholds(params):
             "maxProps": 8,
             "maxBeatGap": 1,
             "maxPrimaryScenes": 3,
-            "maxJumpscaresTotal": 2,
+            "maxJumpscaresTotal": 0 if v31 else 2,
         }
     elif fmt == "short":
         base = {
@@ -96,7 +148,7 @@ def default_thresholds(params):
             "maxProps": 10,
             "maxBeatGap": 1,
             "maxPrimaryScenes": 5,
-            "maxJumpscaresTotal": 4,
+            "maxJumpscaresTotal": 1 if v31 else 4,
         }
     else:
         base = {
@@ -106,7 +158,7 @@ def default_thresholds(params):
             "maxProps": 16,
             "maxBeatGap": 2,
             "maxPrimaryScenes": max(5, min(12, 4 + math.ceil(parts_n / 3))),
-            "maxJumpscaresTotal": max(5, int(round((total_sec / 60.0) * 0.65))),
+            "maxJumpscaresTotal": 2 if v31 else max(5, int(round((total_sec / 60.0) * 0.65))),
         }
     custom = params.get("thresholds") or {}
     if isinstance(custom, dict):
@@ -222,35 +274,72 @@ def cmd_seed(args):
         return acts_seed[-1]["act"]
 
     pacing_seq_short = ["setup", "investigation", "false_relief", "escalation", "twist_reveal"]
-    tension_curve = [
-        (3, 5, 4), (4, 7, 6), (5, 4, 6), (6, 9, 8), (8, 10, 9),
-    ]
+    tension_curve = (
+        [(4, 9, 8)] if n_parts == 1
+        else [(3, 5, 4), (4, 7, 5), (6, 9, 8)] if n_parts == 3
+        else [(3, 5, 4), (4, 7, 6), (5, 4, 6), (7, 9, 8)] if n_parts == 4
+        else [(3, 5, 4), (4, 7, 6), (5, 4, 6), (6, 9, 8), (8, 10, 9)]
+    )
+
+    pacing_profile = getattr(args, "pacing_profile", None) or ("viral_short" if total_sec <= 120 else "deep_story")
+    dialect_region = getattr(args, "dialect", None) or "north"
+    grit_level = getattr(args, "grit_level", None) or "platform_safe_raw"
 
     seed_params = {
         "format": fmt,
         "mode": mode,
+        "pacingProfile": pacing_profile,
         "parts": n_parts,
         "secondsPerPart": sec,
         "targetTotalSec": total_sec,
-        "wordsPerSecond": 2.35,
+        "wordsPerSecond": 2.65,
         "aspect": aspect,
         "seamlessStitch": n_parts > 1,
         "genre": args.genre,
         "adaptMode": args.adapt_mode,
     }
-    seed_params["thresholds"] = default_thresholds(seed_params)
+    seed_params["thresholds"] = default_thresholds(seed_params, schema_version="3.2")
 
     doc = {
-        "schemaVersion": "3.0",
+        "schemaVersion": "3.2",
         "title": args.title,
         "lang": "vi",
         "params": seed_params,
         "narrativeStyle": {
             "pov": pov,
-            "narratorVoice": "Giọng nam kể chuyện đêm khuya trầm ấm nhưng biết run rẩy, nghẹn hơi khi nỗi sợ ập tới (Thiện Minh)",
+            "dialectRegion": dialect_region,
+            "gritLevel": grit_level,
+            "narratorVoice": "Giọng kể truyền miệng đời thật Việt Nam gọn sắc, vào thẳng biến cố ngay giây đầu, có buột miệng cảm thán đúng tâm lý (Thiện Minh)",
             "dialogueDensity": "balanced_dialogue",
-            "toneKeywords": ["tâm lý âm ỉ", "ngột ngạt", "dân gian thực tế", "PSX VHS chân thực"],
-            "forbiddenCliches": ["Tỉnh dậy hóa ra chỉ là giấc mơ", "Bỗng nhiên có bàn tay vỗ vai vô lý", "Nhân vật ngốc nghếch cố tình đi vào chỗ chết không lý do"],
+            "toneKeywords": ["khẩu ngữ truyền miệng đời thật", "hook sốc 1-5s đầu", "văn hóa vùng miền", "âm thanh là nhân vật", "0 lạm dụng Jumpscare"],
+            "forbiddenCliches": [
+                "Mở bài dạo đầu thời tiết / ngày tháng / giới thiệu tên rườm rà ('Đêm cuối năm...', 'Tháng 10 năm...')",
+                "Tỉnh dậy hóa ra chỉ là giấc mơ",
+                "Văn viết sáo rỗng kiểu AI ('một cảm giác lạnh lẽo bao trùm', 'bất giác tôi nhận ra')",
+                "Giải thích hộ cảm xúc ('tôi vô cùng kinh hãi', 'không khí thật rùng rợn')",
+                "Lạm dụng Jumpscare hoặc tiếng reverse_suck báo trước",
+            ],
+        },
+        "soundscapeDesign": {
+            "nearBed": {
+                "sound": "room_tone_dark",
+                "label": "Lớp không gian gần trong phòng (gỗ ẩm, tim đèn dầu, không khí tĩnh)",
+            },
+            "farBed": {
+                "sound": "night_rain_indoor",
+                "label": "Lớp không gian xa ngoài trời (mưa/gió/sông tự đục đi khi đóng cửa)",
+                "occlusionTrigger": {"atWord": "chốt", "lpHz": 580, "gainDeltaDb": -6.5},
+            },
+            "motifs": [
+                {
+                    "id": "m_primary_motif",
+                    "sound": "water_drip_echo",
+                    "intervalSec": 2.5,
+                    "mode": "steady_then_stop",
+                    "meaning": "Âm thanh lặp đời thường đếm nhịp căng thẳng rồi đột ngột tắt hẳn trước biến cố",
+                    "breakBeatId": "P1_AB2",
+                }
+            ],
         },
         "premise": {
             "core": "",
@@ -380,6 +469,7 @@ def cmd_seed(args):
                 "transitionOut": "fade:0.5" if i == n_parts else "cut",
                 "synopsis": "",
                 "hook": "",
+                **({"coldHook": {"hookArchetype": "paradox_prop", "openingLine": "", "openingSoundCue": ""}} if i == 1 else {}),
                 "suspense": "",
                 "sceneIds": ["S01"],
                 "characterIds": ["C01"],
@@ -400,8 +490,9 @@ def cmd_seed(args):
 
 
 def evaluate_gates(doc, stage="full", strict_spatial=False, strict_story=False):
+    sv = str(doc.get("schemaVersion", "")).strip()
     params = doc.get("params") or {}
-    th = default_thresholds(params)
+    th = default_thresholds(params, schema_version=sv or "3.0")
     fmt = resolve_format(params)
     n_parts = int(params.get("parts") or 1)
     adapt_mode = str(params.get("adaptMode") or "original")
@@ -1181,6 +1272,156 @@ def evaluate_gates(doc, stage="full", strict_spatial=False, strict_story=False):
             )
         else:
             add_gate("cross-part-continuity-and-dialogue-briefs", "24. Liên tục Xuyên Chương & Định hướng Thoại", True, "Kiểm ở stage full", applies=False)
+
+        # 25. psychological-soundscape-and-subtext (active on schemaVersion 3.1+ or when soundscapeDesign is present)
+        sc_design = doc.get("soundscapeDesign")
+        v31_mode = sv[:3] in ("3.1", "3.2") or isinstance(sc_design, dict)
+        if v31_mode and eff_stage == "full":
+            p25_errs = []
+            # 1) Anti-Exposition / Anti-Tell prose & spokenBeat check
+            for p in parts:
+                pid = p.get("part")
+                for fld in ("synopsis", "hook", "suspense"):
+                    val = str(p.get(fld, ""))
+                    if EXPOSITION_TELL_RE.search(val):
+                        p25_errs.append(f"P{pid}.{fld} vi phạm Anti-Exposition (giải thích hộ nỗi sợ thay vì gợi chi tiết giác quan)")
+                for idx_ab, ab in enumerate(p.get("actionBeats") or [], 1):
+                    ab_id = ab.get("beatId") or f"P{pid}_AB{idx_ab}"
+                    sb = ab.get("spokenBeat") or {}
+                    for s_fld in ("intent", "keyPhrase"):
+                        if EXPOSITION_TELL_RE.search(str(sb.get(s_fld, ""))):
+                            p25_errs.append(f"{ab_id}.spokenBeat.{s_fld} vi phạm Anti-Exposition (kể hộ nỗi sợ)")
+                    if ab.get("jumpscareStyle"):
+                        reason = str(ab.get("jumpscareReason") or "").strip()
+                        if len(reason) < 12:
+                            p25_errs.append(f"{ab_id} dùng jumpscareStyle nhưng thiếu jumpscareReason (>=12 ký tự chứng minh thực sự bắt buộc)")
+
+            # 2) Narrative Soundscape & Motif check
+            if not isinstance(sc_design, dict):
+                p25_errs.append("Thiếu khối soundscapeDesign (nearBed, farBed, motifs)")
+            else:
+                motifs = sc_design.get("motifs") or []
+                if not isinstance(motifs, list) or len(motifs) < 1:
+                    p25_errs.append("soundscapeDesign.motifs cần >= 1 âm thanh lặp chủ đạo (motif) đóng vai trò dẫn truyện")
+                else:
+                    all_ab_ids = {
+                        str(ab.get("beatId"))
+                        for p in parts
+                        for ab in (p.get("actionBeats") or [])
+                        if ab.get("beatId")
+                    }
+                    for mf in motifs:
+                        mid = mf.get("id") or "motif"
+                        if not str(mf.get("sound", "")).strip():
+                            p25_errs.append(f"Motif '{mid}' thiếu trường sound")
+                        mmode = str(mf.get("mode") or "steady_then_stop").strip()
+                        if mmode not in VALID_MOTIF_MODES:
+                            p25_errs.append(f"Motif '{mid}' mode={mmode!r} không hợp lệ ({sorted(VALID_MOTIF_MODES)})")
+                        brk = str(mf.get("breakBeatId") or "").strip()
+                        if not brk:
+                            p25_errs.append(f"Motif '{mid}' thiếu breakBeatId (điểm âm lặp thay đổi quy luật / tắt bặt)")
+                        elif all_ab_ids and brk not in all_ab_ids:
+                            p25_errs.append(f"Motif '{mid}' breakBeatId='{brk}' không khớp actionBeat nào")
+
+            add_gate(
+                "psychological-soundscape-and-subtext",
+                "25. Thoại Gợi Mở (Anti-Exposition), Âm Lặp (`motifs`) & Kỷ Luật 0-Jumpscare",
+                not p25_errs,
+                "Thoại giàu ẩn ý không kể hộ cảm xúc, có Motif âm thanh biến đổi quy luật & kiểm soát chặt Jumpscare"
+                if not p25_errs
+                else "; ".join(p25_errs[:4]),
+            )
+        elif v31_mode:
+            add_gate(
+                "psychological-soundscape-and-subtext",
+                "25. Thoại Gợi Mở (Anti-Exposition), Âm Lặp (`motifs`) & Kỷ Luật 0-Jumpscare",
+                True,
+                "Kiểm ở stage full",
+                applies=False,
+            )
+
+        # 26. viral-hook-and-oral-authenticity (v14.0: 1-5s Cold Hook, Zero Boring Weather Opener, Oral Colloquial & Platform-Safe Grit)
+        nar_st = doc.get("narrativeStyle") or {}
+        pacing_prof = str(params.get("pacingProfile") or "").strip()
+        v32_mode = sv.startswith("3.2") or bool(pacing_prof) or any(isinstance(p.get("coldHook"), dict) for p in parts)
+        if v32_mode and eff_stage == "full":
+            p26_errs = []
+            if pacing_prof and pacing_prof not in VALID_PACING_PROFILES:
+                p26_errs.append(f"params.pacingProfile={pacing_prof!r} không hợp lệ ({sorted(VALID_PACING_PROFILES)})")
+            grit_lv = str(nar_st.get("gritLevel") or "platform_safe_raw").strip()
+            if grit_lv not in VALID_GRIT_LEVELS:
+                p26_errs.append(f"narrativeStyle.gritLevel={grit_lv!r} không hợp lệ ({sorted(VALID_GRIT_LEVELS)})")
+            dial_reg = str(nar_st.get("dialectRegion") or "north").strip()
+            if dial_reg not in VALID_DIALECT_REGIONS:
+                p26_errs.append(f"narrativeStyle.dialectRegion={dial_reg!r} không hợp lệ ({sorted(VALID_DIALECT_REGIONS)})")
+
+            if parts:
+                p1 = parts[0]
+                p1_hook = str(p1.get("hook") or "").strip()
+                if BORING_CHRONO_HOOK_RE.search(p1_hook):
+                    p26_errs.append("P1.hook mở bài tả thời tiết/ngày tháng/giới thiệu tên rườm rà — phải đập thẳng biến cố/nghịch lý/cấm kỵ ngay 1–5s đầu!")
+                ch_obj = p1.get("coldHook")
+                p1_abs = p1.get("actionBeats") or []
+                ab1 = p1_abs[0] if p1_abs else {}
+                ab1_sb = (ab1.get("spokenBeat") or {}) if isinstance(ab1, dict) else {}
+                ab1_phrase = str(ab1_sb.get("keyPhrase") or "").strip()
+                if BORING_CHRONO_HOOK_RE.search(ab1_phrase):
+                    p26_errs.append("P1_AB1.spokenBeat.keyPhrase mở bài kiểu nhật ký thời tiết/năm tháng — làm rớt người xem ở 3 giây đầu!")
+                if float(ab1.get("visualBeforeSec") or 0.0) >= 0.45:
+                    p26_errs.append(f"P1_AB1 đặt visualBeforeSec={ab1.get('visualBeforeSec')}s >= 0.45s gây chết lặng đầu video — phải vào thoại ngay 0.05-0.25s!")
+
+                if isinstance(ch_obj, dict):
+                    h_arch = str(ch_obj.get("hookArchetype") or "paradox_prop").strip()
+                    if h_arch not in VALID_HOOK_ARCHETYPES:
+                        p26_errs.append(f"P1.coldHook.hookArchetype={h_arch!r} không hợp lệ ({sorted(VALID_HOOK_ARCHETYPES)})")
+                    op_line = str(ch_obj.get("openingLine") or ab1_phrase).strip()
+                    op_words = len(op_line.split())
+                    if op_words == 0:
+                        p26_errs.append("P1.coldHook.openingLine đang để trống — bắt buộc chốt câu mở màn 1–5s đầu!")
+                    elif op_words > 26:
+                        p26_errs.append(f"P1.coldHook.openingLine dài {op_words} từ (>26 từ) — vượt quá khung 1–5s giữ chân đầu video!")
+                    if BORING_CHRONO_HOOK_RE.search(op_line):
+                        p26_errs.append("P1.coldHook.openingLine vi phạm mẫu mở bài thời tiết/ngày tháng nhàm chán!")
+                    op_sfx = str(ch_obj.get("openingSoundCue") or ab1.get("audioCue") or "").strip()
+                    if not op_sfx:
+                        p26_errs.append("P1.coldHook thiếu openingSoundCue (hoặc P1_AB1.audioCue) để đánh thức thính giác ngay 0.1–0.4s đầu!")
+
+            for p in parts:
+                pid = p.get("part")
+                for fld in ("synopsis", "hook", "suspense"):
+                    val = str(p.get(fld) or "")
+                    if LITERARY_SLOP_RE.search(val):
+                        p26_errs.append(f"P{pid}.{fld} dùng văn viết sáo rỗng kiểu AI — hãy chuyển sang khẩu ngữ truyền miệng gọn sắc!")
+                    if grit_lv == "platform_safe_raw" and BANNED_PLATFORM_SLURS_RE.search(val):
+                        p26_errs.append(f"P{pid}.{fld} chứa từ tục vượt ngưỡng an toàn nền tảng (dùng 'mẹ kiếp', 'chết tiệt', 'chó chết', 'bỏ mẹ rồi' thay vì văng tục nhạy cảm)")
+                for idx_ab, ab in enumerate(p.get("actionBeats") or [], 1):
+                    ab_id = ab.get("beatId") or f"P{pid}_AB{idx_ab}"
+                    if pacing_prof == "viral_short" and float(ab.get("durationSec") or 0.0) > 15.5:
+                        p26_errs.append(f"{ab_id} kéo dài {ab.get('durationSec')}s (>15.5s trong chế độ viral_short) — phải mở tình tiết/thoại mới mỗi 8–14s!")
+                    sb = ab.get("spokenBeat") or {}
+                    for s_fld in ("intent", "keyPhrase"):
+                        s_val = str(sb.get(s_fld) or "")
+                        if LITERARY_SLOP_RE.search(s_val):
+                            p26_errs.append(f"{ab_id}.spokenBeat.{s_fld} chứa văn mẫu sáo rỗng kiểu AI")
+                        if grit_lv == "platform_safe_raw" and BANNED_PLATFORM_SLURS_RE.search(s_val):
+                            p26_errs.append(f"{ab_id}.spokenBeat.{s_fld} chứa từ tục vượt ngưỡng an toàn nền tảng")
+
+            add_gate(
+                "viral-hook-and-oral-authenticity",
+                "26. Đòn Mở Màn 1–5s (`coldHook`), Khẩu Ngữ Truyền Miệng & Nhịp Giữ Chân (`viral_short`)",
+                not p26_errs,
+                "Hook 1–5s đánh thẳng biến cố không dạo đầu thời tiết, khẩu ngữ đời thật gọn sắc, an toàn nền tảng"
+                if not p26_errs
+                else "; ".join(p26_errs[:4]),
+            )
+        elif v32_mode:
+            add_gate(
+                "viral-hook-and-oral-authenticity",
+                "26. Đòn Mở Màn 1–5s (`coldHook`), Khẩu Ngữ Truyền Miệng & Nhịp Giữ Chân (`viral_short`)",
+                True,
+                "Kiểm ở stage full",
+                applies=False,
+            )
 
     failed = [g for g in gates if g["applies"] and not g["ok"]]
     return gates, failed
@@ -1972,28 +2213,59 @@ def _export_single_part_blueprint(doc, part, out_dir, base_project_id, aspect, b
     abeats = part.get("actionBeats") or []
     project_id = f"{base_project_id}-p{part_no:02d}" if len(parts) > 1 else base_project_id
 
-    # 1. SCRIPT.skeleton.md grouped into coherent Acts by mood/deadSilence + rich literary cues
+    # Map character names/IDs to distinct VieNeu-TTS voices so NPCs never clone the narrator
+    char_voice_map = {}
+    for c in chars:
+        cname = str(c.get("name") or "").strip()
+        cid = str(c.get("id") or "").strip()
+        if cid == "C01" or "pov" in str(c.get("role", "")).lower():
+            continue
+        v_pick = resolve_vieneu_cast_voice(
+            cname or cid,
+            str(c.get("voiceProfile") or ""),
+            str(c.get("role") or ""),
+            narrator_voice="Thiện Minh",
+        )
+        if cname:
+            char_voice_map[cname.upper()] = v_pick
+        if cid:
+            char_voice_map[cid.upper()] = v_pick
+
+    # 1. SCRIPT.skeleton.md grouped into coherent Acts with v13 clause prosody, [BEAT Xs], [SILENCE_DROP Xs] & auto-cast voices
     script_lines = [
         f"# {doc.get('title', project_id)} — Chương {part_no}: {part.get('title', '')}",
         f"<!-- Format: {resolve_format(doc.get('params') or {})} | Target: {int(part.get('target_sec') or 60)}s | Pacing: {part.get('pacingType', '-')} -->",
         "",
     ]
     if abeats:
-        script_lines.append("<!-- v11.0 Master Establishing Breathing Frame (2A + 3A): thiết lập trọn vẹn kiến trúc phòng trước khi thoại -->")
-        script_lines.append("[VISUAL 2.60s]")
+        script_lines.append("<!-- v14.0 Immediate 0.05s Cold Hook Entry: CẤM chèn [VISUAL] im lặng ở đầu chương! Vào thẳng câu Hook sốc 1–5s đầu tiên -->")
         cur_header = None
-        for ab in abeats:
+        ch_meta = part.get("coldHook") if isinstance(part.get("coldHook"), dict) else {}
+        for idx_ab_s, ab in enumerate(abeats):
             sb = ab.get("spokenBeat") or {}
-            mood = sb.get("mood") or ab.get("mood") or "calm_omen"
+            deliv = sb.get("delivery") if isinstance(sb.get("delivery"), dict) else {}
+            mood = sb.get("mood") or ab.get("mood") or ("tense" if idx_ab_s == 0 else "calm_omen")
             speaker = str(sb.get("speaker") or "NARRATOR").strip()
+            prox = str(deliv.get("prox") or "").strip()
             if ab.get("deadSilenceBeforeSec"):
                 script_lines.append(f"[DEAD SILENCE {float(ab['deadSilenceBeforeSec']):.2f}s]")
                 cur_header = None
-            elif ab.get("visualBeforeSec"):
+            elif ab.get("silenceDropBeforeSec") or deliv.get("silenceDropBeforeSec"):
+                sd_s = float(ab.get("silenceDropBeforeSec") or deliv.get("silenceDropBeforeSec"))
+                script_lines.append(f"[SILENCE_DROP {sd_s:.2f}s]")
+                cur_header = None
+            elif idx_ab_s > 0 and ab.get("visualBeforeSec"):
                 script_lines.append(f"[VISUAL {float(ab['visualBeforeSec']):.2f}s]")
-            elif ab.get("pauseBeforeSec"):
+            elif idx_ab_s > 0 and ab.get("pauseBeforeSec"):
                 script_lines.append(f"[PAUSE {float(ab['pauseBeforeSec']):.2f}s]")
-            hdr = f"[NARRATOR | mood={mood}]" if speaker.upper() == "NARRATOR" else f"[SPEAKER: {speaker} | mood={mood}]"
+
+            if speaker.upper() == "NARRATOR":
+                prox_attr = f" | prox={prox}" if prox else ""
+                hdr = f"[NARRATOR | mood={mood}{prox_attr}]"
+            else:
+                v_cast = char_voice_map.get(speaker.upper()) or resolve_vieneu_cast_voice(speaker, "", "")
+                fx_tag = str(deliv.get("fx") or "room")
+                hdr = f"[SPEAKER: {speaker} | voice={v_cast} | mood={mood} | fx={fx_tag}]"
             if hdr != cur_header:
                 script_lines.append(hdr)
                 cur_header = hdr
@@ -2007,8 +2279,19 @@ def _export_single_part_blueprint(doc, part, out_dir, base_project_id, aspect, b
             if sb.get("wordBudget"):
                 meta_bits.append(f"~{int(sb['wordBudget'])} từ")
             script_lines.append(f"<!-- {' | '.join(meta_bits)} -->")
-            hint = sb.get("keyPhrase") or ab.get("spokenHint") or sb.get("intent") or ab.get("actionSummary", "")
-            script_lines.append(hint if ab.get("spokenHint") else f"[VIẾT LỜI THOẠI {ab.get('beatId')}: {hint}]")
+            beat_pre = f"[BEAT {float(deliv['beatBeforeSec']):.2f}s] " if deliv.get("beatBeforeSec") else ""
+            pace_tag = ""
+            if deliv.get("pace") or deliv.get("pitchSt"):
+                kv_p = []
+                if deliv.get("pace"):
+                    kv_p.append(f"PACE={deliv['pace']}")
+                if deliv.get("pitchSt") is not None:
+                    kv_p.append(f"PITCH={deliv['pitchSt']}")
+                pace_tag = f"[{' | '.join(kv_p)}] "
+            open_line = str(ch_meta.get("openingLine") or "").strip() if idx_ab_s == 0 else ""
+            hint = open_line or sb.get("keyPhrase") or ab.get("spokenHint") or sb.get("intent") or ab.get("actionSummary", "")
+            body_line = hint if (open_line or ab.get("spokenHint")) else f"[VIẾT LỜI THOẠI {ab.get('beatId')}: {hint}]"
+            script_lines.append(f"{beat_pre}{pace_tag}{body_line}")
     else:
         script_lines += ["[NARRATOR | mood=calm_omen]", part.get("synopsis", "")]
 
@@ -2162,6 +2445,8 @@ def _export_single_part_blueprint(doc, part, out_dir, base_project_id, aspect, b
         })
 
     pov_mode = str((doc.get("params") or {}).get("pov") or "first_person_survivor")
+    pacing_prof_bp = str((doc.get("params") or {}).get("pacingProfile") or "")
+    use_cold_hook_open = (part_no == 1) and (pacing_prof_bp == "viral_short" or isinstance(part.get("coldHook"), dict))
     total_f_draft = cur_f if cur_f > 0 else int(round(float(part.get("target_sec") or 75) * fps))
     starter_shots = []
     if m_beats:
@@ -2176,7 +2461,33 @@ def _export_single_part_blueprint(doc, part, out_dir, base_project_id, aspect, b
             if loc_id not in seen_starter_locs:
                 seen_starter_locs.add(loc_id)
                 span_b = bb_f - ba_f
-                if span_b >= 135:
+                if use_cold_hook_open and ba_f == 0 and span_b >= 120:
+                    hk_end = min(135, max(45, span_b // 3))
+                    starter_shots.append({
+                        "id": sh_id,
+                        "beatId": mb["beatId"],
+                        "a": 0,
+                        "b": hk_end,
+                        "scale": "POV_CU",
+                        "light": mb["lightState"]["preset"],
+                        "cameraMode": "cold_hook",
+                        "axisSide": "pov_center",
+                        "note": f"1-5s Cold Hook ({loc_id}) — immediate anomaly/prop/warning before room reveal",
+                    })
+                    sh_id += 1
+                    starter_shots.append({
+                        "id": sh_id,
+                        "beatId": mb["beatId"],
+                        "a": hk_end,
+                        "b": bb_f,
+                        "scale": "WS",
+                        "light": mb["lightState"]["preset"],
+                        "cameraMode": "master",
+                        "axisSide": "pov_center",
+                        "note": f"Master Establishing Shot ({loc_id}) — snap context & readable room geography",
+                    })
+                    sh_id += 1
+                elif span_b >= 135:
                     m_end = ba_f + max(66, min(105, span_b // 2))
                     starter_shots.append({
                         "id": sh_id,
@@ -2187,7 +2498,6 @@ def _export_single_part_blueprint(doc, part, out_dir, base_project_id, aspect, b
                         "light": mb["lightState"]["preset"],
                         "cameraMode": "master",
                         "axisSide": "pov_center",
-                        **({"visualBeatIndex": 0} if ba_f == 0 else {}),
                         "note": f"Master Establishing Shot ({loc_id}) — readable room geography & practical lamps",
                     })
                     sh_id += 1
@@ -2214,7 +2524,6 @@ def _export_single_part_blueprint(doc, part, out_dir, base_project_id, aspect, b
                         "light": mb["lightState"]["preset"],
                         "cameraMode": "master",
                         "axisSide": "pov_center",
-                        **({"visualBeatIndex": 0} if ba_f == 0 else {}),
                         "note": f"Master Establishing Shot ({loc_id}) — {mb.get('cameraIntent', '')}",
                     })
                     sh_id += 1
@@ -2274,25 +2583,71 @@ def _export_single_part_blueprint(doc, part, out_dir, base_project_id, aspect, b
         "beats": m_beats,
         **({"shots": starter_shots} if starter_shots else {}),
     }
+    sc_design = doc.get("soundscapeDesign") if isinstance(doc.get("soundscapeDesign"), dict) else {}
+    far_cfg = sc_design.get("farBed") if isinstance(sc_design.get("farBed"), dict) else {}
+    near_cfg = sc_design.get("nearBed") if isinstance(sc_design.get("nearBed"), dict) else {}
+    far_sound = str(far_cfg.get("sound") or bed_sound)
+    far_auto = []
+    occ = far_cfg.get("occlusionTrigger") if isinstance(far_cfg.get("occlusionTrigger"), dict) else None
+    if occ and occ.get("atWord"):
+        far_auto.append({
+            "at_word": occ["atWord"],
+            "gain_delta_db": float(occ.get("gainDeltaDb", -6.0)),
+            "lp_hz": float(occ.get("lpHz", 580)),
+            "transition_s": float(occ.get("transitionSec", 0.75)),
+        })
+    draft_beds = [
+        {
+            "sound": far_sound,
+            "role": "far",
+            "target_rms_dbfs": -32.0,
+            "hp_hz": 110,
+            "lp_hz": 3400,
+            "voice_notch_db": -3.0,
+            "duck_db": -3.5,
+            "whisper_duck_db": -9.0,
+            **({"automation": far_auto} if far_auto else {}),
+            "label": far_cfg.get("label") or f"Lớp nền xa ngoài trời: {(scenes[0].get('atmosphere') if scenes else '')[:80]}",
+        }
+    ]
+    if near_cfg.get("sound") and near_cfg.get("sound") != far_sound:
+        draft_beds.append({
+            "sound": str(near_cfg["sound"]),
+            "role": "near",
+            "target_rms_dbfs": -36.5,
+            "hp_hz": 80,
+            "lp_hz": 2600,
+            "duck_db": -3.0,
+            "whisper_duck_db": -8.0,
+            "label": near_cfg.get("label") or "Lớp nền cận cảnh trong phòng",
+        })
+
+    draft_motifs = []
+    for mf in (sc_design.get("motifs") or []):
+        if not isinstance(mf, dict) or not mf.get("sound"):
+            continue
+        draft_motifs.append({
+            "id": mf.get("id") or "m_motif_01",
+            "sound": mf["sound"],
+            "start": {"at": 2.2},
+            "end": {"at": round(max(6.0, (total_f_draft / fps) * 0.78), 2)},
+            "interval_s": float(mf.get("intervalSec") or 2.5),
+            "mode": str(mf.get("mode") or "steady_then_stop"),
+            "space": str(mf.get("space") or "room"),
+            "target_peak_dbfs": -16.0,
+            "label": mf.get("meaning") or "Âm thanh lặp dẫn dắt tâm lý rồi phá vỡ quy luật",
+        })
+
+    explicit_js = sum(1 for ab in abeats if ab.get("jumpscareStyle"))
     cues_draft = {
         "voice": "voice/voice.wav",
         "words": "voice/words.json",
-        "target_lufs": -15.0,
+        "target_lufs": -16.0,
         "ceil_db": -1.2,
         "dead_silence_floor_db": -48.0,
-        "max_jumpscares": 2 if len(parts) == 1 else max(1, sum(1 for ab in abeats if ab.get("jumpscareStyle"))),
-        "beds": [
-            {
-                "sound": bed_sound,
-                "target_rms_dbfs": -33.0,
-                "hp_hz": 110,
-                "lp_hz": 3200,
-                "voice_notch_db": -3.0,
-                "duck_db": -4.0,
-                "whisper_duck_db": -9.0,
-                "label": f"1 nền tùy biến theo bối cảnh: {(scenes[0].get('atmosphere') if scenes else '')[:80]}",
-            }
-        ],
+        "max_jumpscares": explicit_js,
+        "beds": draft_beds,
+        **({"motifs": draft_motifs} if draft_motifs else {}),
         "events": cues_events,
     }
 
@@ -2383,6 +2738,9 @@ def main():
     p_sd.add_argument("--aspect", choices=["9:16", "16:9"], default=None)
     p_sd.add_argument("--pov", choices=sorted(VALID_POVS), default="first_person_survivor")
     p_sd.add_argument("--genre", default="folklore")
+    p_sd.add_argument("--pacing-profile", choices=sorted(VALID_PACING_PROFILES), default=None, help="viral_short (60-90s fast retention) or deep_story (2.5-10m)")
+    p_sd.add_argument("--dialect", choices=sorted(VALID_DIALECT_REGIONS), default="north", help="Vietnamese regional dialect & folk lexicon (north, central, south)")
+    p_sd.add_argument("--grit-level", choices=sorted(VALID_GRIT_LEVELS), default="platform_safe_raw", help="Colloquial strong language level (platform_safe_raw default)")
     p_sd.add_argument("--adapt-mode", choices=["original", "folklore", "adapt", "reimagine"], default="original")
     p_sd.add_argument("--out")
 

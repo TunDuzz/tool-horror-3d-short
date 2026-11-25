@@ -1,93 +1,75 @@
-# Horror 3D Short & Series Skill Suite v5.0 (`PSX Low-Poly VHS/CRT & Maximum Dread POV`, Three.js + Remotion)
+# Horror 3D Short & Series Skill Suite v14.0
+**(`Viral 1–5s Cold Hook · Khẩu Ngữ Truyền Miệng · Crisp Neural Voice · Psychological Soundscape · Anchored POV 3D`, Three.js + Remotion)**
 
-Bộ kỹ năng (AI Agent Skills) hoàn chỉnh chuyên sản xuất video hoạt hình kinh dị 3D ngắn (`~55–75 giây`, dọc `9:16` hoặc ngang `16:9`) và series kinh dị nhiều phần bằng **Horror Engine v5.0** — kết hợp thẩm mỹ **PSX Low-Poly VHS/CRT (`1A+2A+3A`)**, **5 trụ cột Maximum Dread tùy biến theo cốt truyện**, **giọng đọc đa sắc thái & quy trình 1-file So-VITS-SVC Expressive VC-Pack (`-na`)**, và **TRUE Dead Silence `-48 dB`**:
+Bộ **6 AI Agent Skills + Engine 3D + Automation Pipeline** hoàn chỉnh chuyên sản xuất video kinh dị 3D tiếng Việt (**Viral Short `55–90s`**, **Standalone Story `2.5–6 phút`**, và **Multi-Part Series `8–16 phút`**) chuẩn dọc `9:16` (`1080×1920`) hoặc ngang `16:9` (`1920×1080`).
 
-* **Đồ họa PSX Low-Poly VHS/CRT Mặc định + 4 Chế độ Chuyển Đổi (`retroPsx.ts`, `paint.ts`, `ShortPlayer.tsx`):** Mặc định `renderStyle="psxHorror"` (hình khối góc cạnh + PS1 `vertexSnap` + **11 cặp bề mặt Albedo/BumpMap** + **SSAO** + lưới pixel 360×640 Bayer 4×4 + CRT scanline bảo toàn độ sáng + sóng băng VHS/`tapeTear` + `outlineMode: "off"`), cho phép đổi mượt sang `"semiReal"`, `"painterly"` hoặc `"comic"` tùy cốt truyện.
-* **Tạo hình Nhân vật & Thực thể 100% Theo Cốt Truyện (`CharacterBlueprint` + `createCharacterFromBlueprint` + `bodyHorror.ts`):** Mọi cờ kinh dị cơ thể đều mặc định **TẮT** — chỉ kích hoạt các chi tiết thực sự có trong mô tả cốt truyện (`storyDescription` / `appearanceBrief`), từ người thường, bóng mờ im lặng cho tới thực thể dân gian dị dạng (`mattedLongHair`, `suturesAndWounds`, `uncannySkullMask`, `jawDrop3D`, `crookedTeeth`, `clawHands`, `extraArms`). Chặn nhân bản mẫu quái vật giữa các video không liên quan bằng cổng **`ANTI_REPEAT_ENTITY_ERROR`**.
-* **5 Trụ Cột Maximum Dread (Opt-In Theo Nhịp Beat):** (A) Bóng rình rập ngoài rìa `addCornerLurker3D`, (B) Ruồi nhặng `addSwarmingFlies3D` & bộ trang trí dân gian/mục nát (`addBloodHandprintDecal3D`, `addIchorPoolDecal3D`, `addTalismanPaper3D`, `addOtherworldGrimeDecal3D`, `addHauntedPortrait3D`), (C) Giải phẫu kinh dị cơ thể theo cốt truyện, (D) Leo thang hành vi 3 bước `doorwayPeek → stalkLoom → lungeCloseUp` + `jacobsLadderTwitch` / `torchMalfunction`, và (E) Camcorder `● REC` VHS HUD + `fogOverride` ép cận + sóng băng `RetroPsxEffect.dreadLevel`.
-* **Góc nhìn Thứ nhất POV, Ánh sáng Vật lý 5 Preset & Whip-Pan Motion Blur (`povRig.ts`, `lights.ts`, `motionblur.ts`):** Nhìn xuống thấy chân/đầu gối; hai tay POV cầm `Phone3D` (màn hình khóa HDR Bloom đồng bộ giờ/tin nhắn 100% với HUD), `Flashlight3D` (`SpotLight` 3D thực), `HandheldOilLamp3D`, `PaperProp3D`; 5 preset ánh sáng (`warmLamp`, `coldMoon`, `fluorescent`, `duskFog`, `flashlight`), tối đa 6 `PointLight` + 1 `SpotLight` + Whip-Pan GPU Motion Blur 13-tap xác định.
-* **Giọng Đọc Neural Sạch 100% Open-Source v6.0 (`gen_horror_voice.py`):** Đọc liền mạch nguyên đoạn theo hồi (tuyệt đối không chắp vá rời rạc, không dùng bộ lọc DSP nhiễu rè!). Chạy ngay **`pnnbao97/VieNeu-TTS`** (ONNX CPU 48 kHz bản địa tiếng Việt + clone giọng/cảm xúc 3–8 giây `--ref-audio` / `--emotion-refs` + `[thở dài]`/`[hắng giọng]`), hỗ trợ xuất gói GPU **`dinhthuan/index-tts-2-vietnamese`** (vector 8 cảm xúc tách biệt *afraid/melancholic/surprised/calm*) & **`F5-TTS-Vietnamese`** (`--export-gpu-voice-pack` → `--import-acts`), và tương thích trọn vẹn **So-VITS-SVC 1-file VC-Pack (`-na`)**.
-* **Kiến Trúc SFX Điện Ảnh Asset-First & TRUE Dead Silence `-48 dB` (`sfx_manager.py`, `mix_base.py`):** Quản lý thư viện Foley thu âm thật CC0 (`Freesound API` / `import-local` chuẩn hóa 48 kHz stereo 24-bit WAV) + xuất gói Neural SFX cho máy GPU (**`declare-lab/TangoFlux`** text-to-SFX 44.1 kHz & **`hkchengrex/MMAudio`** video-to-audio khớp frame `video.mp4`), nạp qua `load_sfx_asset(...)` kết hợp cắt chân không TRUE Dead Silence `-48 dB` và mastering `-15.0 LUFS`.
-* **Khóa Kịch bản ↔ Frame 3 Lớp & Tự Động Hóa Pipeline (`align_manifest.py`, `validate_manifest.py`, `sync_workspace.py`):** Tự động khớp `manifest.json` với `words.json`, kiểm định chống lặp cả bối cảnh (`ANTI_REPEAT_ERROR`) lẫn thực thể (`ANTI_REPEAT_ENTITY_ERROR`), đồng bộ workspace bằng 1 lệnh an toàn không đụng thư mục truyện riêng.
-
-Đã kiểm chứng thực tế trên GPU NVIDIA (Full HD `1080×1920`, `HorrorLabV3Vertical` 300 frame — `0` lỗi frame đen/trắng/đứng hình/pop, `DIRECTING_WARNS none`) cùng đầy đủ kiểm thử tự động TypeScript & Python.
+Toàn bộ kiến trúc được khóa bởi **Hiến pháp Duy nhất ([templates/pipeline_constitution.json](./templates/pipeline_constitution.json) `v14.0.0`)** — bảo đảm đồng nhất 100% từ ý tưởng truyện → kịch bản thoại → giọng đọc → không gian âm thanh → diễn xuất 3D → dựng hình & QA.
 
 ---
 
-## Cấu trúc gói kỹ năng (`What's Inside`)
+## Điểm Nổi Bật Của Phiên Bản Mới Nhất (`v14.0`)
 
-| Đường dẫn | Mô tả chi tiết |
+1. **Móc Giữ Chân `1–5s Cold Hook` & Ngôn Ngữ Truyền Miệng Đời Thật (`horror-story` v3.2 + Gate 26):**
+   - **Cấm mở bài chậm / chết lặng:** Tuyệt đối bỏ màn `[VISUAL 2.6s]` im ắng hay kể lể năm tháng/thời tiết (*"Đêm cuối năm 2003..."*). Câu đầu & âm thanh môi trường vào ngay **`0.05–0.25s`** (`<= 24 từ`), đánh thẳng bằng 4 khuôn mẫu: `paradox_prop`, `blunt_taboo_dialogue`, `flash_forward_crisis`, `raw_confession`.
+   - **Khẩu ngữ dân gian 3 miền & Thán từ đời thật (`platform_safe_raw`):** Tùy chọn vùng miền (`north` / `central` / `south`) và mức cảm thán mạnh an toàn nền tảng (*"Mẹ kiếp"*, *"Chó chết"*, *"Bỏ mẹ rồi"*, *"Tổ cha nó"*, *"Má ơi"*), đồng thời chặn cứng văn mẫu AI sáo rỗng (*"một cảm giác lạnh lẽo bao trùm"*) và từ tục vi phạm chính sách nền tảng qua **Gate 26**.
+   - **2 Chế độ Nhịp Kể (`pacingProfile`):** Hỗ trợ cả `viral_short` (`55–90s`, mở nút thắt mỗi `8–14s`) lẫn `deep_story` (`2.5–10 phút`, nhiều hồi/tập), mặc định nhịp nhanh giữ chân cao.
+
+2. **Giọng Đọc Sắc Gọn `3.10–3.55 từ/s` + Tự Động Phân Vai 25 Giọng (`gen_horror_voice.py` v14.0):**
+   - Tối ưu nhịp `clean_tempo` (`0.76–0.89`), `tail_pad` (`0.12–0.23s`), `lead_silence` `0.05s` và cờ `--strict-hook` giúp tốc độ phát âm đạt **`3.10–3.55 từ/s`** (`2.55–3.05 từ/s` hiệu dụng) — nhanh gọn, sắc nét (~0.5–0.9s nhanh hơn bản cũ), vẫn giữ trọn dynamic 6–8 dB giữa thì thầm sát tai và thoại căng thẳng.
+   - Chạy `VieNeu-TTS` ONNX 48 kHz offline + `--speaker-lock` + ngân hàng 8 sắc thái thuần Việt (`prepare_emotion_refs.py build-vn-horror-bank`) + `faster-whisper` Forced Word Alignment (`< 35ms`) + tự động chọn 25 giọng Bắc/Trung/Nam cho nhân vật phụ (`fx=adjacent_muffled` qua cửa/kính). Hỗ trợ xuất gói GPU `IndexTTS-2` / `F5-TTS` / `So-VITS-SVC`.
+
+3. **Âm Thanh Kể Chuyện Tâm Lý & Kỷ Luật `0-Jumpscare` (`mix_cues.py` · `-16.0 LUFS`):**
+   - Nỗi sợ đến từ sự việc, ngữ điệu và không gian âm thanh sống cùng truyện — **mặc định `max_jumpscares = 0`** (chỉ bật có lý do chính đáng).
+   - Thiết kế **2 lớp nền tách vai** (`near` trong phòng + `far` ngoài trời tự lọc trầm `automation` khi đóng cửa), bắt buộc có âm lặp **`motifs[]`** biết đổi nhịp hoặc tắt bặt (`steady_then_stop`, `decelerate`, `approach`, `stutter_break`), 4 vùng không gian (`close_ear` binaural ITD, `room`, `adjacent_muffled`, `exterior_occluded`), và **`[SILENCE_DROP Xs]` Uncanny Hush** rút sâu nền môi trường kích thích người nghe lắng tai.
+   - Tích hợp **Openverse 5.2M Audio API (`cc0`/`pdm`)** kiểm định bản quyền & xuất tự động `credits.txt` + `mix_report.md`.
+
+4. **Engine 3D Trung Tính `21 Module` · `cold_hook → master` · Kiểm Định Ảnh 5 Tầng (`storyboard_proof.html`):**
+   - Đồ họa mặc định `psxHorror` (PS1 `vertexSnap` + PBR BumpMap 11 cặp bề mặt + SSAO + Bayer 4×4 CRT/VHS) và chuyển mượt sang `semiReal`, `painterly`, `comic`.
+   - Ngữ pháp điện ảnh `cold_hook` (Shot #1 `<= 180f`) nối ngay `master` (`>= 60f`, Zero Black Void) → `80–90%` chuỗi POV liên tục (`camPovChain`, bàn tay POV 2 đốt `fingerCurl` + `worldTarget`) + trục 180°.
+   - **Cổng Kiểm Duyệt 5 Lớp Trước Render (`render-stills.mjs --strict-audit`):** Chiếu tia 3D 9-Ray Occlusion, vùng an toàn `9:16`, giới hạn che khuất foreground, khóa nét DOF và độ sáng từng vật thể 3D → xuất **`storyboard_proof.html`**.
+   - **Chống lặp tuyệt đối (`LOCATION_REGISTRY.json`):** Chặn trùng kiến trúc & tạo hình quái vật rập khuôn (`ANTI_REPEAT_ERROR`, `ANTI_REPEAT_ENTITY_ERROR`).
+
+---
+
+## Cấu Trúc Gói Kỹ Năng (`Package Structure`)
+
+| Thành phần | Chức năng chính |
 |---|---|
-| `SKILL.md` | Kỹ năng chính `horror-3d-short` v5.0: quy trình 11 bước, luật chống lặp bối cảnh & thực thể, khóa `SceneManifest`, So-VITS-SVC 1-file VC-Pack, Pre-Final `--manifest` Still Gate & Post-Render QA |
-| `companion-skills/horror-story/` | Thiết kế & kiểm định cốt truyện kinh dị 2 vòng (14 cổng chất lượng, `appearanceBrief` theo cốt truyện, 5 preset ánh sáng vật lý) |
-| `companion-skills/horror-script-storyboard/` | Kịch bản đa sắc thái `[NARRATOR \| mood=...]` / `[SPEAKER \| fx=...]`, So-VITS-SVC VC-Pack `-na`, `align_manifest.py` & `story.ts` |
-| `companion-skills/horror-world-lookdev/` | `LocationBlueprint`, `CharacterBlueprint` theo cốt truyện, `psxHorror` mặc định (`1A+2A+3A`), 5 trụ cột Maximum Dread, POV Rig & ánh sáng thực |
-| `companion-skills/horror-audio-sfx/` | Giọng đọc đa sắc thái, TRUE Dead Silence `-48 dB`, 27 SFX kinh dị thuần Python DSP (`-15.0 LUFS`) |
-| `companion-skills/horror-series-pipeline/` | Kiến trúc sản xuất series dài nhiều phần (`p01..p10`) chống tràn context, khóa `ANCHORS`, `sameLocationOf` & `sameCharacterOf` |
-| `templates/engine/` | **Horror Engine v5.0 trung tính (20 module):** `camera.ts`, `lights.ts`, `manifest.ts`, `shade.ts`, `outline3d.ts`, `ink.ts`, `motionblur.ts`, `lensblur.ts`, `grade.ts`, `retroPsx.ts`, `paint.ts`, `build.ts`, `face2d.ts`, `bodyHorror.ts`, `rig3d.ts`, `povRig.ts`, `fx3d.ts`, `HorrorHUD.tsx`, `ShortPlayer.tsx`, `index.ts` |
-| `templates/horror-lab-v3/` | Dự án kiểm chứng trực quan **3 bối cảnh & 5 trụ cột Dread v5.0** (`HorrorLabV3Vertical` `9:16` & `HorrorLabV3Wide` `16:9`) |
-| `templates/scripts/` | Bộ công cụ tự động hóa & QA đa nền tảng: `sync_workspace.py`, `align_manifest.py`, `validate_manifest.py`, `gen_horror_voice.py`, `horror_story.py`, `render-stills.mjs`, `render-video.mjs`, `extract_shots.py`, `short_qa.py`, `stitch_parts.py`, `validate_continuity.py` |
-| `templates/audio/` | Thư viện tổng hợp âm thanh kinh dị v5.0 (`dsp.py`, `horror_instruments.py` 27 SFX, `mix_base.py` TRUE Dead Silence) |
-| `templates/project/` | Cấu hình workspace (`package.json`, `tsconfig.json`, `requirements.txt`, `Root.tsx`, `index.ts`, `GEMINI.md`) |
-| `references/` | Chuẩn kỹ thuật v5.0 (`HORROR_STYLE_BIBLE.md`, `LIGHTING_AND_PALETTE.md`, `READABILITY_AND_QA.md`, `HORROR_FORMULAS.md`, `SOUND_CUES_COOKBOOK.md`, `SERIES_ARCHITECTURE.md`) |
-| `tests/` | Bộ kiểm thử tự động Engine v5.0, Voice/Audio DSP, Pipeline & Hygiene (`engine_*.test.ts`, `test_scripts_v3.py`, `test_phase2_pipeline.py`) |
+| [SKILL.md](./SKILL.md) | Kỹ năng điều phối chính `horror-3d-short` v14.0 (quy trình 11 bước end-to-end) |
+| [INSTALL_GUIDE.md](./INSTALL_GUIDE.md) | **Hướng dẫn cài đặt & sử dụng chi tiết từ A–Z** (Linux / macOS / Windows, GPU/CPU, quy trình chạy & xử lý lỗi) |
+| [companion-skills/](./companion-skills/) | 5 kỹ năng chuyên sâu: `horror-story` (26 cổng Gate), `horror-script-storyboard`, `horror-world-lookdev`, `horror-audio-sfx`, `horror-series-pipeline` |
+| [templates/pipeline_constitution.json](./templates/pipeline_constitution.json) | Hiến pháp kỹ thuật duy nhất (`v14.0.0`) kiểm soát toàn bộ Python, TypeScript & Skills |
+| [templates/engine/](./templates/engine/) | **21 module Three.js + Remotion trung tính** (`camera.ts`, `lights.ts`, `manifest.ts`, `sceneAudit.ts`, `stage.ts`, `povRig.ts`, `rig3d.ts`, `bodyHorror.ts`, `retroPsx.ts`, `ShortPlayer.tsx`, `HorrorHUD.tsx`, ...) |
+| [templates/scripts/](./templates/scripts/) | Toàn bộ CLI tự động hóa: `sync_workspace.py`, `horror_story.py` v3.2, `gen_horror_voice.py` v14.0, `align_manifest.py`, `validate_manifest.py`, `sfx_manager.py`, `mix_cues.py`, `render-stills.mjs`, `audit_storyboard.py`, `render-video.mjs`, `extract_shots.py`, `short_qa.py`, `stitch_parts.py`, `validate_continuity.py` |
+| [templates/audio/](./templates/audio/) | Thư viện tổng hợp & xử lý DSP 48 kHz (`dsp.py`, `horror_instruments.py`, `mix_base.py`) |
+| [templates/horror-lab-v3/](./templates/horror-lab-v3/) | Project chuẩn tham chiếu cho Engine 3D |
+| [examples/may-noi-bo-204-v14/](./examples/may-noi-bo-204-v14/) | Kịch bản v14.0 (`SCRIPT_v14.md`), `cues_v14.json`, `mix_report_v14.md` và mã nguồn 3D mẫu từ case test *"Máy Nội Bộ 204"* |
+| [references/](./references/) | Bộ chuẩn kỹ thuật (`HORROR_FORMULAS.md`, `HORROR_STYLE_BIBLE.md`, `LIGHTING_AND_PALETTE.md`, `READABILITY_AND_QA.md`, `SOUND_CUES_COOKBOOK.md`, `SERIES_ARCHITECTURE.md`) |
+| [tests/](./tests/) | Bộ test tự động Python (`unittest`) + TypeScript (`node --test`) |
 
 ---
 
-## Hướng dẫn cài đặt (`Installation`)
+## Cài Đặt Nhanh (`Quickstart`)
 
-### 1. Cài đặt vào thư mục Skills của Agent (Antigravity / Claude Code)
-```bash
-git clone https://github.com/TunDuzz/tool-horror-3d-short.git .agents/skills/horror-3d-short
-cp -r .agents/skills/horror-3d-short/companion-skills/* .agents/skills/
-```
+Xem hướng dẫn đầy đủ tại **[INSTALL_GUIDE.md](./INSTALL_GUIDE.md)**:
 
-### 2. Khởi tạo hoặc Cập nhật Workspace `shorts-project/` bằng 1 Lệnh Duy Nhất (Linux / macOS / Windows)
 ```bash
-python3 .agents/skills/horror-3d-short/templates/scripts/sync_workspace.py \
-  --target shorts-project --include-demo --gemini-out GEMINI.md
+# 1. Cài đặt skill chính & 5 companion skills vào workspace hoặc ~/.agents/skills/
+git clone https://github.com/TunDuzz/tool-horror-3d-short.git ~/.agents/skills/horror-3d-short
+cp -r ~/.agents/skills/horror-3d-short/companion-skills/* ~/.agents/skills/
+
+# 2. Tạo/đồng bộ workspace sản xuất `shorts-project/`
+python3 ~/.agents/skills/horror-3d-short/templates/scripts/sync_workspace.py \
+  --target shorts-project --include-demo --gemini-out shorts-project/GEMINI.md
+
+# 3. Cài thư viện Node.js & Python
 cd shorts-project
-npm install && npm run typecheck
+npm install && npx tsc --noEmit
 pip install -r requirements.txt
-```
-*(Lệnh `sync_workspace.py` chạy được trên cả Linux, macOS và Windows PowerShell, kiểm tra trôi bằng `--check`, và **tuyệt đối không đụng vào thư mục dự án riêng `src/<truyen-cua-ban>/`**.)*
-
-### 3. Quy trình 3 bước Giọng Dẫn Chuyện So-VITS-SVC 2 Máy (Giữ 100% Cảm Xúc!)
-```bash
-# Bước 1 (Máy này): Xuất 1 file dẫn giọng giàu ngữ điệu + script chạy sẵn -na
-python3 shorts-project/scripts/gen_horror_voice.py \
-  --script out/<du-an>/SCRIPT.md --export-vc-pack out/<du-an>/vc_pack
-
-# Bước 2 (Máy So-VITS-SVC): Chạy run_svc_win.bat / run_svc_unix.sh (dùng cờ -na!) -> nhận 1 file narrator_svc_out.wav
-
-# Bước 3 (Máy này): Lắp ghép chính xác từng mẫu + lồng thoại nhân vật + tiếng thở + EQ cảm xúc
-python3 shorts-project/scripts/gen_horror_voice.py \
-  --script out/<du-an>/SCRIPT.md \
-  --vc-pack out/<du-an>/vc_pack \
-  --narrator-vc-wav out/<du-an>/vc_pack/narrator_svc_out.wav \
-  --out-dir out/<du-an>/voice
-```
-
-### 4. Chạy kiểm thử tự động & kiểm chứng `HorrorLabV3`
-```bash
-# Unit test Engine v5.0 + Voice/Audio DSP + Pipeline + Hygiene
-node --import ./tests/ts-loader.mjs --test tests/*.test.ts
-python3 -m unittest discover -s tests -v
-
-# Kiểm định SceneManifest & render still chuẩn theo từng nhịp beat
-python3 shorts-project/scripts/validate_manifest.py shorts-project/src/horror-lab-v3/manifest.json --still-out /tmp/v5_stills.json
-cd shorts-project
-REMOTION_TMP=/tmp/remotion-tmp node scripts/render-stills.mjs HorrorLabV3Vertical out/horror-lab-v3/stills/b_ --manifest /tmp/v5_stills.json 1
+pip install vieneu faster-whisper
 ```
 
 ---
 
-## Lưu ý quan trọng (`Hard Rules & Disk Safety`)
-1. **Không lặp bối cảnh & Không rập khuôn ngoại hình quái vật:** Mọi dự án mới phải khai báo `LocationBlueprint` + `CharacterBlueprint` (bám sát mô tả cốt truyện) và vượt qua cổng `LOCATION_REGISTRY.json` (`ANTI_REPEAT_ERROR` & `ANTI_REPEAT_ENTITY_ERROR`).
-2. **Đồng nhất Kịch bản ↔ Frame:** Dùng `align_manifest.py` khóa beat vào `words.json`, điều khiển `world.ts` và `HorrorHUD` từ `MANIFEST`, và kiểm tra 100% ảnh `--manifest` bằng mắt trước khi render video cuối.
-3. **Quản lý thư mục tạm & Scale hợp lệ:** Đặt `REMOTION_TMP=/tmp/remotion-tmp` (Linux/macOS) hoặc `$env:REMOTION_TMP="D:/remotion-tmp"` (Windows) và xóa thư mục tạm sau khi render. Chỉ dùng `--scale 1`, `1.25`, hoặc `1.5`.
-
----
-
-## Bản quyền (`License`)
-Phát hành theo giấy phép MIT (`LICENSE`).
+## Bản Quyền (`License`)
+Phát hành theo giấy phép MIT ([LICENSE](./LICENSE)).

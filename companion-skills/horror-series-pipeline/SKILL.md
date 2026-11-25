@@ -1,11 +1,11 @@
 ---
 name: horror-series-pipeline
-description: Use when producing a seamless 150-360s (2.5-6 min) standalone horror short (3-5 chapters, 9:16 default) or an 8-16 minute (480-960s) multi-part horror series (8-15 chapters, 16:9 default) split into 45-105s renderable chapters (p01..pNN) governed by pipeline_constitution.json, Anchored POV-First (2A), Whisper Forced Word Alignment (1B), [VISUAL Xs] breathing frames (3A), shared 3D locations & ANCHORS, CONTINUITY.json handoff, and zero-drift stitch_parts.py assembly.
+description: Use when producing a seamless 55-90s viral horror short, 150-360s (2.5-6 min) standalone horror story (3-5 chapters, 9:16 default), or 8-16 minute (480-960s) multi-part horror series (8-15 chapters, 16:9 default) split into 45-105s renderable chapters (p01..pNN) governed by pipeline_constitution.json v14.0, Cold Hook -> Anchored POV-First (2A), Whisper Forced Word Alignment (1B), crisp 2.55-3.05 w/s effective / 3.15-3.45 w/s spoken oral folklore Vietnamese, shared 3D locations & ANCHORS, CONTINUITY.json handoff, and zero-drift stitch_parts.py assembly.
 ---
 
-# Horror Multi-Chapter Pipeline v11.0 (`150–360s` Seamless Shorts & `8–16 Min` Series)
+# Horror Multi-Chapter Pipeline v14.0 (`55–90s` Viral Short & `2.5–16 Min` Seamless Stories)
 
-Solving context window overflow, background repetition & 3D coordinate hallucination on both **2.5–6 min standalone shorts (`3–5` chapters, stitched seamlessly with zero recap)** and **8–16 min feature episodes (`8–15` chapters)**: **build the shared Engine v11.0 3D locations (`LocationBlueprint`) and story-driven cast (`CharacterBlueprint`) ONCE, lock every spot behind named `ANCHORS` from `horror-story` (`export-blueprint --all-parts`), author and render each `45–105s` Chapter (`72–95s` recommended with `[VISUAL Xs]` breathing frames) in an isolated ~350–500 line budget, and hand off state strictly through `CONTINUITY.json`.**
+Solving context window overflow, background repetition & 3D coordinate hallucination on both **viral `55–90s` shorts**, **2.5–6 min standalone stories (`3–5` chapters)**, and **8–16 min feature episodes (`8–15` chapters)**: **build the shared Engine v14.0 3D locations (`LocationBlueprint`) and story-driven cast (`CharacterBlueprint`) ONCE, lock every spot behind named `ANCHORS` from `horror-story` (`export-blueprint --all-parts`), open Part 1 immediately with a `0.05–0.25s` Cold Hook (`cold_hook` -> `master`), author and render each `45–105s` Chapter in an isolated ~350–500 line budget, and hand off state strictly through `CONTINUITY.json`.**
 
 ## 3-Tier Directory Architecture (`shorts-project/src/<episode>/`)
 
@@ -52,8 +52,8 @@ shorts-project/src/<episode>/
 ### Phase 1: Series Bible, 8–10 Part Expressive Scripts & Per-Part Voice
 1. Author `story.json` via `horror-story` and export `bible/OUTLINE.json` (`horror_story.py export-outline`).
 2. Lock `aspect` (`"9:16"` or `"16:9"`), global `audio_drone_hz`, `renderStyle` (`"psxHorror"` default or `"semiReal"` / `"painterly"` / `"comic"`), and per-Part `transition_out` (`"cut"`, `"blackout:0.25"`, `"fade:0.25"`).
-3. Write `out/<episode>/p01/SCRIPT.md` .. `pNN/SCRIPT.md` (`2.2–2.5 words/s` effective with `[VISUAL 2.6s]` Master Establishing opener + `[VISUAL 1.2–2.0s]` prop interaction breathers, `[NARRATOR | mood=...]`, `[SPEAKER: ... | fx=...]`, `[DEAD SILENCE]` and mini-cliffhangers).
-4. Generate studio-clean 48 kHz `voice.wav` + Whisper forced-aligned `words.json` (`<35ms`) per Part via `scripts/gen_horror_voice.py --tts-engine vieneu --speaker-lock --word-aligner auto --no-vc` (optional GPU acting pack / VC-Pack supported).
+3. Write `out/<episode>/p01/SCRIPT.md` .. `pNN/SCRIPT.md` (`2.55–3.05 words/s` effective / `3.15–3.45 words/s` spoken, `platform_safe_raw` 3-region colloquial prose): Part 1 opens straight at `0.05–0.20s` with a `<= 24 words` Cold Hook (ZERO opening `[VISUAL 2.6s]` dead air!), keeping mid-part `[BEAT 0.18–0.35s]` / `[SILENCE_DROP]` / `[VISUAL 0.8–1.4s]` strictly at suspense pivots and cliffhangers.
+4. Generate studio-clean 48 kHz `voice.wav` + Whisper forced-aligned `words.json` (`<35ms`) per Part via `scripts/gen_horror_voice.py --tts-engine vieneu --speaker-lock --word-aligner auto --strict-hook --no-vc` (optional GPU acting pack / VC-Pack supported).
 
 ### Phase 2: Build & Lock `shared/` (One-Time World & Cast Approval)
 1. Author `shared/locations.ts`, `shared/castBlueprints.ts`, `shared/build.ts`, `shared/worldBase.ts` following `horror-world-lookdev` v5.0 (story-driven `LocationBlueprint`s with BumpMap surfaces, `CharacterBlueprint`s via `createCharacterFromBlueprint`, real `setLocalLights` / `setSpotLight`).
@@ -62,7 +62,7 @@ shorts-project/src/<episode>/
 ### Phase 3: Rolling Per-Part Production (`p01` → `pNN`)
 For each Part `N`:
 1. Run `python3 scripts/validate_continuity.py src/<episode> --part N`.
-2. Draft `parts/pNN/manifest.json` (`beats[]` + `shots[]`), lock frames & captions automatically via `align_manifest.py`, and pass `validate_manifest.py --script ... --words ... --cues ... --strict-cinema --registry LOCATION_REGISTRY.json --update-registry --still-out ...`.
+2. Draft `parts/pNN/manifest.json` (`beats[]` + `shots[]`, with `cold_hook` -> `master` on Part 1), lock frames & captions automatically via `align_manifest.py`, and pass `validate_manifest.py --script ... --words ... --cues ... --strict-cinema --strict-retention --registry LOCATION_REGISTRY.json --update-registry --still-out ...`.
 3. Author `parts/pNN/{story.ts, world.ts, index.tsx}` using `SHOTS = shotsFromManifest(MANIFEST)`, `camMasterEstablish` + `camPovChain` (`Anchored POV-First 2A`), `dialogueMode` (`voiceOver` vs `directSpeech`), and 2-joint `worldTarget` POV hands (`4B`), then register `<Ep_PNN />` in `src/Root.tsx`.
 4. Run the **5-Layer Semantic Pre-Final Still Gate** on `<Ep_PNN />` (`render-stills.mjs --manifest ... --strict-audit` -> `storyboard_proof.html` verifying `mustShow` 3D Raycast sightlines & pixel luma + 100% viewed via `read_file`).
 5. Mix `out/<episode>/pNN/audio/mix.wav` via `scripts/mix_cues.py --cues ... --out ... --strict` locked to `CONTINUITY.json` `audio_bridge` with Openverse CC0 Foley and TRUE `-48 dB` Dead Silence!

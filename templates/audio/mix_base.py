@@ -6,7 +6,7 @@ import subprocess
 import numpy as np
 from scipy import ndimage, signal
 from dsp import (
-    SR, ns, st, dbg, pan, read_wav, write_wav,
+    SR, ns, st, dbg, pan, read_wav, write_wav, rng, smooth_noise,
     integrated, momentary, short_term, lra, true_peak, fades,
 )
 
@@ -20,6 +20,7 @@ def load_sfx_asset(
     loop=False,
     fade_in=0.015,
     fade_out=0.04,
+    organic_drift=False,
 ):
     """Horror Engine v6.0: Load a real recorded CC0 / Neural SFX WAV asset as 48 kHz stereo float64.
 
@@ -93,6 +94,12 @@ def load_sfx_asset(
             pad[:, : x.shape[1]] = x
             x = pad
 
+    if organic_drift and x.shape[1] > SR * 2:
+        r_d = rng(713)
+        n_s = x.shape[1]
+        mod_L = dbg(1.35 * smooth_noise(n_s, r_d, 0.14))
+        mod_R = dbg(1.35 * smooth_noise(n_s, r_d, 0.16))
+        x = np.stack([x[0] * mod_L, x[1] * mod_R])
     if pan_pos is not None:
         x = pan(x.mean(0), float(pan_pos))
     if gain_db != 0.0:
@@ -175,6 +182,46 @@ def load_dead_silences(words_json_path):
             if isinstance(d, dict) and "s" in d and "e" in d and float(d["e"]) > float(d["s"])
         ]
     return []
+
+
+def load_silence_drops(words_json_path):
+    """Load v13.0 `[SILENCE_DROP Xs]` uncanny environmental hush spans `[{'s': float, 'e': float}, ...]`."""
+    with open(words_json_path, encoding="utf-8") as fp:
+        data = json.load(fp)
+    if isinstance(data, dict) and isinstance(data.get("silence_drops"), list):
+        return [
+            {"s": float(d["s"]), "e": float(d["e"])}
+            for d in data["silence_drops"]
+            if isinstance(d, dict) and "s" in d and "e" in d and float(d["e"]) > float(d["s"])
+        ]
+    return []
+
+
+def apply_uncanny_hush(buffers, silence_drops, sr=SR, pre_fade=0.30, post_fade=0.24, floor_db=-42.0):
+    """Smoothly drop ambient beds & motifs into an eerie -42 dB hush across `[SILENCE_DROP Xs]` windows
+    without harsh mechanical clicks or cliché reverse-suck risers."""
+    if not silence_drops or not buffers:
+        return
+    n = max(b.shape[1] for b in buffers)
+    floor_lin = dbg(floor_db) if floor_db > -120.0 else 0.0
+    env = np.ones(n, dtype=np.float64)
+    f_pre = max(1, int(round(pre_fade * sr)))
+    f_post = max(1, int(round(post_fade * sr)))
+    for sd in silence_drops:
+        a = max(0, int(round(float(sd["s"]) * sr)))
+        b = min(n, int(round(float(sd["e"]) * sr)))
+        if b <= a + 8:
+            continue
+        fa = min(f_pre, max(1, (b - a) // 3))
+        fb = min(f_post, max(1, (b - a) // 3))
+        fade_out = floor_lin + (1.0 - floor_lin) * (0.5 * (1.0 + np.cos(np.pi * np.linspace(0.0, 1.0, fa))))
+        fade_in = floor_lin + (1.0 - floor_lin) * (0.5 * (1.0 - np.cos(np.pi * np.linspace(0.0, 1.0, fb))))
+        env[a : a + fa] = np.minimum(env[a : a + fa], fade_out)
+        if b - fb > a + fa:
+            env[a + fa : b - fb] = np.minimum(env[a + fa : b - fb], floor_lin)
+        env[b - fb : b] = np.minimum(env[b - fb : b], fade_in)
+    for buf in buffers:
+        buf *= env[None, : buf.shape[1]]
 
 
 def apply_dead_silences(music, sfx, dead_silences, sr=SR, pre_fade=0.022, post_fade=0.010, floor_db=-48.0):

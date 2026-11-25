@@ -140,6 +140,10 @@ def read_wav_stereo(path: str) -> tuple[np.ndarray, int]:
         raw = w.readframes(n)
     if sw == 2:
         x = np.frombuffer(raw, "<i2").astype(np.float64) / 32768.0
+    elif sw == 3:
+        b = np.frombuffer(raw, np.uint8).reshape(-1, 3).astype(np.int32)
+        v = b[:, 0] | (b[:, 1] << 8) | (b[:, 2] << 16)
+        x = np.where(v >= 1 << 23, v - (1 << 24), v).astype(np.float64) / float(1 << 23)
     elif sw == 4:
         x = np.frombuffer(raw, "<i4").astype(np.float64) / float(1 << 31)
     else:

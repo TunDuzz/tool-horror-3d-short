@@ -1,0 +1,1399 @@
+{
+  "projectId": "may-noi-bo-204",
+  "title": "Đêm Gió Bấc — Máy Nội Bộ 204 (v13.0)",
+  "totalFrames": 2228,
+  "aspect": "9:16",
+  "headerStyle": "minimal",
+  "header": {
+    "title": "02:15 · PHÒNG TRỰC KHU B2",
+    "subtitle": "Máy Nội Bộ 204"
+  },
+  "locations": [
+    {
+      "id": "S01",
+      "archetype": "dormNightDutyRoom",
+      "dimensions": [
+        4.6,
+        5.2,
+        3.4
+      ],
+      "ceilingType": "vaulted",
+      "materials": {
+        "wall": "paintedConcreteTex",
+        "floor": "vintagePatternTileTex",
+        "ceiling": "mottledPlasterTex"
+      },
+      "practicalLights": [
+        "deskLamp",
+        "fluorescent"
+      ],
+      "heroProps": [
+        "switchboardPhone",
+        "severedPhoneCord",
+        "wallPendulumClock",
+        "keyBoard204",
+        "corridorTransomDoor"
+      ],
+      "signatureShadowBeat": "Vaulted 2003 Hanoi winter dormitory night-duty room with green-ochre plaster walls, gooseneck desk lamp, stopped 02:15 pendulum clock, dusty severed phone cord, and swaying brass key 204",
+      "anchors": {
+        "DUTY_DESK": [
+          0.0,
+          0.0,
+          0.55
+        ],
+        "HUY_DESK_SIDE": [
+          -0.38,
+          0.0,
+          0.82
+        ],
+        "HUY_BOLT_STAND": [
+          1.18,
+          0.0,
+          -0.96
+        ],
+        "BA_HANH_DOOR": [
+          1.58,
+          0.0,
+          -1.12
+        ],
+        "CORRIDOR_WALK_MID": [
+          2.92,
+          0.0,
+          -1.35
+        ],
+        "CORRIDOR_WALK_FAR": [
+          3.35,
+          0.0,
+          -3.85
+        ],
+        "CORRIDOR_DOOR": [
+          2.22,
+          0.0,
+          -1.2
+        ],
+        "PENDULUM_CLOCK": [
+          -2.2,
+          1.62,
+          -0.32
+        ],
+        "KEY_BOARD": [
+          -1.38,
+          1.48,
+          -2.42
+        ],
+        "SEVERED_CORD": [
+          0.68,
+          0.12,
+          0.06
+        ]
+      }
+    }
+  ],
+  "castBlueprints": [
+    {
+      "id": "C01",
+      "role": "human",
+      "storyDescription": "Sinh viên 21 tuổi trực đêm mùa đông Hà Nội năm 2003, mặc áo khoác nỉ xám sẫm cổ cao bên ngoài áo len cổ lọ màu kem, tóc đen rẽ ngôi gọn gàng, vẻ mặt mệt mỏi nhưng tỉnh táo",
+      "appearance": {
+        "height": 1.73,
+        "skinCol": "#bca089",
+        "hairStyle": "shortParted",
+        "hairCol": "#16161a",
+        "topCol": "#303640",
+        "innerCol": "#cfc6b4",
+        "bottomCol": "#1c2028",
+        "shoeCol": "#18181c",
+        "garment": "coat",
+        "lowPoly": true,
+        "uncannyRealism": true,
+        "outlineMode": "off"
+      }
+    },
+    {
+      "id": "C02",
+      "role": "human",
+      "storyDescription": "Bà Hạnh quản lý nội trú 58 tuổi người miền Bắc, tóc điểm bạc búi gọn sau gáy, khoác áo dạ nâu trầm mùa gió bấc, ánh mắt nghiêm cẩn dặn dò trước khi khép cửa ra về",
+      "appearance": {
+        "height": 1.6,
+        "skinCol": "#ad917b",
+        "hairStyle": "bun",
+        "hairCol": "#6c6e75",
+        "topCol": "#4a3830",
+        "innerCol": "#8c8276",
+        "bottomCol": "#232226",
+        "shoeCol": "#1b1918",
+        "garment": "coat",
+        "lowPoly": true,
+        "uncannyRealism": true,
+        "outlineMode": "off"
+      }
+    }
+  ],
+  "beats": [
+    {
+      "beatId": "MNB_B01_MASTER_WINTER",
+      "shotId": 1,
+      "a": 0,
+      "b": 309,
+      "peakFrame": 154,
+      "locationId": "S01",
+      "spokenLine": {
+        "speaker": "HUY",
+        "speakerColor": "#e8e4da",
+        "text": "Đêm cuối năm 2003... gió bấc rít dọc hành lang khu nội trú cũ sắp giải tỏa.",
+        "highlight": [
+          "năm 2003",
+          "gió bấc"
+        ]
+      },
+      "lightState": {
+        "preset": "fluorescent",
+        "lampsOn": [
+          "deskLamp",
+          "fluorescent"
+        ]
+      },
+      "castStates": {
+        "C01": {
+          "visible": true,
+          "anchor": "HUY_DESK_SIDE",
+          "pose": "standIdle",
+          "facingYaw": 2.15,
+          "expr": "calm",
+          "speakingAs": "NARRATOR",
+          "dialogueMode": "voiceOver"
+        },
+        "C02": {
+          "visible": true,
+          "anchor": "BA_HANH_DOOR",
+          "pose": "standIdle",
+          "facingYaw": -1.05,
+          "expr": "wary",
+          "ageLines": true,
+          "dialogueMode": "silent"
+        }
+      },
+      "propStates": {
+        "P01_DOOR": {
+          "visible": true,
+          "fromState": "ajar",
+          "state": "ajar"
+        },
+        "P02_CLOCK": {
+          "visible": true,
+          "fromState": "ticking",
+          "state": "ticking"
+        },
+        "P03_PHONE": {
+          "visible": true,
+          "fromState": "idleCut",
+          "state": "idleCut"
+        },
+        "P04_KEY204": {
+          "visible": true,
+          "fromState": "still",
+          "state": "still"
+        }
+      },
+      "camera": {
+        "posAnchor": "DUTY_DESK",
+        "lookAnchor": "BA_HANH_DOOR",
+        "motion": "dolly"
+      },
+      "audioCueIds": [
+        "corridor_draft_creak"
+      ],
+      "cameraIntent": "Master Establishing WS revealing vaulted Hanoi dorm duty room, desk lamp, black rotary phone, Huy, and Bà Hạnh at corridor transom door"
+    },
+    {
+      "beatId": "MNB_B02_POV_DESK_DUTY",
+      "shotId": 2,
+      "a": 309,
+      "b": 448,
+      "peakFrame": 379,
+      "locationId": "S01",
+      "spokenLine": {
+        "speaker": "HUY",
+        "speakerColor": "#e8e4da",
+        "text": "Tôi nhận trực thế ca đêm ở phòng trực tầng một.",
+        "highlight": [
+          "trực thế ca đêm"
+        ]
+      },
+      "lightState": {
+        "preset": "fluorescent",
+        "lampsOn": [
+          "deskLamp",
+          "fluorescent"
+        ]
+      },
+      "castStates": {
+        "C01": {
+          "visible": true,
+          "anchor": "HUY_DESK_SIDE",
+          "pose": "standIdle",
+          "facingYaw": 2.15,
+          "expr": "calm",
+          "speakingAs": "NARRATOR",
+          "dialogueMode": "voiceOver"
+        },
+        "C02": {
+          "visible": true,
+          "anchor": "BA_HANH_DOOR",
+          "pose": "standIdle",
+          "facingYaw": -1.05,
+          "expr": "wary",
+          "ageLines": true,
+          "dialogueMode": "silent"
+        }
+      },
+      "propStates": {
+        "P01_DOOR": {
+          "visible": true,
+          "fromState": "ajar",
+          "state": "ajar"
+        },
+        "P02_CLOCK": {
+          "visible": true,
+          "fromState": "ticking",
+          "state": "ticking"
+        },
+        "P03_PHONE": {
+          "visible": true,
+          "fromState": "idleCut",
+          "state": "idleCut"
+        },
+        "P04_KEY204": {
+          "visible": true,
+          "fromState": "still",
+          "state": "still"
+        }
+      },
+      "camera": {
+        "posAnchor": "HUY_DESK_SIDE",
+        "lookAnchor": "DUTY_DESK",
+        "motion": "pan"
+      },
+      "cameraIntent": "Anchored POV over duty desk showing warm gooseneck lamp, duty binder, black switchboard phone and Huy's resting 2-joint hands"
+    },
+    {
+      "beatId": "MNB_B03_BA_HANH_RULE_CUT",
+      "shotId": 3,
+      "a": 448,
+      "b": 708,
+      "peakFrame": 578,
+      "locationId": "S01",
+      "spokenLine": {
+        "speaker": "BÀ HẠNH",
+        "speakerColor": "#ffdca8",
+        "text": "Gió lùa mạnh lắm, cậu nhớ gài kỹ chốt cửa lại. Máy nội bộ trên bàn cắt dây từ đợt khóa phòng hai lẻ bốn rồi...",
+        "highlight": [
+          "gài kỹ chốt cửa",
+          "cắt dây",
+          "phòng hai lẻ bốn"
+        ]
+      },
+      "lightState": {
+        "preset": "fluorescent",
+        "lampsOn": [
+          "deskLamp",
+          "fluorescent"
+        ]
+      },
+      "castStates": {
+        "C01": {
+          "visible": true,
+          "anchor": "HUY_DESK_SIDE",
+          "pose": "standIdle",
+          "facingYaw": 2.52,
+          "expr": "wary",
+          "dialogueMode": "silent"
+        },
+        "C02": {
+          "visible": true,
+          "anchor": "BA_HANH_DOOR",
+          "pose": "talkCalm",
+          "facingYaw": -1.05,
+          "expr": "uneasy",
+          "ageLines": true,
+          "speakingAs": "BÀ HẠNH",
+          "dialogueMode": "directSpeech"
+        }
+      },
+      "propStates": {
+        "P01_DOOR": {
+          "visible": true,
+          "fromState": "ajar",
+          "state": "ajar"
+        },
+        "P02_CLOCK": {
+          "visible": true,
+          "fromState": "ticking",
+          "state": "ticking"
+        },
+        "P03_PHONE": {
+          "visible": true,
+          "fromState": "idleCut",
+          "state": "idleCut"
+        },
+        "P04_KEY204": {
+          "visible": true,
+          "fromState": "still",
+          "state": "still"
+        }
+      },
+      "camera": {
+        "posAnchor": "HUY_DESK_SIDE",
+        "lookAnchor": "BA_HANH_DOOR",
+        "motion": "dolly"
+      },
+      "cameraIntent": "Same-side OTS past Huy's right shoulder (<=24% edge) onto Bà Hạnh at ajar corridor door warning that the internal phone line was cut when Room 204 was sealed"
+    },
+    {
+      "beatId": "MNB_B04_BA_HANH_DONT_PICK_UP",
+      "shotId": 4,
+      "a": 708,
+      "b": 899,
+      "peakFrame": 804,
+      "locationId": "S01",
+      "spokenLine": {
+        "speaker": "BÀ HẠNH",
+        "speakerColor": "#ffdca8",
+        "text": "khuya nó có chạm mạch kêu cạch một tiếng thì kệ, đừng nhấc nghe.",
+        "highlight": [
+          "đừng nhấc nghe"
+        ]
+      },
+      "lightState": {
+        "preset": "fluorescent",
+        "lampsOn": [
+          "deskLamp",
+          "fluorescent"
+        ]
+      },
+      "castStates": {
+        "C01": {
+          "visible": true,
+          "anchor": "HUY_DESK_SIDE",
+          "pose": "standIdle",
+          "facingYaw": 2.15,
+          "expr": "uneasy",
+          "dialogueMode": "silent"
+        },
+        "C02": {
+          "visible": true,
+          "anchor": "BA_HANH_DOOR",
+          "pose": "talkUrgent",
+          "facingYaw": -1.05,
+          "expr": "dread",
+          "ageLines": true,
+          "speakingAs": "BÀ HẠNH",
+          "dialogueMode": "directSpeech"
+        }
+      },
+      "propStates": {
+        "P01_DOOR": {
+          "visible": true,
+          "fromState": "ajar",
+          "state": "ajar"
+        },
+        "P02_CLOCK": {
+          "visible": true,
+          "fromState": "ticking",
+          "state": "ticking"
+        },
+        "P03_PHONE": {
+          "visible": true,
+          "fromState": "idleCut",
+          "state": "idleCut"
+        },
+        "P04_KEY204": {
+          "visible": true,
+          "fromState": "still",
+          "state": "still"
+        }
+      },
+      "camera": {
+        "posAnchor": "DUTY_DESK",
+        "lookAnchor": "BA_HANH_DOOR",
+        "motion": "dolly"
+      },
+      "cameraIntent": "Anchored POV tightening on Bà Hạnh's serious expression with Vietnamese lip-sync delivering 'đừng nhấc nghe'"
+    },
+    {
+      "beatId": "MNB_B05_STEPS_AND_BOLT",
+      "shotId": 5,
+      "a": 899,
+      "b": 1064,
+      "peakFrame": 989,
+      "locationId": "S01",
+      "spokenLine": {
+        "speaker": "HUY",
+        "speakerColor": "#e8e4da",
+        "text": "Tiếng bước chân bà Hạnh khuất dần ngoài hành lang gạch bông. Tôi kéo chốt sắt...",
+        "highlight": [
+          "kéo chốt sắt"
+        ]
+      },
+      "lightState": {
+        "preset": "fluorescent",
+        "lampsOn": [
+          "deskLamp",
+          "fluorescent"
+        ]
+      },
+      "castStates": {
+        "C01": {
+          "visible": true,
+          "anchor": "HUY_DESK_SIDE",
+          "moveFromAnchor": "HUY_DESK_SIDE",
+          "moveToAnchor": "HUY_BOLT_STAND",
+          "pose": "walk",
+          "poseTo": "reachInteract",
+          "facingYaw": 1.57,
+          "expr": "wary",
+          "speakingAs": "NARRATOR",
+          "dialogueMode": "voiceOver"
+        },
+        "C02": {
+          "visible": true,
+          "anchor": "BA_HANH_DOOR",
+          "moveFromAnchor": "BA_HANH_DOOR",
+          "moveToAnchor": "CORRIDOR_WALK_FAR",
+          "pose": "walk",
+          "facingYaw": 3.1,
+          "expr": "wary",
+          "ageLines": true,
+          "dialogueMode": "silent"
+        }
+      },
+      "propStates": {
+        "P01_DOOR": {
+          "visible": true,
+          "fromState": "ajar",
+          "state": "lockedInside",
+          "triggerWord": "chốt",
+          "triggerFrame": 1037
+        },
+        "P02_CLOCK": {
+          "visible": true,
+          "fromState": "ticking",
+          "state": "ticking"
+        },
+        "P03_PHONE": {
+          "visible": true,
+          "fromState": "idleCut",
+          "state": "idleCut"
+        },
+        "P04_KEY204": {
+          "visible": true,
+          "fromState": "still",
+          "state": "still"
+        }
+      },
+      "camera": {
+        "posAnchor": "HUY_BOLT_STAND",
+        "lookAnchor": "CORRIDOR_DOOR",
+        "motion": "dolly"
+      },
+      "audioCueIds": [
+        "bahanh_receding_steps",
+        "corridor_bolt_lock"
+      ],
+      "cameraIntent": "Embodied POV right 2-joint hand reaches brass slide-bolt on corridor door and locks it shut as Bà Hạnh walks away outside"
+    },
+    {
+      "beatId": "MNB_B06_CLOCK_COUNTING",
+      "shotId": 6,
+      "a": 1064,
+      "b": 1221,
+      "peakFrame": 1142,
+      "locationId": "S01",
+      "spokenLine": {
+        "speaker": "HUY",
+        "speakerColor": "#e8e4da",
+        "text": "rồi ngồi nghe đồng hồ quả lắc đếm nhịp trên tường.",
+        "highlight": [
+          "đồng hồ quả lắc"
+        ]
+      },
+      "lightState": {
+        "preset": "fluorescent",
+        "lampsOn": [
+          "deskLamp",
+          "fluorescent"
+        ]
+      },
+      "castStates": {
+        "C01": {
+          "visible": true,
+          "anchor": "HUY_BOLT_STAND",
+          "moveFromAnchor": "HUY_BOLT_STAND",
+          "moveToAnchor": "HUY_DESK_SIDE",
+          "pose": "walk",
+          "poseTo": "sitChair",
+          "facingYaw": -1.57,
+          "expr": "wary",
+          "speakingAs": "NARRATOR",
+          "dialogueMode": "voiceOver"
+        },
+        "C02": {
+          "visible": false,
+          "anchor": "CORRIDOR_WALK_FAR",
+          "pose": "standIdle",
+          "dialogueMode": "silent"
+        }
+      },
+      "propStates": {
+        "P01_DOOR": {
+          "visible": true,
+          "fromState": "lockedInside",
+          "state": "lockedInside"
+        },
+        "P02_CLOCK": {
+          "visible": true,
+          "fromState": "ticking",
+          "state": "ticking"
+        },
+        "P03_PHONE": {
+          "visible": true,
+          "fromState": "idleCut",
+          "state": "idleCut"
+        },
+        "P04_KEY204": {
+          "visible": true,
+          "fromState": "still",
+          "state": "still"
+        }
+      },
+      "camera": {
+        "posAnchor": "HUY_DESK_SIDE",
+        "lookAnchor": "PENDULUM_CLOCK",
+        "motion": "pan"
+      },
+      "cameraIntent": "Continuous POV turn from locked door back to desk looking at wall pendulum clock swinging steadily on left plaster wall"
+    },
+    {
+      "beatId": "MNB_B07_0215_STOP_AND_RING",
+      "shotId": 7,
+      "a": 1221,
+      "b": 1515,
+      "peakFrame": 1381,
+      "locationId": "S01",
+      "spokenLine": {
+        "speaker": "HUY",
+        "speakerColor": "#dbe6f0",
+        "text": "Đúng 02:15... quả lắc đồng hồ bỗng khựng đứng. Chiếc điện thoại đen trước mặt nảy lên một hồi chuông cụt lủn.",
+        "highlight": [
+          "02:15",
+          "khựng đứng",
+          "một hồi chuông cụt lủn"
+        ]
+      },
+      "lightState": {
+        "preset": "fluorescent",
+        "blendTo": "coldMoon",
+        "blendRange": [
+          1221,
+          1381
+        ],
+        "lampsOn": [
+          "deskLamp",
+          "fluorescent"
+        ]
+      },
+      "castStates": {
+        "C01": {
+          "visible": true,
+          "anchor": "HUY_DESK_SIDE",
+          "pose": "sitChair",
+          "facingYaw": 3.14,
+          "expr": "uneasy",
+          "speakingAs": "NARRATOR",
+          "dialogueMode": "voiceOver"
+        },
+        "C02": {
+          "visible": false,
+          "anchor": "CORRIDOR_WALK_FAR",
+          "pose": "standIdle",
+          "dialogueMode": "silent"
+        }
+      },
+      "propStates": {
+        "P01_DOOR": {
+          "visible": true,
+          "fromState": "lockedInside",
+          "state": "lockedInside"
+        },
+        "P02_CLOCK": {
+          "visible": true,
+          "fromState": "ticking",
+          "state": "stopped0215",
+          "triggerWord": "khựng",
+          "triggerFrame": 1330
+        },
+        "P03_PHONE": {
+          "visible": true,
+          "fromState": "idleCut",
+          "state": "halfRing",
+          "triggerWord": "chuông",
+          "triggerFrame": 1443
+        },
+        "P04_KEY204": {
+          "visible": true,
+          "fromState": "still",
+          "state": "still"
+        }
+      },
+      "camera": {
+        "posAnchor": "HUY_DESK_SIDE",
+        "lookAnchor": "DUTY_DESK",
+        "motion": "pan"
+      },
+      "audioCueIds": [
+        "corridor_wood_settle",
+        "abrupt_half_ring"
+      ],
+      "cameraIntent": "POV sees brass pendulum freeze dead at 02:15 then pans sharply onto black bakelite switchboard phone jolting with one short cut-off ring"
+    },
+    {
+      "beatId": "MNB_B08_SILENCE_DROP_WHISPER",
+      "shotId": 8,
+      "a": 1515,
+      "b": 1681,
+      "peakFrame": 1610,
+      "locationId": "S01",
+      "spokenLine": {
+        "speaker": "TIẾNG TRONG MÁY",
+        "speakerColor": "#b8d8e8",
+        "text": "Phòng hai lẻ bốn... sao khóa ngoài rồi anh ơi...",
+        "highlight": [
+          "Phòng hai lẻ bốn",
+          "khóa ngoài rồi"
+        ]
+      },
+      "lightState": {
+        "preset": "coldMoon",
+        "lampsOn": [
+          "deskLamp"
+        ]
+      },
+      "castStates": {
+        "C01": {
+          "visible": true,
+          "anchor": "HUY_DESK_SIDE",
+          "pose": "holdPhone",
+          "facingYaw": 3.14,
+          "expr": "dread",
+          "dialogueMode": "silent"
+        },
+        "C02": {
+          "visible": false,
+          "anchor": "CORRIDOR_WALK_FAR",
+          "pose": "standIdle",
+          "dialogueMode": "silent"
+        }
+      },
+      "propStates": {
+        "P01_DOOR": {
+          "visible": true,
+          "fromState": "lockedInside",
+          "state": "lockedInside"
+        },
+        "P02_CLOCK": {
+          "visible": true,
+          "fromState": "stopped0215",
+          "state": "stopped0215"
+        },
+        "P03_PHONE": {
+          "visible": true,
+          "fromState": "halfRing",
+          "state": "liftedWhisper"
+        },
+        "P04_KEY204": {
+          "visible": true,
+          "fromState": "still",
+          "state": "still"
+        }
+      },
+      "camera": {
+        "posAnchor": "HUY_DESK_SIDE",
+        "lookAnchor": "DUTY_DESK",
+        "motion": "dolly"
+      },
+      "audioCueIds": [
+        "receiver_lift_breath"
+      ],
+      "cameraIntent": "Across [SILENCE_DROP 1.30s], Huy's 2-joint POV hand lifts black handset toward right ear over cradleless switchboardPhone as faint female voice whispers"
+    },
+    {
+      "beatId": "MNB_B09_SEVERED_DUSTY_CORD",
+      "shotId": 9,
+      "a": 1681,
+      "b": 1929,
+      "peakFrame": 1805,
+      "locationId": "S01",
+      "spokenLine": {
+        "speaker": "HUY",
+        "speakerColor": "#cfe2f5",
+        "text": "Tay tôi lạnh buốt áp ống nghe... Dưới chân tường, sợi dây đồng đã bị cắt rời phủ dày bụi trắng...",
+        "highlight": [
+          "cắt rời",
+          "phủ dày bụi trắng"
+        ]
+      },
+      "lightState": {
+        "preset": "coldMoon",
+        "lampsOn": [
+          "deskLamp"
+        ]
+      },
+      "castStates": {
+        "C01": {
+          "visible": true,
+          "anchor": "HUY_DESK_SIDE",
+          "pose": "holdPhone",
+          "facingYaw": 3.14,
+          "expr": "terrified",
+          "speakingAs": "NARRATOR",
+          "dialogueMode": "voiceOver"
+        },
+        "C02": {
+          "visible": false,
+          "anchor": "CORRIDOR_WALK_FAR",
+          "pose": "standIdle",
+          "dialogueMode": "silent"
+        }
+      },
+      "propStates": {
+        "P01_DOOR": {
+          "visible": true,
+          "fromState": "lockedInside",
+          "state": "lockedInside"
+        },
+        "P02_CLOCK": {
+          "visible": true,
+          "fromState": "stopped0215",
+          "state": "stopped0215"
+        },
+        "P03_PHONE": {
+          "visible": true,
+          "fromState": "liftedWhisper",
+          "state": "liftedWhisper"
+        },
+        "P04_KEY204": {
+          "visible": true,
+          "fromState": "still",
+          "state": "still"
+        }
+      },
+      "camera": {
+        "posAnchor": "HUY_DESK_SIDE",
+        "lookAnchor": "SEVERED_CORD",
+        "motion": "pan"
+      },
+      "audioCueIds": [
+        "severed_cord_undertone"
+      ],
+      "cameraIntent": "Slow chilling POV tilt down to open floor beside desk revealing severed copper telephone cord coated in thick white dust next to 'ĐÃ CẮT DÂY' terminal box"
+    },
+    {
+      "beatId": "MNB_B10_SWAYING_KEY_204",
+      "shotId": 10,
+      "a": 1929,
+      "b": 2228,
+      "peakFrame": 2090,
+      "locationId": "S01",
+      "spokenLine": {
+        "speaker": "HUY",
+        "speakerColor": "#cfe2f5",
+        "text": "còn trên bảng gỗ trước mặt, chiếc chìa khóa số hai lẻ bốn... vẫn đang đung đưa nhè nhẹ.",
+        "highlight": [
+          "chìa khóa số hai lẻ bốn",
+          "đung đưa nhè nhẹ"
+        ]
+      },
+      "lightState": {
+        "preset": "coldMoon",
+        "lampsOn": [
+          "deskLamp"
+        ]
+      },
+      "castStates": {
+        "C01": {
+          "visible": true,
+          "anchor": "HUY_DESK_SIDE",
+          "pose": "peerForward",
+          "facingYaw": 3.14,
+          "expr": "terrified",
+          "speakingAs": "NARRATOR",
+          "dialogueMode": "voiceOver"
+        },
+        "C02": {
+          "visible": false,
+          "anchor": "CORRIDOR_WALK_FAR",
+          "pose": "standIdle",
+          "dialogueMode": "silent"
+        }
+      },
+      "propStates": {
+        "P01_DOOR": {
+          "visible": true,
+          "fromState": "lockedInside",
+          "state": "lockedInside"
+        },
+        "P02_CLOCK": {
+          "visible": true,
+          "fromState": "stopped0215",
+          "state": "stopped0215"
+        },
+        "P03_PHONE": {
+          "visible": true,
+          "fromState": "liftedWhisper",
+          "state": "liftedWhisper"
+        },
+        "P04_KEY204": {
+          "visible": true,
+          "fromState": "still",
+          "state": "swaying"
+        }
+      },
+      "camera": {
+        "posAnchor": "HUY_DESK_SIDE",
+        "lookAnchor": "KEY_BOARD",
+        "motion": "dolly"
+      },
+      "cameraIntent": "Slow POV tilt up onto wooden room-key board where red-and-brass tag 204 sways gently in sealed windless room (0 Jumpscare)"
+    }
+  ],
+  "shots": [
+    {
+      "id": 1,
+      "beatId": "MNB_B01_MASTER_WINTER",
+      "a": 0,
+      "b": 309,
+      "scale": "WS",
+      "light": "fluorescent",
+      "cameraMode": "master",
+      "axisSide": "right",
+      "visualBeatIndex": 0,
+      "note": "Master Establishing WS revealing full vaulted 2003 Hanoi duty room, gooseneck desk lamp, black rotary phone, Huy, and Bà Hạnh at corridor door",
+      "stillKeyframes": [
+        {
+          "tag": "s01_master_phòng_trực_mùa_đông",
+          "onPhrase": "gió bấc rít dọc hành lang",
+          "mustShow": [
+            "switchboardPhone",
+            "C02:head"
+          ],
+          "expectedVisual": "Toàn cảnh phòng trực đêm khu nội trú cũ trần vòm, thấy rõ bàn trực, điện thoại đen, Huy và Bà Hạnh đứng cạnh cửa kính hành lang",
+          "frame": 178,
+          "spokenAtFrame": "[HUY] gió bấc rít dọc hành lang khu"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "beatId": "MNB_B02_POV_DESK_DUTY",
+      "a": 309,
+      "b": 403,
+      "scale": "POV_DOWN",
+      "light": "fluorescent",
+      "cameraMode": "pov_turn",
+      "axisSide": "pov_center",
+      "startPhrase": "Tôi nhận trực thế",
+      "povMode": "leanDesk",
+      "note": "Anchored POV from Huy's desk framing warm green gooseneck deskLamp, logbook binder, and black switchboardPhone",
+      "stillKeyframes": [
+        {
+          "tag": "s02_pov_bàn_trực_đèn_điện_thoại",
+          "onPhrase": "phòng trực tầng một",
+          "mustShow": [
+            "deskLamp",
+            "switchboardPhone"
+          ],
+          "expectedVisual": "POV Huy tì hai tay lên bàn trực: thấy rõ cả cây đèn bàn chụp xanh ấm áp lẫn chiếc điện thoại quay số đen bên phải",
+          "frame": 370,
+          "spokenAtFrame": "[HUY] phòng trực tầng một."
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "beatId": "MNB_B03_BA_HANH_RULE_CUT",
+      "a": 403,
+      "b": 708,
+      "scale": "OTS",
+      "light": "fluorescent",
+      "cameraMode": "ots_same_side",
+      "axisSide": "right",
+      "visualBeatIndex": 1,
+      "note": "Mathematical camOtsFrame right shoulder (C01 <= 28% edge) onto Bà Hạnh warning that internal phone line was cut when Room 204 was locked",
+      "stillKeyframes": [
+        {
+          "tag": "s03_ots_bà_hạnh_dặn_cắt_dây",
+          "onPhrase": "cắt dây từ đợt khóa phòng",
+          "mustShow": [
+            "C02:head",
+            "corridorDoor"
+          ],
+          "maxScreenBlockPct": {
+            "C01": 0.28
+          },
+          "expectedVisual": "Góc OTS gọn qua vai phải của Huy (vai Huy <=24% rìa trái), thấy rõ Bà Hạnh đang nhép môi dặn chuyện máy nội bộ đã cắt dây bên cửa hành lang",
+          "frame": 605,
+          "spokenAtFrame": "[BÀ HẠNH] Máy nội bộ trên bàn cắt dây"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "beatId": "MNB_B04_BA_HANH_DONT_PICK_UP",
+      "a": 708,
+      "b": 845,
+      "scale": "POV",
+      "light": "fluorescent",
+      "cameraMode": "pov",
+      "axisSide": "pov_center",
+      "startPhrase": "khuya nó có chạm mạch",
+      "povMode": "idle",
+      "note": "Anchored POV pushing closer onto Bà Hạnh's serious expression delivering 'đừng nhấc nghe'",
+      "stillKeyframes": [
+        {
+          "tag": "s04_pov_đừng_nhấc_nghe",
+          "onPhrase": "kệ đừng nhấc nghe",
+          "mustShow": [
+            "C02:head",
+            "corridorDoor"
+          ],
+          "expectedVisual": "Cận trung POV Bà Hạnh hạ giọng nghiêm nghị nói rõ chữ 'đừng nhấc nghe' cạnh cửa gỗ hành lang",
+          "frame": 795,
+          "spokenAtFrame": "[BÀ HẠNH] một tiếng thì kệ,"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "beatId": "MNB_B05_STEPS_AND_BOLT",
+      "a": 845,
+      "b": 1064,
+      "scale": "POV_PROP",
+      "light": "fluorescent",
+      "cameraMode": "pov_interact",
+      "axisSide": "pov_center",
+      "visualBeatIndex": 2,
+      "povMode": "reachBolt",
+      "actionTriggerPhrase": "kéo chốt sắt",
+      "note": "Embodied 2-joint POV right hand reaches worldTarget on corridorDoor and slides brass bolt shut",
+      "stillKeyframes": [
+        {
+          "tag": "s05_pov_gài_chốt_sắt",
+          "onPhrase": "kéo chốt sắt",
+          "offsetFrames": 8,
+          "mustShow": [
+            "corridorBolt"
+          ],
+          "expectedVisual": "Tay phải 2 khớp của Huy vươn tới nắm thanh chốt đồng và đẩy khóa chặt cánh cửa gỗ hành lang",
+          "frame": 1038,
+          "spokenAtFrame": "[HUY] Tôi kéo chốt sắt..."
+        }
+      ],
+      "actionTriggerFrame": 1026
+    },
+    {
+      "id": 6,
+      "beatId": "MNB_B06_CLOCK_COUNTING",
+      "a": 1064,
+      "b": 1170,
+      "scale": "POV_TURN",
+      "light": "fluorescent",
+      "cameraMode": "pov_walk",
+      "axisSide": "pov_center",
+      "startPhrase": "rồi ngồi nghe đồng hồ",
+      "povMode": "idle",
+      "note": "Continuous POV turn from locked door onto wallPendulumClock swinging steadily on left plaster wall",
+      "stillKeyframes": [
+        {
+          "tag": "s06_pov_đồng_hồ_quả_lắc",
+          "onPhrase": "đồng hồ quả lắc đếm nhịp",
+          "mustShow": [
+            "wallPendulumClock"
+          ],
+          "expectedVisual": "POV nhìn sang mảng tường vôi bên trái thấy rõ chiếc đồng hồ quả lắc gỗ đang đung đưa đều đặn gần mốc 02:15",
+          "frame": 1099,
+          "spokenAtFrame": "[HUY] rồi ngồi nghe đồng hồ quả lắc"
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "beatId": "MNB_B07_0215_STOP_AND_RING",
+      "a": 1170,
+      "b": 1479,
+      "scale": "POV_TURN",
+      "light": "fluorescent",
+      "cameraMode": "pov_turn",
+      "axisSide": "pov_center",
+      "visualBeatIndex": 3,
+      "actionTriggerPhrase": "bỗng khựng đứng",
+      "povMode": "leanDesk",
+      "note": "Phase A watches wallPendulumClock freeze dead at 02:15 -> Phase B whips gaze onto black switchboardPhone jolting with 1 short ring",
+      "stillKeyframes": [
+        {
+          "tag": "s07a_quả_lắc_khựng_đứng",
+          "onPhrase": "quả lắc đồng hồ bỗng khựng",
+          "mustShow": [
+            "wallPendulumClock"
+          ],
+          "expectedVisual": "Đúng chữ 'bỗng khựng đứng': Quả lắc bằng đồng bên dưới mặt đồng hồ 02:15 dừng chết đứng",
+          "frame": 1286,
+          "spokenAtFrame": "[HUY] quả lắc đồng hồ bỗng khựng đứng."
+        },
+        {
+          "tag": "s07b_điện_thoại_nảy_chuông",
+          "onPhrase": "nảy lên một hồi chuông",
+          "mustShow": [
+            "switchboardPhone"
+          ],
+          "expectedVisual": "Huy quay phắt mắt xuống chiếc điện thoại quay số đen trên bàn đang rung nhẹ hai quả chuông đồng",
+          "frame": 1416,
+          "spokenAtFrame": "[HUY] Chiếc điện thoại đen trước mặt nảy"
+        }
+      ],
+      "actionTriggerFrame": 1316
+    },
+    {
+      "id": 8,
+      "beatId": "MNB_B08_SILENCE_DROP_WHISPER",
+      "a": 1479,
+      "b": 1681,
+      "scale": "POV_PROP",
+      "light": "coldMoon",
+      "cameraMode": "pov_interact",
+      "axisSide": "pov_center",
+      "startPhrase": "Phòng hai lẻ bốn",
+      "leadFrames": 36,
+      "povMode": "holdHandset",
+      "note": "Across [SILENCE_DROP 1.30s], Huy's right POV hand lifts black bakelite handset toward right ear while looking at cradleless switchboardPhone",
+      "stillKeyframes": [
+        {
+          "tag": "s08_nhấc_ống_nghe_thì_thầm",
+          "onPhrase": "sao khóa ngoài rồi",
+          "mustShow": [
+            "switchboardPhone"
+          ],
+          "expectedVisual": "Giữa ánh sáng lạnh sau khoảng lặng tâm lý: chiếc điện thoại trên bàn đã nhấc trống gác máy, tay phải POV cầm ống nghe đưa lên tai nghe tiếng thì thầm",
+          "frame": 1584,
+          "spokenAtFrame": "[TIẾNG TRONG MÁY] sao khóa ngoài rồi anh ơi..."
+        }
+      ]
+    },
+    {
+      "id": 9,
+      "beatId": "MNB_B09_SEVERED_DUSTY_CORD",
+      "a": 1681,
+      "b": 1929,
+      "scale": "POV_CU",
+      "light": "coldMoon",
+      "cameraMode": "pov_turn",
+      "axisSide": "pov_center",
+      "startPhrase": "Tay tôi lạnh buốt",
+      "povMode": "none",
+      "note": "Slow chilling POV tilt down to open floor beside desk revealing severed copper telephone cord coated in white dust",
+      "stillKeyframes": [
+        {
+          "tag": "s09_dây_điện_thoại_cắt_đứt_phủ_bụi",
+          "onPhrase": "sợi dây đồng đã bị cắt rời",
+          "mustShow": [
+            "severedPhoneCord"
+          ],
+          "expectedVisual": "Cận cảnh sắc nét sàn gạch bông cạnh chân bàn: sợi dây điện thoại đen bị cắt đứt lìa, lõi đồng xòe ra trên lớp bụi trắng cạnh hộp 'MÁY NỘI BỘ 204 — ĐÃ CẮT DÂY'",
+          "frame": 1812,
+          "spokenAtFrame": "[HUY] Dưới chân tường, sợi dây đồng đã"
+        }
+      ]
+    },
+    {
+      "id": 10,
+      "beatId": "MNB_B10_SWAYING_KEY_204",
+      "a": 1929,
+      "b": 2228,
+      "scale": "POV_CU",
+      "light": "coldMoon",
+      "cameraMode": "pov_turn",
+      "axisSide": "pov_center",
+      "startPhrase": "còn trên bảng gỗ",
+      "povMode": "none",
+      "note": "Slow POV tilt up onto wooden key board where red-and-brass tag 204 sways gently across final [VISUAL 2.60s] (0 Jumpscare)",
+      "stillKeyframes": [
+        {
+          "tag": "s10_chìa_khóa_204_đung_đưa",
+          "onPhrase": "chìa khóa số hai lẻ bốn",
+          "mustShow": [
+            "keyTag204"
+          ],
+          "expectedVisual": "Cận cảnh bảng khóa khu nội trú B2: bên cạnh các thẻ 201, 202 đứng yên, chiếc thẻ đỏ 'PHÒNG 204 NIÊM PHONG' và chìa khóa đồng đang đung đưa nhè nhẹ",
+          "frame": 2004,
+          "spokenAtFrame": "[HUY] chiếc chìa khóa số hai lẻ bốn..."
+        }
+      ]
+    }
+  ],
+  "captionChunks": [
+    {
+      "a": 80,
+      "b": 167,
+      "text": "Đêm cuối năm 2003...",
+      "speaker": "HUY",
+      "speakerColor": "#e8e4da",
+      "highlight": [
+        "năm 2003"
+      ]
+    },
+    {
+      "a": 174,
+      "b": 237,
+      "text": "gió bấc rít dọc hành lang khu",
+      "speaker": "HUY",
+      "speakerColor": "#e8e4da",
+      "highlight": [
+        "gió bấc"
+      ]
+    },
+    {
+      "a": 237,
+      "b": 297,
+      "text": "nội trú cũ sắp giải tỏa.",
+      "speaker": "HUY",
+      "speakerColor": "#e8e4da"
+    },
+    {
+      "a": 309,
+      "b": 366,
+      "text": "Tôi nhận trực thế ca đêm ở",
+      "speaker": "HUY",
+      "speakerColor": "#e8e4da",
+      "highlight": [
+        "trực thế ca đêm"
+      ]
+    },
+    {
+      "a": 366,
+      "b": 406,
+      "text": "phòng trực tầng một.",
+      "speaker": "HUY",
+      "speakerColor": "#e8e4da"
+    },
+    {
+      "a": 448,
+      "b": 485,
+      "text": "Gió lùa mạnh lắm,",
+      "speaker": "BÀ HẠNH",
+      "speakerColor": "#ffdca8"
+    },
+    {
+      "a": 493,
+      "b": 550,
+      "text": "cậu nhớ gài kỹ chốt cửa lại.",
+      "speaker": "BÀ HẠNH",
+      "speakerColor": "#ffdca8",
+      "highlight": [
+        "gài kỹ chốt cửa"
+      ]
+    },
+    {
+      "a": 563,
+      "b": 621,
+      "text": "Máy nội bộ trên bàn cắt dây",
+      "speaker": "BÀ HẠNH",
+      "speakerColor": "#ffdca8",
+      "highlight": [
+        "cắt dây"
+      ]
+    },
+    {
+      "a": 621,
+      "b": 699,
+      "text": "từ đợt khóa phòng hai lẻ bốn rồi...",
+      "speaker": "BÀ HẠNH",
+      "speakerColor": "#ffdca8",
+      "highlight": [
+        "phòng hai lẻ bốn"
+      ]
+    },
+    {
+      "a": 708,
+      "b": 766,
+      "text": "khuya nó có chạm mạch kêu cạch",
+      "speaker": "BÀ HẠNH",
+      "speakerColor": "#ffdca8"
+    },
+    {
+      "a": 766,
+      "b": 805,
+      "text": "một tiếng thì kệ,",
+      "speaker": "BÀ HẠNH",
+      "speakerColor": "#ffdca8"
+    },
+    {
+      "a": 810,
+      "b": 842,
+      "text": "đừng nhấc nghe.",
+      "speaker": "BÀ HẠNH",
+      "speakerColor": "#ffdca8",
+      "highlight": [
+        "đừng nhấc nghe"
+      ]
+    },
+    {
+      "a": 899,
+      "b": 963,
+      "text": "Tiếng bước chân bà Hạnh khuất dần",
+      "speaker": "HUY",
+      "speakerColor": "#e8e4da"
+    },
+    {
+      "a": 963,
+      "b": 1010,
+      "text": "ngoài hành lang gạch bông.",
+      "speaker": "HUY",
+      "speakerColor": "#e8e4da"
+    },
+    {
+      "a": 1020,
+      "b": 1064,
+      "text": "Tôi kéo chốt sắt...",
+      "speaker": "HUY",
+      "speakerColor": "#e8e4da",
+      "highlight": [
+        "kéo chốt sắt"
+      ]
+    },
+    {
+      "a": 1064,
+      "b": 1128,
+      "text": "rồi ngồi nghe đồng hồ quả lắc",
+      "speaker": "HUY",
+      "speakerColor": "#e8e4da",
+      "highlight": [
+        "đồng hồ quả lắc"
+      ]
+    },
+    {
+      "a": 1128,
+      "b": 1170,
+      "text": "đếm nhịp trên tường.",
+      "speaker": "HUY",
+      "speakerColor": "#e8e4da"
+    },
+    {
+      "a": 1221,
+      "b": 1282,
+      "text": "Đúng 02:15...",
+      "speaker": "HUY",
+      "speakerColor": "#dbe6f0",
+      "highlight": [
+        "02:15"
+      ]
+    },
+    {
+      "a": 1282,
+      "b": 1350,
+      "text": "quả lắc đồng hồ bỗng khựng đứng.",
+      "speaker": "HUY",
+      "speakerColor": "#dbe6f0",
+      "highlight": [
+        "khựng đứng"
+      ]
+    },
+    {
+      "a": 1363,
+      "b": 1424,
+      "text": "Chiếc điện thoại đen trước mặt nảy",
+      "speaker": "HUY",
+      "speakerColor": "#dbe6f0"
+    },
+    {
+      "a": 1424,
+      "b": 1478,
+      "text": "lên một hồi chuông cụt lủn.",
+      "speaker": "HUY",
+      "speakerColor": "#dbe6f0",
+      "highlight": [
+        "một hồi chuông cụt lủn"
+      ]
+    },
+    {
+      "a": 1515,
+      "b": 1579,
+      "text": "Phòng hai lẻ bốn...",
+      "speaker": "TIẾNG TRONG MÁY",
+      "speakerColor": "#b8d8e8",
+      "highlight": [
+        "Phòng hai lẻ bốn"
+      ]
+    },
+    {
+      "a": 1579,
+      "b": 1670,
+      "text": "sao khóa ngoài rồi anh ơi...",
+      "speaker": "TIẾNG TRONG MÁY",
+      "speakerColor": "#b8d8e8",
+      "highlight": [
+        "khóa ngoài rồi"
+      ]
+    },
+    {
+      "a": 1681,
+      "b": 1756,
+      "text": "Tay tôi lạnh buốt áp ống nghe...",
+      "speaker": "HUY",
+      "speakerColor": "#cfe2f5"
+    },
+    {
+      "a": 1766,
+      "b": 1841,
+      "text": "Dưới chân tường, sợi dây đồng đã",
+      "speaker": "HUY",
+      "speakerColor": "#cfe2f5"
+    },
+    {
+      "a": 1841,
+      "b": 1920,
+      "text": "bị cắt rời phủ dày bụi trắng...",
+      "speaker": "HUY",
+      "speakerColor": "#cfe2f5",
+      "highlight": [
+        "cắt rời",
+        "phủ dày bụi trắng"
+      ]
+    },
+    {
+      "a": 1929,
+      "b": 1985,
+      "text": "còn trên bảng gỗ trước mặt,",
+      "speaker": "HUY",
+      "speakerColor": "#cfe2f5"
+    },
+    {
+      "a": 1993,
+      "b": 2054,
+      "text": "chiếc chìa khóa số hai lẻ bốn...",
+      "speaker": "HUY",
+      "speakerColor": "#cfe2f5",
+      "highlight": [
+        "chìa khóa số hai lẻ bốn"
+      ]
+    },
+    {
+      "a": 2054,
+      "b": 2128,
+      "text": "vẫn đang đung đưa nhè nhẹ.",
+      "speaker": "HUY",
+      "speakerColor": "#cfe2f5",
+      "highlight": [
+        "đung đưa nhè nhẹ"
+      ]
+    }
+  ]
+}

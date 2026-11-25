@@ -63,7 +63,7 @@ FPS = float(_CONST.get("fps", 30))
 
 
 def norm_text(s: str) -> str:
-    return re.sub(r"[^\w\s]", "", s.lower(), flags=re.UNICODE).strip()
+    return re.sub(r"\s+", " ", re.sub(r"[^\w\s]", "", s.lower(), flags=re.UNICODE)).strip()
 
 
 def loc_feature_set(loc: dict) -> set:
@@ -156,7 +156,8 @@ def main():
     ap.add_argument("--registry", help="Optional LOCATION_REGISTRY.json for cross-video anti-repetition check")
     ap.add_argument("--update-registry", action="store_true", help="Register validated locations into --registry on pass")
     ap.add_argument("--still-out", help="Output path for generated still_manifest.json")
-    ap.add_argument("--strict-cinema", action="store_true", help="Enforce v11.0 Anchored POV-First cinema gates (`shots[]`, Master Establishing, 180-axis)")
+    ap.add_argument("--strict-cinema", action="store_true", help="Enforce v11.0+ Anchored POV-First cinema gates (`shots[]`, Cold-Hook/Master Establishing, 180-axis)")
+    ap.add_argument("--strict-retention", action="store_true", help="Enforce v14.0 1-5s retention rule: first spoken word in words.json must start <= 0.45s (zero opening dead air)")
     args = ap.parse_args()
 
     with open(args.manifest, encoding="utf-8") as fp:
@@ -325,7 +326,8 @@ def main():
     script_norm = None
     if args.script:
         with open(args.script, encoding="utf-8") as fp:
-            script_norm = norm_text(fp.read())
+            raw_scr = re.sub(r"\[[^\[\]]*\]", " ", fp.read())
+            script_norm = norm_text(raw_scr)
         if not script_norm:
             errors.append(f"SCRIPT.md '{args.script}' is empty")
 
@@ -582,7 +584,7 @@ def main():
         shot_still_entries = []
         POV_MODES_SET = {"pov", "pov_turn", "pov_walk", "pov_interact"}
 
-        for sh in sorted_shots:
+        for idx_sh, sh in enumerate(sorted_shots):
             sid = sh.get("id", "?")
             sa, sb = sh.get("a"), sh.get("b")
             if not isinstance(sa, int) or not isinstance(sb, int) or sa >= sb:
@@ -606,13 +608,24 @@ def main():
             cov_beat = next((b for b in sorted_beats if int(b["a"]) <= mid_f < int(b["b"])), sorted_beats[-1] if sorted_beats else {})
             s_loc = cov_beat.get("locationId", "S01")
 
-            # Gate 1: Master Establishing Shot on first visit to each location
+            # Gate 1: Master Establishing Shot on first visit to each location (or v14.0 `cold_hook` <= 180f immediately followed by `master`!)
             if s_loc not in seen_loc_first_shot:
                 seen_loc_first_shot.add(s_loc)
                 min_m = min(MASTER_MIN_FRAMES, max(24, (total_frames or 180) // 4))
-                if cmode != "master" or (sb - sa) < min_m:
+                if cmode == "cold_hook":
+                    next_sh = sorted_shots[idx_sh + 1] if idx_sh + 1 < len(sorted_shots) else None
+                    next_dur = (int(next_sh.get("b", 0)) - int(next_sh.get("a", 0))) if isinstance(next_sh, dict) else 0
+                    if (sb - sa) > 180:
+                        errors.append(
+                            f"COLD_HOOK_DURATION_ERROR: Shot #{sid} cameraMode='cold_hook' is {sb - sa}f (> 180f / 6.0s max); keep the opening hook punchy (1-5s) then pull into 'master'!"
+                        )
+                    if not isinstance(next_sh, dict) or next_sh.get("cameraMode") != "master" or next_dur < min_m:
+                        errors.append(
+                            f"MASTER_ESTABLISHING_ERROR: Location '{s_loc}' opens with cameraMode='cold_hook' (Shot #{sid}) so the immediately following Shot must be cameraMode='master' (>= {min_m}f) to establish room geography!"
+                        )
+                elif cmode != "master" or (sb - sa) < min_m:
                     errors.append(
-                        f"MASTER_ESTABLISHING_ERROR: First shot (#{sid}) in location '{s_loc}' must be cameraMode='master' (>= {min_m}f) to establish room geography, got cameraMode={cmode!r} ({sb - sa}f)"
+                        f"MASTER_ESTABLISHING_ERROR: First shot (#{sid}) in location '{s_loc}' must be cameraMode='master' (>= {min_m}f) or 'cold_hook' followed by 'master', got cameraMode={cmode!r} ({sb - sa}f)"
                     )
 
             # Gate 2: Strict 180-Degree Axis Rule
@@ -723,6 +736,13 @@ def main():
         errors.append(f"Timeline gap at end of manifest: beats end at {cursor} < totalFrames {total_frames}")
     elif total_frames and cursor > total_frames:
         errors.append(f"Timeline overflow: beats end at {cursor} > totalFrames {total_frames}")
+
+    if getattr(args, "strict_retention", False) and norm_words:
+        max_fw = float((_CONST.get("retentionAndVoiceStyle") or {}).get("maxFirstWordStartSec", 0.45))
+        if norm_words[0][1] > max_fw:
+            errors.append(
+                f"RETENTION_DEAD_AIR_ERROR: First spoken word {norm_words[0][0]!r} starts at {norm_words[0][1]:.2f}s (> {max_fw:.2f}s). Remove opening [VISUAL Xs] dead air so the 1-5s Cold Hook hits immediately!"
+            )
 
     if errors:
         print("MANIFEST VALIDATION FAILED:")

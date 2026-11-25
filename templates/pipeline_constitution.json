@@ -1,15 +1,74 @@
 {
-  "version": "12.0.0",
+  "version": "14.0.0",
   "fps": 30,
   "speech": {
-    "wordsPerSecondMin": 2.0,
-    "wordsPerSecondTarget": 2.35,
-    "wordsPerSecondMax": 2.75,
-    "minVisualBreathingRatio": 0.20,
+    "wordsPerSecondMin": 2.05,
+    "wordsPerSecondTarget": 2.65,
+    "wordsPerSecondMax": 3.20,
+    "spokenWordsPerSecondMin": 2.55,
+    "spokenWordsPerSecondTarget": 3.25,
+    "spokenWordsPerSecondMax": 3.65,
+    "minVisualBreathingRatio": 0.14,
     "directives": [
       "[VISUAL Xs]",
       "[PAUSE Xs]",
+      "[BEAT Xs]",
+      "[SILENCE_DROP Xs]",
       "[DEAD SILENCE Xs]"
+    ],
+    "inlineClauseTags": [
+      "PACE",
+      "PITCH",
+      "PROX"
+    ]
+  },
+  "retentionAndVoiceStyle": {
+    "maxFirstWordStartSec": 0.45,
+    "maxOpeningHookSec": 5.0,
+    "maxOpeningHookWords": 24,
+    "viralShortMaxBeatSec": 15.0,
+    "pacingProfiles": [
+      "viral_short",
+      "deep_story"
+    ],
+    "hookArchetypes": [
+      "paradox_prop",
+      "blunt_taboo_dialogue",
+      "flash_forward_crisis",
+      "raw_confession"
+    ],
+    "gritLevels": [
+      "platform_safe_raw",
+      "clean_folklore"
+    ],
+    "dialectRegions": [
+      "north",
+      "central",
+      "south"
+    ]
+  },
+  "soundscape": {
+    "defaultMaxJumpscaresPerPart": 0,
+    "hardMaxJumpscaresShort": 1,
+    "hardMaxJumpscaresSeries": 2,
+    "maxBeds": 2,
+    "requireAcousticMotif": true,
+    "forbidAutoReverseSuckBeforeSilence": true,
+    "targetLufs": -16.0,
+    "targetLraMin": 6.5,
+    "validSpaceZones": [
+      "close_ear",
+      "room",
+      "adjacent_muffled",
+      "exterior_occluded",
+      "otherworld"
+    ],
+    "validMotifModes": [
+      "steady_then_stop",
+      "accelerate",
+      "decelerate",
+      "approach",
+      "stutter_break"
     ]
   },
   "partDurationSec": {
@@ -36,6 +95,7 @@
     "maxPerspectiveSwitchesPerMinute": 4,
     "maxShotSyncDriftFrames": 4,
     "validCameraModes": [
+      "cold_hook",
       "master",
       "pov",
       "pov_turn",

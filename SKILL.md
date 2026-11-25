@@ -1,23 +1,23 @@
 ---
 name: horror-3d-short
-description: Use when creating a horror story video — standalone 150-360s (2.5-6 min) short (9:16 default), 8-16 min (480-960s) multi-part series (16:9 default), or 45-105s micro chapter — in Horror Engine v11.0 (Single-Source pipeline_constitution.json, Anchored POV-First cinema grammar 2A with Master Establishing + strict 180-axis + Zero Black Void lights, Whisper Forced Word Alignment <35ms 1B + shotsFromManifest, [VISUAL Xs] breathing frames 3A at 2.2-2.5 w/s, 3-phase acting + 2-joint worldTarget POV hands 4B, VieNeu-TTS 48kHz --speaker-lock, Openverse CC0 mix_cues.py --strict, and TRUE -48 dB Dead Silence).
+description: Use when creating a horror story video — standalone 55-90s viral short or 150-360s multi-chapter story (9:16 default), or 8-16 min multi-part series (16:9 default) — in Horror Engine v14.0 (Single-Source pipeline_constitution.json, Viral 1-5s Cold Hook via cameraMode "cold_hook" into Anchored POV-First 2A, Whisper Forced Word Alignment <35ms 1B + shotsFromManifest, crisp 2.55-3.05 w/s effective / 3.15-3.45 w/s spoken oral Vietnamese folklore with regional grit & platform_safe_raw language, VieNeu-TTS 48kHz --speaker-lock, Openverse CC0 mix_cues.py --strict, and TRUE -48 dB Dead Silence / Uncanny Hush).
 ---
 
-# Horror 3D Story Video v12.0 (`Semantic Still Lock · Anchored POV-First · Single Constitution`, Three.js + Remotion)
+# Horror 3D Story Video v14.0 (`Viral Cold Hook · Crisp Oral Voice · Psychological Soundscape`, Three.js + Remotion)
 
-- **Single Source of Truth (`5B`):** `templates/pipeline_constitution.json` (`v12.0.0`, synced to `shorts-project/pipeline_constitution.json` — governs all 6 skills, Python scripts, and TypeScript engine modules).
+- **Single Source of Truth (`5B`):** `templates/pipeline_constitution.json` (`v14.0.0`, synced to `shorts-project/pipeline_constitution.json` — governs all 6 skills, Python scripts, and TypeScript engine modules).
 - **Workspace:** `shorts-project/` (30 fps; `9:16` `1080×1920` or `16:9` `1920×1080`; integer-dimension multipliers `--scale 1`, `1.25`, or `1.5`).
 - **Neutral Horror Engine v12.0:** `shorts-project/src/engine/` (**21 modules** including `sceneAudit.ts` imported via `../engine`).
-- **Studio Horror Audio & SFX:** `shorts-project/audio/` + `scripts/{gen_horror_voice.py, sfx_manager.py, mix_cues.py}` (`VieNeu-TTS --speaker-lock` + `faster-whisper` `<35ms` forced word alignment + Openverse CC0 Foley + `TRUE -48 dB` Dead Silence).
+- **Crisp Oral Voice & Narrative Soundscape v14.0:** `shorts-project/audio/` + `scripts/{prepare_emotion_refs.py, gen_horror_voice.py, sfx_manager.py, mix_cues.py}` (Pure-Vietnamese 8-mood horror bank + `VieNeu-TTS --speaker-lock` crisp spoken cadence `3.15–3.45 w/s`, `0.05s` Cold Hook entry, clause-level prosody `[BEAT Xs]`/`[PACE]`/`[PITCH]`/`[PROX=close]` + 25-voice NPC auto-casting + `<35ms` forced word alignment + Dual-Layer Occluded Beds + Rhythmic `motifs[]` + 4-Zone Binaural Space + `[SILENCE_DROP Xs]` Uncanny Hush + `0` Jumpscares by default at `-16.0 LUFS`).
 - **Automation & QA Scripts:** `shorts-project/scripts/` (`sync_workspace.py`, `constitution.py`, `horror_story.py`, `gen_horror_voice.py`, `align_manifest.py`, `validate_manifest.py`, `render-stills.mjs`, `audit_storyboard.py`, `render-video.mjs`, `extract_shots.py`, `short_qa.py`, `stitch_parts.py`, `validate_continuity.py`).
 
 ## Companion Skills (Activate as Needed)
 
-- **Story planning v3.0 (`150–300s` Shorts & `8–15 min` Series — 3-round approval, World Lore, Entity 4-Stage Rules, Character Psychology/Trapped Stakes, Clues/Twist Economy, Tension Curve SVG, 2D Floorplans & 24 quality gates):** Activate `horror-story`.
-- **Seamless multi-chapter production (`150–300s` Shorts via 3–5 Chapters & `8–15 min` Series via 8–15 Chapters with constant context budget):** Activate `horror-series-pipeline`.
-- **Expressive multi-speaker `SCRIPT.md`, 1-file So-VITS-SVC VC-Pack (`-na`), `align_manifest.py`, shot-scale & `story.ts` timing:** Activate `horror-script-storyboard`.
+- **Story planning v3.2 (Viral `55–90s` Shorts & `2.5–10 min` Deep Stories — 1–5s Cold Hook, Khẩu ngữ truyền miệng 3 miền + `platform_safe_raw`, World Lore, Entity Rules, Clues/Twist Economy, 2D Floorplans & 26 quality gates including Gate 26):** Activate `horror-story`.
+- **Seamless multi-chapter production (`150–360s` Shorts via 3–5 Chapters & `8–16 min` Series via 8–15 Chapters with constant context budget):** Activate `horror-series-pipeline`.
+- **Expressive colloquial `SCRIPT.md` (0.05s Cold Hook, `align_manifest.py`, shot-scale & `story.ts` timing):** Activate `horror-script-storyboard`.
 - **Non-repeating 3D worlds (`LocationBlueprint`), story-driven `CharacterBlueprint`s, PSX VHS/CRT & 5 Maximum Dread pillars, POV rigs & practical lights:** Activate `horror-world-lookdev`.
-- **Expressive voice DSP, TRUE `-48 dB` Dead Silence & procedural horror score/SFX mix:** Activate `horror-audio-sfx`.
+- **Expressive voice DSP, Uncanny Hush & procedural horror score/SFX mix:** Activate `horror-audio-sfx`.
 
 ## Hard Workspace, Anti-Repetition & Directing Rules (`GEMINI.md`)
 
@@ -30,8 +30,8 @@ description: Use when creating a horror story video — standalone 150-360s (2.5
    - `manifest.json` + exported `MANIFEST` in `story.ts` are the **single source of truth** for `locations[].anchors`, `castBlueprints`, beats, spoken lines, practical lamps (`lampsOn`), per-beat `fogOverride`, cast poses/trajectories (`moveFromAnchor -> moveToAnchor`, `alignPart`), prop state machines (`fromState -> state`, `triggerWord -> triggerFrame`), and `HorrorHUD`.
    - Drive actors in `world.ts` via **`stage.ts`** (`applyManifestActors`, `alignCharacterPartTo`, `getCharacterPartWorldPos`) instead of manual `if (frame >= ...)` coordinate guesses.
    - Run `align_manifest.py` → `validate_manifest.py --script ... --words ... --cues ... --registry ...` (catching out-of-bounds anchors, intra-room teleports, prop state regressions & audio drift!) before rendering, AND inspect **100% of beat stills** (`render-stills.mjs --manifest`) via `read_file`.
-4. **Anchored POV-First Cinema Grammar (`2A`), Phrase-Locked Shots (`1B`), Visual Breathing (`3A`) & 3-Phase Acting (`4B`):**
-   - **Mandatory Master Establishing Shot (`MASTER_ESTABLISHING_ERROR`):** Every location MUST open with `cameraMode: "master"` (`>= 60 frames`, `camMasterEstablish`) revealing full room architecture, light sources, hero props, and spatial layout with **Zero Black Void** (`lights.ts` lifted `shade/lift` + `fogNear/fogFar`).
+4. **Anchored POV-First Cinema Grammar (`2A`), Cold Hook & Phrase-Locked Shots (`1B`):**
+   - **Cold Hook `cold_hook` -> Master Establishing (`MASTER_ESTABLISHING_ERROR`):** Do NOT start `SCRIPT.md` with silent `[VISUAL 2.6s]` dead air! Shot #1 enters immediately on `cameraMode: "cold_hook"` (`<= 180 frames`, first word `<= 0.45s` + diegetic sound cue) and hands off immediately to Shot #2 `cameraMode: "master"` (`>= 60 frames`, `camMasterEstablish`) revealing full room architecture with **Zero Black Void** (`lights.ts` lifted `shade/lift` + `fogNear/fogFar`).
    - **80–90% Continuous Anchored POV + Strict 180° Axis (`AXIS_180_VIOLATION_ERROR`, `POV_PINGPONG_ERROR`):** Stay anchored inside the protagonist's eyes using `camPovChain()` smooth head-turn/eyeline scans (never cut to floating props in a black void; never flip 180° into the protagonist's front face!). Use at most `1–2` `ots_same_side` shots (`<= 22%` of frames) strictly at major act transitions.
    - **Phrase-Locked `manifest.shots[]` & `shotsFromManifest(MANIFEST)` (`SHOT_WORD_SYNC_ERROR`):** NEVER hardcode raw shot frame numbers in `story.ts`! Declare `shots[]` (`startPhrase`, `endPhrase`, `visualBeatIndex`, `actionTriggerPhrase`) in `manifest.json`, lock via `align_manifest.py`, and export `SHOTS = shotsFromManifest(MANIFEST)` in `story.ts`.
    - **3-Phase Acting, `dialogueMode` & 2-Joint `worldTarget` POV Hands:** Set `dialogueMode: "voiceOver"` on `C01` during `[NARRATOR]` internal monologue (`VOICEOVER_LIPSYNC_ERROR` blocks mouth-flapping on voice-over!) and `"directSpeech"` on speaking NPCs. Drive `PovRig3D` with 2-joint `fingerCurl` and `worldTarget` 3D prop coordinates so hands genuinely reach and grasp bolts, receipts, and ledgers.
@@ -42,34 +42,34 @@ description: Use when creating a horror story video — standalone 150-360s (2.5
 5. **Physical Lighting (5 Presets), Practical Lights & Whip-Pan Motion Blur:**
    - Use strictly the 5 physical presets (`warmLamp`, `coldMoon`, `fluorescent`, `duskFog`, `flashlight`), smooth `lerpLights`/`getLightBlend` transitions when lamps die, up to **6 real `PointLight`s** (`setLocalLights`) + **1 `SpotLight` cone** (`setSpotLight`), and selective HDR Bloom (`thr: 0.92`).
    - Use deterministic 6–8 frame `whipPan` turns paired with `WhipMotionBlurEffect`, and declare `WHIP_PANS` and `POV_MOTIONS` in `story.ts`.
-6. **Studio-Clean Neural Voice Acting v6.0 (100% Free & Open-Source), Asset-First Real SFX & TRUE `-48 dB` Dead Silence:**
-   - Author `SCRIPT.md` in **2–4 coherent Act-level paragraphs** (NEVER fragmented into 15+ choppy snippets; NEVER use distorting DSP hacks to fake whisper/tremor/stuttering!).
-   - Generate clean 48 kHz Vietnamese narration via **`VieNeu-TTS v3 Turbo`** (`--tts-engine vieneu`, ONNX CPU + 3–8s emotional voice cloning `--ref-audio`/`--emotion-refs` + native `[thở dài]`/`[hắng giọng]`), OR export a GPU acting pack (`--export-gpu-voice-pack` for **`dinhthuan/index-tts-2-vietnamese`** 8-D emotion vectors / **`F5-TTS-Vietnamese`** → `--import-acts`), OR pass clean guide audio through 1-file **So-VITS-SVC (`-na`)**.
-   - Prefer real recorded CC0 Foley (`sfx_manager.py fetch-freesound` / `import-local`) or GPU neural SFX (`sfx_manager.py export-sfx-pack` for **`declare-lab/TangoFlux`** & **`hkchengrex/MMAudio`**) loaded via `mix_base.load_sfx_asset(...)`, and always pass `dead_silences=load_dead_silences(words_json)` into `master_mix(...)` for TRUE `-48 dB` vacuum!
+6. **Crisp Oral Horror Voice, Retention Hook & Living Soundscape v14.0:**
+   - **1–5s Cold Hook & Khẩu ngữ truyền miệng:** Start at `0.05–0.25s` with one of 4 hook archetypes (`paradox_prop`, `blunt_taboo_dialogue`, `flash_forward_crisis`, `raw_confession`, `<= 24 words`), zero chronological weather/year intros (*"Đêm cuối năm 2003..."*) and zero AI literary clichés (*"một cảm giác lạnh lẽo bao trùm"*). Match 3-region dialect (`north` / `central` / `south`) and controlled `platform_safe_raw` exclamations (*"Mẹ kiếp"*, *"Chó chết"*, *"Bỏ mẹ rồi"*) per story character.
+   - **Crisp Pacing (`gen_horror_voice.py` v14.0):** Spoken rate `3.15–3.45 words/s` (hard max `3.65`), effective rate `2.55–3.05 words/s` (`0.5–1.0s` punchier than v13 via tighter `clean_tempo` + `tail_pad` `0.11–0.24s` and `--strict-hook`), keeping clause pauses `[BEAT Xs]` / `[PACE]` / `[PITCH]` / `[PROX=close]` and automatic 25-voice `VieNeu-TTS` casting.
+   - **Narrative Soundscape (`mix_cues.py` v8.0):** Pair `near` + `far` (occluded) beds, at least 1 recurring `motifs[]`, 4 physical spaces (`close_ear`, `room`, `adjacent_muffled`, `exterior_occluded`), prefer `[SILENCE_DROP Xs]` uncanny hush over cliché `reverse_suck` risers, and keep **`max_jumpscares = 0` by default** (`-16.0 LUFS`, `LRA 7–12 LU`).
 
-## End-to-End 11-Step Pipeline (Engine v11.0 — Unified Single Constitution)
+## End-to-End 11-Step Pipeline (Engine v14.0 — Unified Single Constitution)
 
 1. **Sync Workspace & Verify `pipeline_constitution.json`:**
    ```bash
    python3 templates/scripts/sync_workspace.py --target shorts-project --include-demo
    ```
-2. **Coherent Script With `[VISUAL Xs]` Breathing Budget (`2.2–2.5 words/s`, `45–105 s`/chapter):**
-   - Author `SCRIPT.md` starting with `[VISUAL 2.6s]` (Master Establishing room breather) + `4–6` `[VISUAL 1.2–2.0s]` beats around physical prop interactions (ambient rain/Foley keep playing!), `[DEAD SILENCE Xs]` (`-48 dB` vacuum before reveals), `[NARRATOR | mood=...]`, and `[SPEAKER: NAME | mood=... | fx=room|phone|ghost]`.
-3. **Studio-Clean Neural Voice + Whisper Forced Word Alignment (`1B`, `< 35ms`):**
+2. **Viral Script With 0.05s Cold Hook (`2.55–3.05 words/s` effective, `55–90s` viral short or `45–105s`/chapter):**
+   - Author `SCRIPT.md` opening straight at `0.05–0.20s` with `[NARRATOR]` or `[SPEAKER]` Cold Hook (`<= 24 words`, no opening `[VISUAL 2.6s]` dead air!), keeping mid-story `[BEAT 0.18–0.35s]` / `[VISUAL 0.8–1.4s]` / `[SILENCE_DROP 1.0–1.5s]` strictly at suspense turns and twists.
+3. **Studio-Clean Neural Voice (`--strict-hook`) + Whisper Forced Word Alignment (`1B`, `< 35ms`):**
    ```bash
    python3 scripts/gen_horror_voice.py --script out/<project>/SCRIPT.md \
-     --tts-engine vieneu --speaker-lock --word-aligner auto \
+     --tts-engine vieneu --speaker-lock --word-aligner auto --strict-hook \
      --out-dir out/<project>/voice --no-vc
    ```
    *(Optional GPU IndexTTS-2/F5-TTS `--export-gpu-voice-pack` or So-VITS-SVC `--export-vc-pack` remain supported as auxiliary workflows.)*
-4. **Author `manifest.json` (`beats[]` + `shots[]`), Single-Lock & Cinema Validation:**
+4. **Author `manifest.json` (`beats[]` + `shots[]` with `cold_hook` -> `master`), Single-Lock & Retention Validation:**
    ```bash
    python3 scripts/align_manifest.py src/<project>/manifest.json --words out/<project>/voice/words.json --in-place
    python3 scripts/validate_manifest.py src/<project>/manifest.json \
      --script out/<project>/SCRIPT.md \
      --words out/<project>/voice/words.json \
      --cues out/<project>/cues.json \
-     --strict-cinema \
+     --strict-cinema --strict-retention \
      --registry LOCATION_REGISTRY.json \
      --update-registry \
      --still-out out/<project>/still_manifest.json
@@ -90,7 +90,7 @@ description: Use when creating a horror story video — standalone 150-360s (2.5
    Enforces `mustShow` 9:16 Safe Frustum, 9-Ray 3D Occlusion sightlines, foreground `maxScreenBlockPct` (`<= 28%` OTS shoulder, `<= 38%` held paper), Subject-Locked DOF, and per-target pixel luminance/washout checks, generating `storyboard_proof.html` — inspect 100% of stills via `read_file` (and get user approval when requested) BEFORE running `render-video.mjs`!
 9. **Final Render (`--scale 1`, `1.25`, or `1.5`) & Audio Mux.**
 10. **Post-Render Automated QA Gate (`extract_shots.py` + `short_qa.py`):**
-    Confirm `DIRECTING_WARNS none`, `DEAD_CAMERA_WARNS none`, `DARK_VOID_WARNS none`, `0` unplanned black/white/frozen/pops, and `-15.0 LUFS`.
+    Confirm `DIRECTING_WARNS none`, `DEAD_CAMERA_WARNS none`, `DARK_VOID_WARNS none`, `0` unplanned black/white/frozen/pops, and `-16.0 LUFS` (`LRA 7–12 LU`).
 11. **Deliver & Clean Temp Disk.**
 
 ## Style & Technical References

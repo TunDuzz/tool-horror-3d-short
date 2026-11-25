@@ -20,6 +20,7 @@ import argparse
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -29,6 +30,81 @@ import numpy as np
 from scipy import signal
 
 SR_REF = 48000
+
+VN_HORROR_BANK_SPECS = [
+    (
+        "calm",
+        "Thiền Tâm Đức",
+        0.82,
+        -0.5,
+        0.32,
+        0.68,
+        "Đêm cuối mùa nước nổi, mưa gõ từng nhịp chậm rãi trên mái tôn gỉ sét ven sông vắng.",
+    ),
+    (
+        "curious",
+        "Thiện Minh",
+        0.86,
+        +0.3,
+        0.26,
+        0.82,
+        "Khoan đã... vết bùn ướt này vừa mới in lên sàn gỗ, sao bên ngoài hiên lại không có một bóng người?",
+    ),
+    (
+        "uneasy",
+        "Thiện Minh",
+        0.84,
+        -0.3,
+        0.30,
+        0.76,
+        "Ngọn đèn dầu trên bàn tự dưng lụi nhỏ dần, dù cánh cửa sổ gỗ đã cài then kín mít từ lúc nãy.",
+    ),
+    (
+        "whisper",
+        "Thiền Tâm Đức",
+        0.78,
+        -1.2,
+        0.42,
+        0.70,
+        "Đừng lên tiếng... nín thở lại đi, tiếng bước chân vừa dừng ngay sát bên kia vách ván.",
+    ),
+    (
+        "fear",
+        "Thái Sơn",
+        0.92,
+        +0.8,
+        0.18,
+        0.88,
+        "Tay tôi lạnh buốt không nhấc nổi chùm chìa khóa... chốt sắt đang tự trượt mở từng nấc một!",
+    ),
+    (
+        "panic",
+        "Hải Đăng",
+        1.02,
+        +1.3,
+        0.08,
+        0.92,
+        "Tắt đèn mau! Đừng ngoái ra cửa kính, khóa chặt chốt lại trước khi thứ đó bước qua bậc thềm!",
+    ),
+    (
+        "dread",
+        "Thiền Tâm Đức",
+        0.78,
+        -1.4,
+        0.46,
+        0.64,
+        "Trên trang giấy nhòe nước phù sa... mười hai cái tên đã gạch xóa, chỉ chừa lại đúng một dòng bỏ trống.",
+    ),
+    (
+        "cold_twist",
+        "Thiền Tâm Đức",
+        0.76,
+        -1.8,
+        0.48,
+        0.62,
+        "Lúc đó tôi mới nhận ra... tiếng thở lạnh buốt suốt nãy giờ không phát ra từ ngoài cửa, mà ở ngay sau lưng mình.",
+    ),
+]
 
 EMOTION_SLOTS = [
     (
@@ -415,6 +491,96 @@ def cmd_import_vc_bank(args):
     cmd_check(argparse.Namespace(dir=args.out_dir))
 
 
+def _shape_vn_horror_ref(x: np.ndarray, sr: int, tempo: float, pitch_st: float, is_whisper: bool = False) -> np.ndarray:
+    """Apply clean formant-preserved tempo/pitch + optional soft close-mic whisper contour (zero white-noise distortion)."""
+    y = x.astype(np.float64)
+    if shutil.which("ffmpeg") and (abs(tempo - 1.0) > 0.02 or abs(pitch_st) > 0.1):
+        with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as f_in, tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as f_out:
+            p_in, p_out = f_in.name, f_out.name
+        try:
+            write_wav_mono16(p_in, y, sr)
+            ratio = 2.0 ** (float(pitch_st) / 12.0)
+            out_chk = subprocess.check_output(["ffmpeg", "-hide_banner", "-filters"], text=True, stderr=subprocess.STDOUT)
+            if "rubberband" in out_chk:
+                af = f"rubberband=tempo={tempo:.5f}:pitch={ratio:.5f}:formant=preserved"
+            else:
+                af = f"asetrate={sr}*{ratio:.5f},aresample={sr},atempo={tempo / ratio:.5f}"
+            subprocess.run(["ffmpeg", "-y", "-v", "error", "-i", p_in, "-af", af, "-ar", str(sr), "-ac", "1", "-c:a", "pcm_s16le", p_out], check=True)
+            y, _ = read_wav_mono(p_out)
+        finally:
+            for p in (p_in, p_out):
+                if os.path.exists(p):
+                    os.remove(p)
+
+    if is_whisper:
+        # Gentle close-mic intimacy contour: attenuate heavy chest boom <135Hz while preserving crisp Vietnamese tones
+        sos_hp = signal.butter(2, 135.0 / (0.5 * sr), btype="highpass", output="sos")
+        sos_lp = signal.butter(2, 7200.0 / (0.5 * sr), btype="lowpass", output="sos")
+        y = signal.sosfilt(sos_lp, signal.sosfilt(sos_hp, y))
+    return clean_reference_clip(y, sr, use_denoiser=False)
+
+
+def cmd_build_vn_horror_bank(args):
+    """Synthesize a 100% pure-Vietnamese 8-mood studio horror prosody reference bank via local VieNeu-TTS v3turbo."""
+    out_dir = os.path.abspath(args.out_dir)
+    if args.backup_old and os.path.isdir(out_dir):
+        mf_p = os.path.join(out_dir, "emotion_refs_manifest.json")
+        already_v13 = False
+        if os.path.isfile(mf_p):
+            try:
+                already_v13 = str(json.load(open(mf_p, encoding="utf-8")).get("version", "")).startswith("v13")
+            except Exception:
+                already_v13 = False
+        existing_wavs = [f for f in os.listdir(out_dir) if f.endswith(".wav")]
+        if existing_wavs and not already_v13:
+            bak_dir = os.path.join(os.path.dirname(out_dir), "emotion_refs_backup_v6")
+            os.makedirs(bak_dir, exist_ok=True)
+            for fn in os.listdir(out_dir):
+                sp = os.path.join(out_dir, fn)
+                if os.path.isfile(sp):
+                    shutil.copy2(sp, os.path.join(bak_dir, fn))
+            print(f"  [BACKUP] Backed up previous emotion_refs -> {bak_dir}")
+
+    os.makedirs(out_dir, exist_ok=True)
+    from vieneu import Vieneu
+    tts = Vieneu(mode="v3turbo", device="cpu")
+    in_sr = int(getattr(tts, "sample_rate", 48000))
+    entries = {}
+    try:
+        for slug, voice_name, tempo, pitch_st, sil_p, temp, text in VN_HORROR_BANK_SPECS:
+            raw = tts.infer(
+                text=text,
+                voice=voice_name,
+                denoise=True,
+                apply_watermark=False,
+                silence_p=sil_p,
+                temperature=temp,
+            )
+            arr = _resample_simple(np.asarray(raw, dtype=np.float64).reshape(-1), in_sr, SR_REF)
+            shaped = _shape_vn_horror_ref(arr, SR_REF, tempo=tempo, pitch_st=pitch_st, is_whisper=(slug == "whisper"))
+            out_wav = os.path.join(out_dir, f"{slug}.wav")
+            write_wav_mono16(out_wav, shaped, SR_REF)
+            dur = round(len(shaped) / float(SR_REF), 3)
+            print(f"  [VN-BANK] {slug:11s} -> {out_wav} ({dur:.2f}s · 48kHz · voice={voice_name} · tempo={tempo}x · pitch={pitch_st:+.1f}st)")
+            entries[slug] = {
+                "file": f"{slug}.wav",
+                "dur": dur,
+                "lang": "vi",
+                "source": f"VieNeu-v3turbo:{voice_name}",
+                "emotion": slug,
+                "source_text": text,
+            }
+    finally:
+        if hasattr(tts, "close"):
+            tts.close()
+
+    mf_out = os.path.join(out_dir, "emotion_refs_manifest.json")
+    with open(mf_out, "w", encoding="utf-8") as fp:
+        json.dump({"version": "v13.0-vn-horror-bank", "sr": SR_REF, "refs": entries}, fp, ensure_ascii=False, indent=2)
+    print(f"PURE-VIETNAMESE HORROR EMOTION BANK READY -> {out_dir} ({len(entries)} clips)")
+    cmd_check(argparse.Namespace(dir=out_dir))
+
+
 def build_parser():
     ap = argparse.ArgumentParser(description="Horror Engine v6.3 Emotion Bank Builder for VieNeu-TTS & So-VITS-SVC (-na).")
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -458,6 +624,11 @@ def build_parser():
     p_iv.add_argument("--out-dir", default="audio/emotion_refs")
     p_iv.add_argument("--keep-original-whisper", action=argparse.BooleanOptionalAction, default=True, help="Keep original unvoiced whisper.wav intact (default: True)")
     p_iv.set_defaults(func=cmd_import_vc_bank)
+
+    p_vb = sub.add_parser("build-vn-horror-bank", help="Build 100% pure-Vietnamese 8-mood horror prosody reference bank locally via VieNeu-TTS")
+    p_vb.add_argument("--out-dir", default="shorts-project/audio/emotion_refs")
+    p_vb.add_argument("--backup-old", action="store_true", help="Backup existing emotion_refs to emotion_refs_backup_v6/ before overwriting")
+    p_vb.set_defaults(func=cmd_build_vn_horror_bank)
     return ap
 
 

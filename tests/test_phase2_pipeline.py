@@ -1056,7 +1056,7 @@ class TestPhase2Pipeline(unittest.TestCase):
                 adapt_mode="original", out=ser_p,
             ))
             ser_doc = hs.read_json(ser_p)
-            self.assertEqual(ser_doc["schemaVersion"], "3.0")
+            self.assertEqual(ser_doc["schemaVersion"], "3.2")
             self.assertEqual(ser_doc["params"]["format"], "series")
             self.assertEqual(ser_doc["params"]["aspect"], "16:9")
             self.assertEqual(ser_doc["params"]["parts"], 10)

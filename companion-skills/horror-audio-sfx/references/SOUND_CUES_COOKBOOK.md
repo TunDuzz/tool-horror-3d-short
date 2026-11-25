@@ -1,25 +1,18 @@
-# Horror Sound Cues & Declarative `cues.json` Cookbook v7.1
+# Horror Sound Cues & Psychological Soundscape Cookbook v8.0 / v13.0
 
-## 0. Five Golden Rules of Horror Sound Design & Multi-Style Jumpscares (Enforced by `mix_cues.py --strict`)
+## 0. Six Golden Rules of Narrative Horror Soundscape (Enforced by `mix_cues.py --strict`)
 
-1. **Story-Driven Setting Bed (`<= 1 Bed Only` — NEVER hardcode one bed for every video!):**
-   - Pick **exactly ONE** subtle ambience matching the story's location/weather (rainy rural house → indoor rain from Openverse; empty hospital ward → sterile low room tone; midnight alley → faint wind; closed attic → near-silent dark room tone).
-   - Carve the vocal band (`voice_notch_db: -3.0`, `lp_hz: 3200`) and automatically duck `-4 dB` under speech and `-9..-12 dB` during `mood == "whisper"` acts.
-2. **Cinema Horror Spotting (`8–12 Well-Spaced Hero Cues` per 45–60 s, Calibrated by Measurement):**
-   - Place SFX **only** where the story or visual shot has a physical action or dread beat — never pile cues into mud, and never bury them so softly that they disappear under `-15 LUFS` narration!
-   - **Measurement-Calibrated Levels (NEVER guess raw `gain_db`!):**
-     - Bed: set `"target_rms_dbfs": -32.0 .. -35.0` (post-EQ, audible atmospheric mood ~16 dB under voice; ducks `-4 dB` under speech and `-9 dB` under whispers).
-     - Shock / Impact SFX (`cinematic_boom`, `heavy_door_slam`, `door_bolt_latch`): `"target_peak_dbfs": -3.0 .. -4.5` so they genuinely startle!
-     - Atmospheric / Foley SFX (`wooden_door_creak_ov`, `wood_footsteps_ov`, `distant_thunder`, `cello_dread_sting`): `"target_peak_dbfs": -4.2 .. -7.5`, panned left/right (`±0.3..0.5`) to surround the narrator cleanly.
-   - **Anti-Crowding:** One hero sound per moment (or at most 1 cross-band pair marked `allow_layer: true`); never pile `>= 3` cues inside `1.50 s`.
-   - **Silent Whisper Rule:** Keep `mood == "whisper"` acts free of distracting spot Foley (only ultra-low `< 120 Hz` `sub_drone` pressure swell or pre-silence `reverse_suck` marked `allow_in_whisper: true`).
-3. **Psychoacoustic 3-Band Multi-Style Jumpscares (`1–2` Max per 45–60 s — `JUMPSCARE_FATIGUE_WARN`):**
-   - A real Jumpscare is NEVER just a low-passed boom! It requires **Contrast (TRUE Dead Silence or `micro_silence_s: 0.22`)** + **`<10 ms` Synchronized 3-Band Strike (Sub Chest-Punch 35–190 Hz + Startle Bite 1.4–6.5 kHz)** + optional **Aftershock (`tinnitus: true`)**.
-   - Choose the style matching each story's setting/entity (NEVER reuse one fixed sound on every video):
-     - `"jumpscare": "cinema_stab"` — *Conjuring/Insidious* dissonant orchestral stab + chest-punch sub (`target_peak_dbfs: -1.2`, `tinnitus: true`).
-     - `"jumpscare": "entity_shriek"` — Supernatural/spirit shriek + inhuman rattle (`body_crack: true` optional).
-     - `"jumpscare": "metal_dread"` — Abandoned house/hospital metallic screech + dark brass braam.
-     - `"jumpscare": "vhs_psx_glitch"` — Engine v5.0 PSX/VHS analog tape-tear + harsh scream/screech (ideal for final post-twist lunges after `micro_silence_s: 0.22` + `tail_pad_s: 2.8`!).
+1. **Dual-Layer Living Setting Beds With Occlusion Automation (`near` + `far` — Max 2 Distinct Roles):**
+   - Pair up to **2 complementary spatial layers**: `"role": "far"` (exterior weather/river/wind) + `"role": "near"` (intimate interior room tone, lamp wick, damp timber), with automatic organic anti-loop drift (`organic_drift=True`).
+   - Drive `"automation": [{"at_word": "chốt", "gain_delta_db": -6.5, "lp_hz": 580, "transition_s": 0.75}]` so closing doors/windows physically muffles the outside world!
+2. **Obsessive / Rhythmic Sound Motifs & Pattern Breaks (`motifs[]`):**
+   - Declare at least **1 recurring diegetic motif** (`steady_then_stop`, `accelerate`, `decelerate`, `approach`, `stutter_break`) — e.g., a water drip or clock tick that repeats steadily and **stops dead** at `[SILENCE_DROP]` or steps progressively closer (`pan_from` → `pan_to`, `far` → `close_ear` binaural ITD).
+3. **4-Zone Acoustic Distance & Role-Tiered Dynamics (`-16.0 LUFS`, `LRA 7–12 LU`):**
+   - Assign `"space": "close_ear" | "room" | "adjacent_muffled" | "exterior_occluded" | "otherworld"` and `"role": "subliminal" (-20.5 dBFS) | "motif" (-16.0 dBFS) | "foley" (-11.5 dBFS) | "tension" (-6.8 dBFS) | "impact" (-3.2 dBFS)` so subtle paper rustles never blast as loud as iron door bolts!
+4. **Psychological Uncanny Hush (`[SILENCE_DROP Xs]` + `survive_hush: true`) Over Trailer Clichés:**
+   - Prefer `[SILENCE_DROP Xs]` (smooth `-42 dB` environmental hush, ZERO cliché `reverse_suck` riser!), optionally leaving a single `survive_hush: true` close-ear breath (`synth: "breath_close_ear"`) or floorboard tick inside the silence. Reserve `[DEAD SILENCE Xs]` (`-48 dB`) strictly for major climax cuts.
+5. **Jumpscare Demotion (`max_jumpscares = 0` Default):**
+   - Jumpscares default to **`0`** on v13 soundscapes. Only enable `max_jumpscares: 1` when genuinely justified by the story (`cinema_stab | entity_shriek | metal_dread | vhs_psx_glitch`).
 4. **Exact `onset` / `peak` / `end` Alignment via `cues.json`:**
    - Hits / door latches / flashlight clicks → `"align": "onset"` anchored to `at_act`, `at_word`, or `at_dead_silence`.
    - Whip-pan whooshes → `"align": "peak"` on the cut midpoint.
