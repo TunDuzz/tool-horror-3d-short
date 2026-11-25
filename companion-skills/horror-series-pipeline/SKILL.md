@@ -64,7 +64,7 @@ For each Part `N`:
 1. Run `python3 scripts/validate_continuity.py src/<episode> --part N`.
 2. Draft `parts/pNN/manifest.json` (`beats[]` + `shots[]`), lock frames & captions automatically via `align_manifest.py`, and pass `validate_manifest.py --script ... --words ... --cues ... --strict-cinema --registry LOCATION_REGISTRY.json --update-registry --still-out ...`.
 3. Author `parts/pNN/{story.ts, world.ts, index.tsx}` using `SHOTS = shotsFromManifest(MANIFEST)`, `camMasterEstablish` + `camPovChain` (`Anchored POV-First 2A`), `dialogueMode` (`voiceOver` vs `directSpeech`), and 2-joint `worldTarget` POV hands (`4B`), then register `<Ep_PNN />` in `src/Root.tsx`.
-4. Run the **Shot-by-Shot Pre-Final Still Gate** on `<Ep_PNN />` (`render-stills.mjs --manifest` + 100% viewed via `read_file`).
+4. Run the **5-Layer Semantic Pre-Final Still Gate** on `<Ep_PNN />` (`render-stills.mjs --manifest ... --strict-audit` -> `storyboard_proof.html` verifying `mustShow` 3D Raycast sightlines & pixel luma + 100% viewed via `read_file`).
 5. Mix `out/<episode>/pNN/audio/mix.wav` via `scripts/mix_cues.py --cues ... --out ... --strict` locked to `CONTINUITY.json` `audio_bridge` with Openverse CC0 Foley and TRUE `-48 dB` Dead Silence!
 6. Render `<Ep_PNN />` via `render-video.mjs` (`--scale 1`, `1.25`, or `1.5`; NEVER `1.3333`), mux audio (`-map 0:v:0 -map 1:a:0`), and run `extract_shots.py` + `short_qa.py` confirming `DIRECTING_WARNS none`, `DEAD_CAMERA_WARNS none`, and `DARK_VOID_WARNS none` → `out/<episode>/pNN/final.mp4`.
 7. Update `bible/CONTINUITY.json` (`completed_part: N`, final character anchors/props, plot reveals, end camera/transition, audio bridge).

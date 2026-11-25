@@ -659,16 +659,48 @@ def main():
                                 f"SHOT_WORD_SYNC_ERROR: Shot #{sid} starts at f{sa} vs phrase {s_phrase!r} at f{exp_a} (drift {abs(sa - exp_a)}f > {MAX_SHOT_DRIFT_FRAMES}f). Run align_manifest.py!"
                             )
 
-            shot_still_entries.append({
-                "beatId": sh.get("beatId") or cov_beat.get("beatId"),
-                "shotId": sid,
-                "peakFrame": mid_f,
-                "range": [sa, sb],
-                "locationId": s_loc,
-                "cameraMode": cmode,
-                "cameraIntent": sh.get("note") or cov_beat.get("cameraIntent", ""),
-                "lightState": {"preset": s_light, "lampsOn": (cov_beat.get("lightState") or {}).get("lampsOn", [])},
-            })
+            kfs = sh.get("stillKeyframes")
+            if isinstance(kfs, list) and kfs:
+                for kf_idx, kf in enumerate(kfs):
+                    if not isinstance(kf, dict):
+                        continue
+                    kf_f = kf.get("frame", mid_f)
+                    if not isinstance(kf_f, int) or not (sa <= kf_f < sb):
+                        errors.append(
+                            f"Shot #{sid} stillKeyframes[{kf_idx}] ('{kf.get('tag')}') frame={kf_f} outside shot [{sa}, {sb})"
+                        )
+                        continue
+                    ms_list = kf.get("mustShow") if isinstance(kf.get("mustShow"), list) else (sh.get("mustShow") or [])
+                    shot_still_entries.append({
+                        "beatId": sh.get("beatId") or cov_beat.get("beatId"),
+                        "shotId": sid,
+                        "tag": kf.get("tag") or f"s{sid:02d}_kf{kf_idx + 1}",
+                        "peakFrame": kf_f,
+                        "range": [sa, sb],
+                        "locationId": s_loc,
+                        "cameraMode": cmode,
+                        "spokenAtFrame": kf.get("spokenAtFrame") or "",
+                        "mustShow": ms_list,
+                        "maxScreenBlockPct": kf.get("maxScreenBlockPct") or sh.get("maxScreenBlockPct") or {},
+                        "minHeightPct": kf.get("minHeightPct"),
+                        "cameraIntent": kf.get("expectedVisual") or sh.get("note") or cov_beat.get("cameraIntent", ""),
+                        "lightState": {"preset": s_light, "lampsOn": (cov_beat.get("lightState") or {}).get("lampsOn", [])},
+                    })
+            else:
+                shot_still_entries.append({
+                    "beatId": sh.get("beatId") or cov_beat.get("beatId"),
+                    "shotId": sid,
+                    "tag": f"s{sid:02d}_mid",
+                    "peakFrame": mid_f,
+                    "range": [sa, sb],
+                    "locationId": s_loc,
+                    "cameraMode": cmode,
+                    "spokenAtFrame": "",
+                    "mustShow": sh.get("mustShow") or [],
+                    "maxScreenBlockPct": sh.get("maxScreenBlockPct") or {},
+                    "cameraIntent": sh.get("note") or cov_beat.get("cameraIntent", ""),
+                    "lightState": {"preset": s_light, "lampsOn": (cov_beat.get("lightState") or {}).get("lampsOn", [])},
+                })
 
         if total_frames and sh_cur != total_frames:
             errors.append(f"Shots contiguity error: shots end at {sh_cur} != totalFrames {total_frames}")

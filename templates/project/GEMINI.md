@@ -26,12 +26,15 @@ Các quy tắc bắt buộc dưới đây được khóa đồng nhất từ `pi
 - Viết `SCRIPT.md` ở mật độ **`2.2–2.5 từ/giây`** (`45–105s`/chương), mở đầu bằng `[VISUAL 2.6s]` cho Master Establishing và chèn `[VISUAL 1.2–2.0s]` ở các hành động đạo cụ (giữ nguyên âm thanh môi trường + Foley), kèm `[DEAD SILENCE Xs]` (`-48 dB` chân không trước cao trào).
 - Sinh giọng bằng `gen_horror_voice.py --tts-engine vieneu --speaker-lock --word-aligner auto --no-vc` (tự động căn mốc từ bằng `faster-whisper` `< 35ms` hoặc sóng âm `Acoustic Pause-Island` `< 80ms`), và trộn âm thanh qua `cues.json` + `mix_cues.py --strict` với SFX CC0 từ Openverse.
 
-## 6. Cổng Kiểm Duyệt Pre-Final Still Gate & Post-Render QA (Hard Gates)
-- **Beat-by-Beat Pre-Final Still Gate:** Chạy:
-  ```bash
-  REMOTION_TMP=/tmp/remotion-tmp node scripts/render-stills.mjs <CompositionId> out/<project>/stills/b_ --manifest out/<project>/still_manifest.json 1
-  ```
-  rồi **tự mở xem trực tiếp 100% ảnh bằng `read_file`** để đối chiếu kịch bản ↔ frame (đúng bối cảnh, đúng đèn tắt/bật, ngoại hình nhân vật đúng mô tả truyện, không lộ quái sớm, không kẹt tay/tóc che màn hình `Phone3D`, Whip-Pan có blur ngang rõ rệt, không cháy sáng).
+## 6. Cổng Kiểm Duyệt 5 Tầng Pre-Final Semantic Still Gate (`storyboard_proof.html`) & Post-Render QA
+- **5-Layer Phrase-Anchored Still Gate (Bắt buộc trước mọi lệnh render MP4):**
+  - Khai báo `mustShow` + `stillKeyframes` (`onPhrase`, `maxScreenBlockPct`) trong `manifest.json`, đăng ký `getAuditTargets()` trong `ShortWorld`, dùng `frameWorldPoints` / `camOtsFrame` (`sceneAudit.ts`) để không gõ mò tọa độ tay.
+  - Chạy:
+    ```bash
+    REMOTION_TMP=/tmp/remotion-tmp node scripts/render-stills.mjs <CompositionId> out/<project>/stills/s_ \
+      --manifest out/<project>/still_manifest.json --scale 0.75 --strict-audit
+    ```
+    vượt qua cả 5 tầng (`9:16 Safe Frustum`, `9-Ray 3D Occlusion`, `Min Size & Foreground Block Cap`, `Subject-Locked DOF`, `Per-Target Pixel Luma & Exposure`) để xuất **`storyboard_proof.html`**, sau đó **mở kiểm tra trực tiếp 100% ảnh bằng `read_file`** đối chiếu từng danh từ – tính từ – động từ với dòng thoại ngay trên ảnh trước khi chạy `render-video.mjs`.
 - **Post-Render QA Gate & Tăng tốc GPU / Bảo vệ ổ đĩa:**
   - Dùng `node scripts/render-video.mjs <CompId> out/<project>/video.mp4 --scale 1` (tự dò GPU NVIDIA `angle-egl`, fallback `swangle`, tự dọn bundle tạm; hỗ trợ `--draft`).
   - Đặt `REMOTION_TMP=/tmp/remotion-tmp` (Linux/macOS) hoặc `$env:REMOTION_TMP="D:/remotion-tmp"` (Windows). Chỉ dùng `--scale 0.5`, `1`, `1.25` hoặc `1.5` (tuyệt đối không dùng `--scale 1.3333`).

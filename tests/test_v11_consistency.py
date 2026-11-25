@@ -14,18 +14,21 @@ if TEMPLATES_SCRIPTS not in sys.path:
     sys.path.insert(0, TEMPLATES_SCRIPTS)
 
 import align_manifest  # noqa: E402
+import audit_storyboard  # noqa: E402
 import constitution  # noqa: E402
 import gen_horror_voice  # noqa: E402
 import horror_story  # noqa: E402
 import validate_continuity  # noqa: E402
 import validate_manifest  # noqa: E402
+from PIL import Image  # noqa: E402
 
 
 class TestV11CrossSkillConsistency(unittest.TestCase):
     def test_constitution_matches_code_and_skills(self):
         const = constitution.load_constitution()
-        self.assertEqual(const["version"], "11.0.0")
+        self.assertEqual(const["version"], "12.0.0")
         self.assertEqual(const["fps"], 30)
+        self.assertIn("stillAccuracyGate", const)
 
         # 1. Python validators & horror_story.py share identical enums & bounds
         self.assertEqual(set(const["enums"]["validLights"]), validate_manifest.VALID_LIGHTS)
@@ -71,6 +74,7 @@ class TestV11CrossSkillConsistency(unittest.TestCase):
                 body = fp.read()
             self.assertNotIn("No On-Screen Captions by Default", body, f"Stale caption contradiction in {sf}")
             self.assertNotIn("2.7–3.2 words/s", body, f"Stale speech rate in {sf}")
+            self.assertIn("storyboard_proof.html", body, f"Missing v12.0 Semantic Still Gate in {sf}")
 
     def test_acoustic_island_aligner_eliminates_pause_drift_and_visual_directive(self):
         sr = 24000
@@ -253,6 +257,148 @@ class TestV11CrossSkillConsistency(unittest.TestCase):
             self.assertIn("MASTER_ESTABLISHING_ERROR", res_bad.stdout)
             self.assertIn("AXIS_180_VIOLATION_ERROR", res_bad.stdout)
             self.assertIn("VOICEOVER_LIPSYNC_ERROR", res_bad.stdout)
+
+    def test_v12_phrase_keyframes_and_5layer_storyboard_auditor(self):
+        words = [
+            {"w": "Ngọn", "s": 1.00, "e": 1.25, "speaker": "NARRATOR"},
+            {"w": "đèn", "s": 1.26, "e": 1.50, "speaker": "NARRATOR"},
+            {"w": "dầu", "s": 1.52, "e": 1.82, "speaker": "NARRATOR"},
+            {"w": "chớp", "s": 1.85, "e": 2.15, "speaker": "NARRATOR"},
+            {"w": "lạnh.", "s": 2.18, "e": 2.60, "speaker": "NARRATOR"},
+        ]
+        manifest = {
+            "projectId": "v12-still-test",
+            "title": "V12 Still Test",
+            "totalFrames": 90,
+            "aspect": "9:16",
+            "locations": [
+                {
+                    "id": "S01",
+                    "archetype": "boothTestV12",
+                    "dimensions": [4.5, 4.5, 3.0],
+                    "ceilingType": "flatConcrete",
+                    "materials": {"wall": "darkTimberTex", "floor": "concreteFloorTex", "ceiling": "corrugatedTinTex"},
+                    "practicalLights": ["oilLamp"],
+                    "heroProps": ["oilLamp", "ledgerBook", "ironBolt"],
+                    "signatureShadowBeat": "Cold lamp",
+                    "anchors": {"DESK": [0, 0, 0]},
+                }
+            ],
+            "castBlueprints": [{"id": "C01", "role": "human", "storyDescription": "Night clerk", "appearance": {"height": 1.72}}],
+            "beats": [
+                {
+                    "beatId": "B1",
+                    "shotId": 1,
+                    "a": 0,
+                    "b": 90,
+                    "peakFrame": 45,
+                    "locationId": "S01",
+                    "spokenLine": {"speaker": "NAM", "text": "Ngọn đèn dầu chớp lạnh."},
+                    "lightState": {"preset": "warmLamp", "lampsOn": ["oilLamp"]},
+                    "castStates": {"C01": {"visible": True, "anchor": "DESK", "pose": "standIdle", "speakingAs": "NARRATOR", "dialogueMode": "voiceOver"}},
+                    "propStates": {},
+                    "cameraIntent": "Frame both oilLamp and ledgerBook",
+                }
+            ],
+            "shots": [
+                {
+                    "id": 1,
+                    "a": 0,
+                    "b": 90,
+                    "scale": "WS",
+                    "light": "warmLamp",
+                    "cameraMode": "master",
+                    "axisSide": "pov_center",
+                    "stillKeyframes": [
+                        {
+                            "tag": "s01_lamp_chill",
+                            "onPhrase": "đèn dầu",
+                            "mustShow": ["oilLamp", "ledgerBook"],
+                            "maxScreenBlockPct": {"C01": 0.28},
+                            "expectedVisual": "Oil lamp and open ledger both clearly visible above subtitle",
+                        }
+                    ],
+                }
+            ],
+        }
+        aligned, _ = align_manifest.align_manifest_data(manifest, words, fps=30.0)
+        kf = aligned["shots"][0]["stillKeyframes"][0]
+        self.assertTrue(38 <= kf["frame"] <= 46, f"Unexpected phrase-locked frame: {kf}")
+        self.assertIn("đèn dầu", kf["spokenAtFrame"])
+
+        with tempfile.TemporaryDirectory() as td:
+            img_p = os.path.join(td, "s01_lamp_chill_f42.jpg")
+            # Build synthetic 180x320 RGB image with well-lit structured subject (textured gradient, not flat white!)
+            arr = np.full((320, 180, 3), 42, dtype=np.uint8)
+            yy, xx = np.meshgrid(np.linspace(70, 185, 80), np.linspace(60, 160, 60), indexing="ij")
+            arr[100:180, 20:80, 0] = yy.astype(np.uint8)
+            arr[120:200, 90:150, 1] = xx.astype(np.uint8)
+            Image.fromarray(arr).save(img_p, quality=92)
+
+            still_items = [
+                {
+                    "shotId": 1,
+                    "beatId": "B1",
+                    "tag": "s01_lamp_chill",
+                    "peakFrame": 42,
+                    "cameraMode": "master",
+                    "spokenAtFrame": kf["spokenAtFrame"],
+                    "mustShow": ["oilLamp", "ledgerBook"],
+                    "maxScreenBlockPct": {"C01": 0.28},
+                    "cameraIntent": kf["expectedVisual"],
+                }
+            ]
+            raw_ok = {
+                "jobs": [{"index": 0, "frame": 42, "tag": "s01_lamp_chill_f42", "imagePath": img_p}],
+                "frames": {
+                    "42": {
+                        "frame": 42,
+                        "shotId": 1,
+                        "focusDist": 1.15,
+                        "targets": {
+                            "oilLamp": {
+                                "id": "oilLamp",
+                                "found": True,
+                                "visible": True,
+                                "inSafeFrustum": True,
+                                "uvBox": [0.12, 0.32, 0.44, 0.56],
+                                "heightPct": 0.24,
+                                "areaPct": 0.08,
+                                "visibleRayRatio": 1.0,
+                                "issues": [],
+                            },
+                            "ledgerBook": {
+                                "id": "ledgerBook",
+                                "found": True,
+                                "visible": True,
+                                "inSafeFrustum": True,
+                                "uvBox": [0.50, 0.38, 0.88, 0.62],
+                                "heightPct": 0.24,
+                                "areaPct": 0.09,
+                                "visibleRayRatio": 0.89,
+                                "issues": [],
+                            },
+                            "C01": {"id": "C01", "found": True, "visible": True, "uvBox": [0.75, 0.55, 0.98, 0.98], "areaPct": 0.19, "issues": []},
+                        },
+                    }
+                },
+            }
+            rep_ok = audit_storyboard.evaluate_storyboard(still_items, raw_ok, td)
+            self.assertTrue(rep_ok["passed"], rep_ok)
+            html_out = os.path.join(td, "storyboard_proof.html")
+            audit_storyboard.write_storyboard_html(rep_ok, html_out)
+            self.assertTrue(os.path.isfile(html_out))
+            with open(html_out, encoding="utf-8") as fh:
+                self.assertIn("PASS 100%", fh.read())
+
+            # Now simulate occluded bench + foreground 46% shoulder blob -> must FAIL!
+            raw_bad = json.loads(json.dumps(raw_ok))
+            raw_bad["frames"]["42"]["targets"]["oilLamp"]["visibleRayRatio"] = 0.0
+            raw_bad["frames"]["42"]["targets"]["oilLamp"]["issues"] = ["OCCLUDED_BY(highSill:clear=0/9)"]
+            raw_bad["frames"]["42"]["targets"]["C01"]["areaPct"] = 0.46
+            rep_bad = audit_storyboard.evaluate_storyboard(still_items, raw_bad, td)
+            self.assertFalse(rep_bad["passed"])
+            self.assertGreaterEqual(rep_bad["totalErrors"], 2)
 
 
 if __name__ == "__main__":

@@ -33,6 +33,7 @@ VALID_ENGINE_POSES = {
     "sitCrossLegged", "sitChair", "sitBenchHunched", "walk", "creep", "peerForward", "recoil",
     "holdPhone", "holdLantern", "point", "lunge", "loomingStill", "peekAroundDoor",
     "turnHead", "stalkLoom", "jawUnlatch", "crawler", "doorwayPeek", "backbendCrab", "lungeCloseUp",
+    "handoverProp", "fleePanic",
 }
 DIALOGUE_QUOTE_RE = re.compile(r'["“”«»「」『』]')
 CHAPTER_RE = re.compile(r"^\s*(?:chương|hồi|phần|tập|chapter)\s+[0-9ivxlcdm]+", re.IGNORECASE | re.MULTILINE)

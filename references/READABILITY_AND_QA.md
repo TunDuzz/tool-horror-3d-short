@@ -56,16 +56,23 @@ Never hardcode conflicting captions, light toggles, prop states, or timestamps a
 
 ---
 
-## 3. Layer 3: Mandatory Beat-by-Beat Pre-Final Still Gate (`read_file`)
+## 3. Layer 3: Mandatory 5-Layer Semantic Still Gate (`render-stills.mjs --strict-audit` → `storyboard_proof.html`)
 
-Before rendering the final MP4, render **100% of manifest beat peak frames at scale `1`** plus Whip-Pan burst midpoint frames:
+Before rendering ANY final MP4, generate phrase-anchored `still_manifest.json` (`stillKeyframes[]` + `mustShow[]`) and run the automated **5-Layer 3D Frustum + Raycast + Pixel Auditor**:
 
 ```bash
-REMOTION_TMP=/tmp/remotion-tmp node scripts/render-stills.mjs <CompId> out/<project>/stills/b_ --manifest out/<project>/still_manifest.json 1
-REMOTION_TMP=/tmp/remotion-tmp node scripts/render-stills.mjs <CompId> out/<project>/stills/whip_ <f_whip_mid,...> 1
+REMOTION_TMP=/tmp/remotion-tmp node scripts/render-stills.mjs <CompId> out/<project>/stills/s_ \
+  --manifest out/<project>/still_manifest.json --scale 0.75 --strict-audit
 ```
 
-Open and visually inspect **EVERY rendered `.jpg` directly using `read_file`** and verify this Beat-by-Beat Audit Checklist:
+`render-stills.mjs --strict-audit` + `audit_storyboard.py` automatically fail (`exit 1`) on:
+1. **`OFFSCREEN_*` / `SUBTITLE_OR_BOTTOM_CLIP`:** Any `mustShow` 3D object cropped outside `safeNdcX [-0.90, 0.90]` × `safeNdcY [-0.66, 0.84]`.
+2. **`OCCLUDED_BY(blocker)`:** Fewer than `34%` of 9 sightline rays from `camera.position` reach the `mustShow` object (catches window sills blocking exterior benches, held receipts blocking NPCs, or walls blocking props!).
+3. **`TOO_SMALL` / `FOREGROUND_BLOB`:** Primary subject smaller than `5.5%` screen height or foreground silhouette exceeding `maxScreenBlockPct` (`<= 28%` OTS shoulder, `<= 38%` held paper).
+4. **Subject-Locked DOF Drift:** `ShortWorld.getFocusTarget()` locks `LensBlur` onto the active spoken subject.
+5. **`DARK_UNREADABLE` / `OVEREXPOSED_WASHOUT`:** Measured directly on the rendered `.jpg` inside each target's projected 2D `uvBox` (`mean >= 0.048` and no flat washed-out white `mean > 0.88, std < 0.045`).
+
+Then open **`storyboard_proof.html`** and visually inspect **EVERY rendered `.jpg` directly using `read_file`** against this Audit Checklist:
 
 1. **REJECT — Script↔Frame Contradiction:**
    - Does the visible location match `beat.locationId` and `fogOverride`?

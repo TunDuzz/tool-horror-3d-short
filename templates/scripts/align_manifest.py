@@ -260,6 +260,92 @@ def _align_shots_in_place(updated: dict, norm_words: list, visual_beats: list, f
     return shot_changes
 
 
+def _caption_at_frame(captions: list, frame: int) -> str:
+    for cc in captions:
+        if int(cc["a"]) <= frame < int(cc["b"]):
+            sp = f"[{cc['speaker']}] " if cc.get("speaker") else ""
+            return f"{sp}{cc['text']}"
+    # Check within +-6 frames for phrase onset boundary
+    best = None
+    best_d = 999
+    for cc in captions:
+        ca, cb = int(cc["a"]), int(cc["b"])
+        d = min(abs(frame - ca), abs(frame - cb))
+        if d <= 6 and d < best_d:
+            best_d = d
+            sp = f"[{cc['speaker']}] " if cc.get("speaker") else ""
+            best = f"{sp}{cc['text']}"
+    return best or "[VISUAL / KHÔNG LỜI]"
+
+
+def _align_still_keyframes_in_place(updated: dict, norm_words: list, fps: float):
+    """v12.0 (2A): Lock `shots[].stillKeyframes[]` to exact `words.json` phrases and stamp `spokenAtFrame`."""
+    shots = updated.get("shots")
+    if not isinstance(shots, list) or not shots:
+        return
+    captions = updated.get("captionChunks") or []
+    kf_cursor = 0
+    for sh in shots:
+        sa, sb = int(sh["a"]), int(sh["b"])
+        kfs = sh.get("stillKeyframes")
+        if (not isinstance(kfs, list) or not kfs) and sh.get("mustShow"):
+            # Auto-seed phrase-anchored keyframe when shot declares mustShow without explicit stillKeyframes
+            anchor_f = int(sh.get("actionTriggerFrame") or ((sa + sb) // 2))
+            kfs = [
+                {
+                    "tag": f"s{sh['id']:02d}_main",
+                    "frame": max(sa + 1, min(sb - 1, anchor_f)),
+                    "mustShow": list(sh["mustShow"]),
+                    **(
+                        {"maxScreenBlockPct": dict(sh["maxScreenBlockPct"])}
+                        if isinstance(sh.get("maxScreenBlockPct"), dict)
+                        else {}
+                    ),
+                    "expectedVisual": sh.get("note", ""),
+                }
+            ]
+            sh["stillKeyframes"] = kfs
+        if not isinstance(kfs, list):
+            continue
+
+        # Advance cursor near shot start
+        shot_start_s = max(0.0, (sa / fps) - 0.35)
+        while kf_cursor < len(norm_words) and norm_words[kf_cursor][2] < shot_start_s:
+            kf_cursor += 1
+
+        for idx_k, kf in enumerate(kfs):
+            if not isinstance(kf, dict):
+                continue
+            if not kf.get("tag"):
+                kf["tag"] = f"s{sh['id']:02d}_kf{idx_k + 1}"
+            resolved_f = None
+            if kf.get("onPhrase"):
+                hit = _find_phrase_span(norm_words, str(kf["onPhrase"]), cursor=kf_cursor)
+                if hit is not None:
+                    h_idx, h_end, s0, e0 = hit
+                    # Sample 4 frames into the keyword (or midpoint of short word) so gesture/light is settled!
+                    mid_word_s = min(e0, s0 + 0.14)
+                    extra_off = int(kf.get("offsetFrames", 0) or 0)
+                    resolved_f = int(round(mid_word_s * fps)) + extra_off
+                    if h_idx >= kf_cursor:
+                        kf_cursor = h_end
+            elif isinstance(kf.get("offsetFrames"), int):
+                off = int(kf["offsetFrames"])
+                resolved_f = (sa + off) if off >= 0 else (sb + off)
+            elif isinstance(kf.get("frame"), int):
+                resolved_f = int(kf["frame"])
+
+            if resolved_f is None:
+                resolved_f = (sa + sb) // 2
+            margin = 2 if (sb - sa) > 6 else 0
+            kf["frame"] = max(sa + margin, min(sb - 1 - margin, resolved_f))
+            kf["spokenAtFrame"] = _caption_at_frame(captions, kf["frame"])
+            if "mustShow" not in kf or not isinstance(kf["mustShow"], list):
+                kf["mustShow"] = list(sh.get("mustShow") or [])
+            if not kf.get("maxScreenBlockPct") and isinstance(sh.get("maxScreenBlockPct"), dict):
+                kf["maxScreenBlockPct"] = dict(sh["maxScreenBlockPct"])
+
+
 def align_manifest_data(manifest: dict, words: list, fps: float = 30.0, target_total_frames=None, visual_beats=None):
     """Return `(updated_manifest, changes_list)` with contiguous beat AND shot frames locked to `words`."""
     norm_words = [
@@ -359,6 +445,7 @@ def align_manifest_data(manifest: dict, words: list, fps: float = 30.0, target_t
 
     _align_shots_in_place(updated, norm_words, visual_beats or [], fps=fps, old_total=old_total)
     updated["captionChunks"] = build_word_caption_chunks(updated, words, fps=fps)
+    _align_still_keyframes_in_place(updated, norm_words, fps=fps)
     return updated, changes
 
 

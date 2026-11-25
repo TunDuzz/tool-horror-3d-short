@@ -512,7 +512,7 @@ export function createPaperProp3D(outlineMode: OutlineMode = "off"): PaperProp3D
   tex.colorSpace = THREE.SRGBColorSpace;
 
   const mat = stylizedShade(new THREE.MeshLambertMaterial({ map: tex, color: "#ddd5c4", side: THREE.DoubleSide }), 1, 0.25);
-  const geo = new THREE.BoxGeometry(0.16, 0.21, 0.004);
+  const geo = new THREE.BoxGeometry(0.132, 0.168, 0.004);
   const sheet = new THREE.Mesh(geo, mat);
   group.add(sheet);
   attachOutlineRig(group, { mode: outlineMode, pxWidth: 4.0, minWorld: 0.0008, maxWorld: 0.008, color: "#06060a" });
@@ -775,17 +775,18 @@ export function createPovRig3D(
       lCurl = pose.fingerCurl ?? 0.38;
       rCurl = pose.fingerCurl ?? (0.30 + smooth(clamp01((act - 0.18) / 0.28)) * 0.56);
     } else if (pose.propMode === "holdPaper") {
-      // Two-handed pinching damp receipt/ticket cleanly on left & right edges in lower-center foreground
+      // v12.0: Compact lower-foreground two-handed pinch (`~26%` area) so BOTH 2-joint hands grip left & right paper edges
+      // while keeping opposite characters across the desk 100% visible in the upper half of the 9:16 frame!
       const liftEnv = glide(act);
       left.arm.visible = true;
       right.arm.visible = true;
       right.wrist.visible = true;
-      left.arm.position.set(-0.072 + swayX * 0.5, -0.142 + liftEnv * 0.048 + swayY * 0.7, -0.325);
-      left.arm.rotation.set(0.36, 0.32, -0.18);
-      right.arm.position.set(0.072 + swayX * 0.5, -0.138 + liftEnv * 0.048 + swayY * 0.7, -0.325);
-      right.arm.rotation.set(0.36, -0.32, 0.18);
-      lCurl = pose.fingerCurl ?? 0.56;
-      rCurl = pose.fingerCurl ?? 0.56;
+      left.arm.position.set(-0.068 + swayX * 0.4, -0.124 + liftEnv * 0.032 + swayY * 0.5, -0.355);
+      left.arm.rotation.set(-0.18, 0.24, -0.14);
+      right.arm.position.set(0.068 + swayX * 0.4, -0.122 + liftEnv * 0.032 + swayY * 0.5, -0.355);
+      right.arm.rotation.set(-0.18, -0.24, 0.14);
+      lCurl = pose.fingerCurl ?? 0.58;
+      rCurl = pose.fingerCurl ?? 0.58;
     } else if (pose.propMode === "holdHandset") {
       const trem = Math.sin(t * 24) * 0.004;
       left.arm.visible = true;

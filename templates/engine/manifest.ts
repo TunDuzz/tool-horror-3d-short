@@ -67,6 +67,27 @@ export type DialogueMode = "directSpeech" | "voiceOver" | "silent";
 export type CameraMode = "master" | "pov" | "pov_turn" | "pov_walk" | "pov_interact" | "ots_same_side";
 export type AxisSide = "pov_center" | "left" | "right";
 
+export type StillKeyframeSpec = {
+  /** Unique tag within the shot (e.g. "kf_lamp_chill", "kf_bench_sightline"). */
+  tag: string;
+  /** Optional phrase in words.json so align_manifest.py locks exact keyframe timestamp. */
+  onPhrase?: string;
+  /** Optional frame offset from shot start (>=0) or from shot end (<0, e.g. -16 for settled end hold). */
+  offsetFrames?: number;
+  /** Resolved global frame index locked by align_manifest.py. */
+  frame?: number;
+  /** Active spoken caption text at `frame` populated automatically by align_manifest.py. */
+  spokenAtFrame?: string;
+  /** Named 3D scene targets (`ShortWorld.getAuditTargets()`) that MUST be visible & unoccluded in this still! */
+  mustShow: string[];
+  /** Optional max projected 2D bounding-box screen fraction for foreground elements (e.g. `{ C01: 0.28 }`). */
+  maxScreenBlockPct?: Record<string, number>;
+  /** Optional minimum screen height fraction for primary subject (default: 0.055). */
+  minHeightPct?: number;
+  /** Human-readable expected visual state matching the spoken words at this keyframe. */
+  expectedVisual?: string;
+};
+
 export type ManifestShotSpec = {
   id: number;
   beatId?: string;
@@ -88,6 +109,14 @@ export type ManifestShotSpec = {
   worldTargetAnchor?: string;
   actionTriggerPhrase?: string;
   actionTriggerFrame?: number;
+  /** v12.0 Optional named 3D target for automatic Depth-of-Field focus lock. */
+  focusTarget?: string;
+  /** v12.0 Default named 3D targets that must be visible & unoccluded in this shot. */
+  mustShow?: string[];
+  /** v12.0 Foreground screen-block cap map (e.g. `{ C01: 0.28, povReceipt: 0.36 }`). */
+  maxScreenBlockPct?: Record<string, number>;
+  /** v12.0 Phrase-anchored multi-keyframes for 5-Layer 3D Raycast + Pixel Still Audit! */
+  stillKeyframes?: StillKeyframeSpec[];
   note?: string;
 };
 
@@ -180,7 +209,9 @@ export type PoseAction =
   | "crawler"
   | "doorwayPeek"
   | "backbendCrab"
-  | "lungeCloseUp";
+  | "lungeCloseUp"
+  | "handoverProp"
+  | "fleePanic";
 
 export type FaceExpr =
   | "calm"

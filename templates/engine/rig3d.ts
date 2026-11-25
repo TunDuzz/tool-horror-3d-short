@@ -1126,6 +1126,42 @@ export function createCharacter3D(cfg: CharacterConfig): Character3D {
       rightArm.hand.rotation.set(-0.22, 0, 0);
       leftArm.upperArm.rotation.set(-0.22, 0.08, -0.12);
       leftArm.forearm.rotation.set(-0.48, 0, 0.10);
+    } else if (action === "handoverProp") {
+      // v12.0: Leaning across a counter/desk extending right hand low onto tabletop (`y ~ 0.84m`) with subtle nervous tremor
+      const trem = Math.sin(t * 15.0 + seed) * 0.018;
+      pelvis.position.y = hipY - 0.025 * hScale;
+      spine.rotation.set(0.24 + aliveBreath, -0.14, 0);
+      chest.rotation.set(0.08, -0.08, 0);
+      head.rotation.set(0.10, 0.12, 0);
+      rightArm.upperArm.rotation.set(-0.88 + trem, -0.12, 0.08);
+      rightArm.forearm.rotation.set(-0.44 - trem, 0.08, -0.06);
+      rightArm.hand.rotation.set(0.24 + trem * 1.5, 0, -0.10);
+      leftArm.upperArm.rotation.set(-0.34, 0.12, -0.14);
+      leftArm.forearm.rotation.set(-0.76, 0.14, 0.14);
+    } else if (action === "fleePanic") {
+      // v12.0: Urgent panicked sprint (`2x` stride frequency, forward lean, pumping arms & fearful glance back over shoulder)
+      const ph = t * 9.4;
+      const sL = Math.sin(ph);
+      const sR = Math.sin(ph + Math.PI);
+      const liftL = Math.max(0, Math.cos(ph - 0.35));
+      const liftR = Math.max(0, Math.cos(ph + Math.PI - 0.35));
+      const lookBack = Math.max(0, Math.sin(t * 2.8 + seed)) * 0.56;
+      pelvis.position.y = hipY - 0.055 * hScale + Math.max(liftL, liftR) * 0.036 * hScale;
+      pelvis.rotation.y = -sL * 0.14;
+      pelvis.rotation.z = sL * 0.05;
+      spine.rotation.set(0.32, sL * 0.12 - lookBack * 0.25, 0);
+      chest.rotation.set(0.10, sL * 0.10 - lookBack * 0.20, 0);
+      head.rotation.set(-0.12, -lookBack, 0.06 * sL);
+      leftLeg.thigh.rotation.x = sL * 0.76 - liftL * 0.16;
+      rightLeg.thigh.rotation.x = sR * 0.76 - liftR * 0.16;
+      leftLeg.calf.rotation.x = liftL * 1.05 + 0.16;
+      rightLeg.calf.rotation.x = liftR * 1.05 + 0.16;
+      leftLeg.foot.rotation.x = -sL * 0.24 + liftL * 0.16;
+      rightLeg.foot.rotation.x = -sR * 0.24 + liftR * 0.16;
+      leftArm.upperArm.rotation.set(-0.32 - sL * 0.72, 0.10, -0.16);
+      rightArm.upperArm.rotation.set(-0.32 - sR * 0.72, -0.10, 0.16);
+      leftArm.forearm.rotation.x = -0.92 - Math.max(0, -sL * 0.34);
+      rightArm.forearm.rotation.x = -0.92 - Math.max(0, -sR * 0.34);
     } else if (action === "glassSlam") {
       // Sudden aggressive palm/claw slap pressed flat against a vertical window glass plane
       const tremble = Math.sin(t * 26.0 + seed) * 0.025;

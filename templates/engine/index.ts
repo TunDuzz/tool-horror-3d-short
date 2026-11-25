@@ -16,6 +16,7 @@ export * from "./bodyHorror";
 export * from "./rig3d";
 export * from "./stage";
 export * from "./povRig";
+export * from "./sceneAudit";
 export * from "./fx3d";
 export * from "./HorrorHUD";
 export * from "./ShortPlayer";

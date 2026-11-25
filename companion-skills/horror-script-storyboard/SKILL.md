@@ -133,7 +133,10 @@ python3 scripts/validate_manifest.py src/<project>/manifest.json \
    - `{ kind: "blackout", a, b }` for `[DEAD SILENCE]` vacuum beats; `{ kind: "lightning", f }` for real 3D storm flashes.
    - `{ kind: "vignettePulse", a, b, freq, strength }` for creeping dread/heartbeat tension.
    - `{ kind: "aberration", a, b, strength }` to trigger VHS `tapeTear` / `RetroPsxEffect.dreadLevel` surges on entity reveals.
-5. **Action-to-Word Lock:** Land visual impacts (`KICKS`, `lightning`, `aberration`, `lungeCloseUp`, `turnHead`) **0–2 frames before** the matching trigger word in `words.json`.
+- **Action-to-Word & Phrase-Anchored Still Lock (v12.0 `sceneAudit.ts` + `storyboard_proof.html`):**
+  - Declare `mustShow: string[]` and `stillKeyframes[]` (`onPhrase`, `expectedVisual`, `maxScreenBlockPct`) on `manifest.shots[]` for every spoken noun/action (`oilLamp`, `waitingBench`, `coalStove`, `C02:head`, `boothDoorBolt`).
+  - Use **`frameWorldPoints(camPos, subjectPoints, aspect)`** and **`camOtsFrame(...)`** in `story.ts` instead of blind coordinate guessing so multi-object beats (e.g. sputtering oil lamp + open ledger) stay 100% inside the 9:16 Safe Window above subtitles!
+  - Run `render-stills.mjs --manifest still_manifest.json --strict-audit` to generate `storyboard_proof.html` and pass all 5 semantic layers before rendering video.
 
 ## Formulas & Multi-Part Series Arc
 

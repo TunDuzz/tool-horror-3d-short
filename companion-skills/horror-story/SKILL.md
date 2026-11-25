@@ -74,8 +74,9 @@ python3 scripts/horror_story.py render story.json --html --out story-report.html
 
 ### Vòng 3 — Bảng Blocking Hành Động, Nội Tâm & Định Hướng Thoại (`--stage full`) → Xuất Blueprint Toàn Tập
 
-9. **Điền `actionBeats[]` cho từng chương (`Gate 17, 18, 19, 24`):**
+9. **Điền `actionBeats[]` cho từng chương (`Gate 17, 18, 19, 24` + Hợp đồng Chủ thể Ngữ nghĩa v12.0):**
    - Mỗi beat có `beatId`, `sceneId`, `durationSec` *(tổng mỗi chương khớp `target_sec` trong `±20%`)*, `mood`, `light`, `camera`, `actors[]`, `propChanges[]`, `actionSummary`, **`subtext`** *(nội tâm nhân vật)*, **`sensoryDetails`** (`sight`, `sound`, `atmosphere`), **`spokenBeat`** (`speaker`, `intent`, `keyPhrase`, `mood`, `wordBudget`), `audioCue`, `jumpscareStyle`.
+   - **Khóa Danh từ – Tính từ – Động từ (`mustShow` / `storyboard_proof.html`):** Mọi danh từ đạo cụ/địa điểm được nhắc trong `spokenBeat` phải có trạng thái cụ thể trong `props[].states` (vd: lò than `burningEmbers` vs `coldDead`) và ánh xạ sang `mustShow` + pose đúng động từ (`handoverProp`, `fleePanic`, `talkUrgent`) để vượt qua cổng `render-stills.mjs --strict-audit`.
    - Kiểm định tự động khóa **0 lỗi teleport xuyên chương**, **0 lỗi nhảy ngược đạo cụ xuyên chương**, đủ `wordBudget`, và **không vượt trần Jumpscare toàn phim**.
 
 Chạy đủ **24 Cổng Chất Lượng**, xuất Story Bible HTML/MD và khởi tạo đồng bộ toàn bộ thư mục các chương:

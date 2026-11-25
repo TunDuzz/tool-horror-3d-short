@@ -1,5 +1,5 @@
 {
-  "version": "11.0.0",
+  "version": "12.0.0",
   "fps": 30,
   "speech": {
     "wordsPerSecondMin": 2.0,
@@ -137,8 +137,20 @@
       "crawler",
       "doorwayPeek",
       "backbendCrab",
-      "lungeCloseUp"
+      "lungeCloseUp",
+      "handoverProp",
+      "fleePanic"
     ]
+  },
+  "stillAccuracyGate": {
+    "safeNdcX": [-0.90, 0.90],
+    "safeNdcY": [-0.66, 0.84],
+    "minVisibleRayRatio": 0.34,
+    "minSubjectHeightPct": 0.055,
+    "maxOtsForegroundBlockRatio": 0.28,
+    "maxHeldPropBlockRatio": 0.38,
+    "minTargetLumaMean": 0.048,
+    "maxTargetP95": 0.96
   },
   "lightPresets": {
     "warmLamp": {

@@ -39,6 +39,7 @@ import { GradeEffect, GRADES, GRADE_STRENGTH, gradeFor } from "./grade";
 import { DEF_PSX_OPTIONS, RetroPsxEffect, type PsxOptions } from "./retroPsx";
 import { setLightningFlash, setPsxVertexSnap } from "./shade";
 import { HorrorHUD, type HorrorHudConfig } from "./HorrorHUD";
+import { auditSceneTargets } from "./sceneAudit";
 
 export type RenderStyle = "psxHorror" | "semiReal" | "painterly" | "comic";
 
@@ -88,6 +89,10 @@ export interface ShortWorld {
   syncLighting?(shotId: number, frame: number): void;
   getMotionVelocity?(shotId: number, frame: number, aspect: number, heightPx: number): CamVelocity;
   getLightBlend?(shotId: number, frame: number): { from?: LightKey; to: LightKey; t: number } | null;
+  /** v12.0 Optional named 3D Object3D registry for 5-Layer Semantic Still Frustum & Raycast Audit! */
+  getAuditTargets?(): Record<string, THREE.Object3D | null | undefined>;
+  /** v12.0 Optional active Depth-of-Field focus target override (`Object3D` or world `[x, y, z]`). */
+  getFocusTarget?(shotId: number, frame: number): THREE.Object3D | [number, number, number] | null | undefined;
   dispose?(): void;
 }
 
@@ -237,6 +242,9 @@ function Inner<TAssets>({
   const target = useMemo(() => new THREE.Vector3(), []);
   const glSize = useMemo(() => new THREE.Vector2(), []);
   const appliedSize = useRef({ width: -1, height: -1, pixelRatio: -1 });
+  const lastAuditedFrame = useRef<number>(-999999);
+  const curFocusRef = useRef<number>(1.0);
+  const auditStills = !!(getInputProps() as { auditStills?: boolean })?.auditStills;
   const grainOn = grainAmount > 0;
   const ssaoOn = ssao && !draft;
   const on = useMemo(() => toggles(renderStyle, ssaoOn, grainOn ? 1 : 0), [renderStyle, ssaoOn, grainOn]);
@@ -351,6 +359,21 @@ function Inner<TAssets>({
     gl.autoClear = true;
     composer.render(delta);
     gl.autoClear = prevAutoClear;
+
+    if (auditStills && lastAuditedFrame.current !== frameRef.current && world.getAuditTargets) {
+      lastAuditedFrame.current = frameRef.current;
+      const targets = auditSceneTargets(camera as THREE.PerspectiveCamera, world.root, world.getAuditTargets());
+      const payload = {
+        frame: frameRef.current,
+        shotId: id,
+        focusDist: Number(curFocusRef.current.toFixed(3)),
+        targets,
+      };
+      if (typeof window !== "undefined") {
+        (window as unknown as { __HORROR_STILL_AUDIT__?: unknown }).__HORROR_STILL_AUDIT__ = payload;
+      }
+      console.info("__HORROR_AUDIT__" + JSON.stringify(payload));
+    }
   }, 1);
 
   const cam = camera as THREE.PerspectiveCamera;
@@ -363,9 +386,22 @@ function Inner<TAssets>({
 
   const d = evalDof(dof, f);
   cam.getWorldDirection(fwd);
-  if (d.focus) fpt.set(...d.focus(f));
-  else fpt.copy(target);
-  fx.lens.focus = Math.max(0.18, fpt.sub(cam.position).dot(fwd));
+  const subjFocus = world.getFocusTarget?.(id, f);
+  if (subjFocus) {
+    if (Array.isArray(subjFocus)) {
+      fpt.set(subjFocus[0], subjFocus[1], subjFocus[2]);
+    } else {
+      subjFocus.updateMatrixWorld(true);
+      subjFocus.getWorldPosition(fpt);
+    }
+  } else if (d.focus) {
+    fpt.set(...d.focus(f));
+  } else {
+    fpt.copy(target);
+  }
+  const focusVal = Math.max(0.18, fpt.sub(cam.position).dot(fwd));
+  curFocusRef.current = focusVal;
+  fx.lens.focus = focusVal;
   // Keep PSX low-res pixels crisp & readable by dampening heavy cinematic bokeh blur
   fx.lens.cInf = on.psx ? d.cInf * 0.22 : d.cInf;
 

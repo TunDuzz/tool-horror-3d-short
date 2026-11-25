@@ -3,13 +3,13 @@ name: horror-3d-short
 description: Use when creating a horror story video — standalone 150-360s (2.5-6 min) short (9:16 default), 8-16 min (480-960s) multi-part series (16:9 default), or 45-105s micro chapter — in Horror Engine v11.0 (Single-Source pipeline_constitution.json, Anchored POV-First cinema grammar 2A with Master Establishing + strict 180-axis + Zero Black Void lights, Whisper Forced Word Alignment <35ms 1B + shotsFromManifest, [VISUAL Xs] breathing frames 3A at 2.2-2.5 w/s, 3-phase acting + 2-joint worldTarget POV hands 4B, VieNeu-TTS 48kHz --speaker-lock, Openverse CC0 mix_cues.py --strict, and TRUE -48 dB Dead Silence).
 ---
 
-# Horror 3D Story Video v11.0 (`Anchored POV-First · Studio Sync · Single Constitution`, Three.js + Remotion)
+# Horror 3D Story Video v12.0 (`Semantic Still Lock · Anchored POV-First · Single Constitution`, Three.js + Remotion)
 
-- **Single Source of Truth (`5B`):** `templates/pipeline_constitution.json` (synced to `shorts-project/pipeline_constitution.json` — governs all 6 skills, Python scripts, and TypeScript engine modules).
+- **Single Source of Truth (`5B`):** `templates/pipeline_constitution.json` (`v12.0.0`, synced to `shorts-project/pipeline_constitution.json` — governs all 6 skills, Python scripts, and TypeScript engine modules).
 - **Workspace:** `shorts-project/` (30 fps; `9:16` `1080×1920` or `16:9` `1920×1080`; integer-dimension multipliers `--scale 1`, `1.25`, or `1.5`).
-- **Neutral Horror Engine v11.0:** `shorts-project/src/engine/` (**20 modules** imported via `../engine`).
+- **Neutral Horror Engine v12.0:** `shorts-project/src/engine/` (**21 modules** including `sceneAudit.ts` imported via `../engine`).
 - **Studio Horror Audio & SFX:** `shorts-project/audio/` + `scripts/{gen_horror_voice.py, sfx_manager.py, mix_cues.py}` (`VieNeu-TTS --speaker-lock` + `faster-whisper` `<35ms` forced word alignment + Openverse CC0 Foley + `TRUE -48 dB` Dead Silence).
-- **Automation & QA Scripts:** `shorts-project/scripts/` (`sync_workspace.py`, `constitution.py`, `horror_story.py`, `gen_horror_voice.py`, `align_manifest.py`, `validate_manifest.py`, `render-stills.mjs`, `render-video.mjs`, `extract_shots.py`, `short_qa.py`, `stitch_parts.py`, `validate_continuity.py`).
+- **Automation & QA Scripts:** `shorts-project/scripts/` (`sync_workspace.py`, `constitution.py`, `horror_story.py`, `gen_horror_voice.py`, `align_manifest.py`, `validate_manifest.py`, `render-stills.mjs`, `audit_storyboard.py`, `render-video.mjs`, `extract_shots.py`, `short_qa.py`, `stitch_parts.py`, `validate_continuity.py`).
 
 ## Companion Skills (Activate as Needed)
 
@@ -82,7 +82,12 @@ description: Use when creating a horror story video — standalone 150-360s (2.5
    ```bash
    python3 scripts/mix_cues.py --cues out/<project>/cues.json --out out/<project>/audio/mix.wav --strict
    ```
-8. **Mandatory Shot-by-Shot Pre-Final Still Gate (`--manifest`, 100% shots inspected via `read_file`).**
+8. **Mandatory 5-Layer Semantic Still Gate (`--audit --strict-audit` -> `storyboard_proof.html`):**
+   ```bash
+   REMOTION_TMP=/tmp/remotion-tmp node scripts/render-stills.mjs <CompId> out/<project>/stills/s_ \
+     --manifest out/<project>/still_manifest.json --scale 0.75 --strict-audit
+   ```
+   Enforces `mustShow` 9:16 Safe Frustum, 9-Ray 3D Occlusion sightlines, foreground `maxScreenBlockPct` (`<= 28%` OTS shoulder, `<= 38%` held paper), Subject-Locked DOF, and per-target pixel luminance/washout checks, generating `storyboard_proof.html` — inspect 100% of stills via `read_file` (and get user approval when requested) BEFORE running `render-video.mjs`!
 9. **Final Render (`--scale 1`, `1.25`, or `1.5`) & Audio Mux.**
 10. **Post-Render Automated QA Gate (`extract_shots.py` + `short_qa.py`):**
     Confirm `DIRECTING_WARNS none`, `DEAD_CAMERA_WARNS none`, `DARK_VOID_WARNS none`, `0` unplanned black/white/frozen/pops, and `-15.0 LUFS`.
