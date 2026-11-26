@@ -856,6 +856,184 @@ print("DONE -> Extract audio from mmaudio_out/*.mp4 using ffmpeg and blend benea
     return out_dir
 
 
+def _query_from_slug(slug: str, label: str = "") -> str:
+    """Turn a snake_case SFX slug into a clean English Openverse search query."""
+    base = re.sub(r"(_ov|_sfx|_loop|_short|_long|\d+)$", "", safe_slug(slug))
+    words = [w for w in base.replace("-", "_").split("_") if w]
+    if not words:
+        return "horror ambience"
+    return " ".join(words)
+
+
+def auto_fetch_for_script(
+    cues_path: str,
+    lib_dir: str,
+    allow_cc_by: bool = False,
+    fresh: bool = True,
+    sources: str = "freesound,jamendo",
+    max_dur: float = 25.0,
+    http_get_fn=None,
+    download_fn=None,
+) -> dict:
+    """v15.0: Inspect `cues.json` and automatically download + normalize any missing real CC0 SFX from Openverse."""
+    with open(cues_path, encoding="utf-8") as fp:
+        cfg = json.load(fp)
+
+    os.makedirs(lib_dir, exist_ok=True)
+    mf = load_manifest(lib_dir)
+    mf_assets = mf.setdefault("assets", {})
+    excl = load_recent_history(lib_dir) if fresh else set()
+
+    needed: list[dict] = []
+    seen_slugs: set[str] = set()
+
+    def _add_need(sound_name: str | None, category: str, query: str = "", desc: str = "", min_s: float = 0.2, max_s: float = 60.0):
+        if not sound_name:
+            return
+        slug = safe_slug(os.path.splitext(os.path.basename(str(sound_name)))[0])
+        if not slug or slug in seen_slugs:
+            return
+        seen_slugs.add(slug)
+        needed.append({
+            "slug": slug,
+            "category": category,
+            "query": (query or _query_from_slug(slug, desc)).strip(),
+            "desc": desc or slug.replace("_", " "),
+            "min_sec": min_s,
+            "max_sec": max_s,
+        })
+
+    for b in cfg.get("beds") or []:
+        if isinstance(b, dict) and b.get("sound"):
+            _add_need(b.get("sound"), "ambience", str(b.get("search_query") or b.get("query") or ""), str(b.get("label") or ""), min_s=3.0, max_s=180.0)
+    for m in cfg.get("motifs") or []:
+        if isinstance(m, dict) and m.get("sound"):
+            _add_need(m.get("sound"), "foley", str(m.get("search_query") or m.get("query") or ""), str(m.get("label") or ""), min_s=0.15, max_s=15.0)
+    for ev in cfg.get("events") or []:
+        if not isinstance(ev, dict):
+            continue
+        if ev.get("sound"):
+            cat = "tension" if ev.get("jumpscare") or ev.get("role") in ("impact", "tension") else "foley"
+            _add_need(ev.get("sound"), cat, str(ev.get("search_query") or ev.get("query") or ""), str(ev.get("label") or ""), min_s=0.15, max_s=25.0)
+        if ev.get("sub_sound"):
+            _add_need(ev.get("sub_sound"), "tension", str(ev.get("sub_query") or "cinematic sub bass boom horror"), "Jumpscare sub boom", min_s=0.4, max_s=15.0)
+        if ev.get("jumpscare") and not ev.get("sound"):
+            # Ensure at least one real recorded jumpscare sting exists locally
+            default_js_slugs = {
+                "cinema_stab": ("jumpscare_shock_stab_ov", "horror jumpscare sting shock"),
+                "entity_shriek": ("jumpscare_entity_shriek_ov", "horror monster shriek scream"),
+                "metal_dread": ("jumpscare_metal_screech_ov", "horror metal screech impact"),
+                "vhs_psx_glitch": ("jumpscare_scream_ov", "horror glitch scream burst"),
+            }
+            js_slug, js_q = default_js_slugs.get(str(ev["jumpscare"]).lower(), ("jumpscare_shock_stab_ov", "horror jumpscare sting"))
+            _add_need(js_slug, "tension", js_q, f"Real recorded jumpscare ({ev['jumpscare']})", min_s=0.3, max_s=12.0)
+
+    fetched: list[str] = []
+    skipped: list[str] = []
+    failed: list[dict] = []
+
+    for item in needed:
+        slug = item["slug"]
+        dst_wav = os.path.join(lib_dir, f"{slug}.wav")
+        if os.path.isfile(dst_wav) and os.path.getsize(dst_wav) >= 256:
+            if slug not in mf_assets or "onset_s" not in mf_assets[slug]:
+                env = analyze_sfx_envelope(dst_wav)
+                m = inspect_wav_metrics(dst_wav)
+                mf_assets.setdefault(slug, {"file": f"{slug}.wav", "category": item["category"], "license": "CC0", "source": "local"})
+                mf_assets[slug].update({"dur": m["dur"], "peak_dbfs": m["peak_dbfs"], "clips": m["clips"], **env})
+            skipped.append(slug)
+            continue
+
+        queries = [item["query"]]
+        toks = item["query"].split()
+        if len(toks) > 2:
+            queries.append(" ".join(toks[:2]))
+        chosen = None
+        for q in queries:
+            try:
+                hits = openverse_search(
+                    q,
+                    allow_cc_by=allow_cc_by,
+                    sources=sources,
+                    min_sec=item["min_sec"],
+                    max_sec=item["max_sec"],
+                    page_size=10,
+                    exclude_ids=excl,
+                    http_get_fn=http_get_fn,
+                )
+            except Exception as exc:
+                hits = []
+                last_err = str(exc)
+            if hits:
+                chosen = hits[0]
+                break
+        if not chosen:
+            failed.append({"slug": slug, "query": item["query"], "error": "No commercial-safe Openverse match found"})
+            continue
+
+        try:
+            peak_ceil = -4.0 if item["category"] == "ambience" else -3.0
+            hp_hz = 45.0 if item["category"] != "tension" else 0.0
+            with tempfile.TemporaryDirectory(prefix="ov_auto_") as td:
+                ext = os.path.splitext(urllib.parse.urlparse(chosen["url"]).path)[1].lower() or ".wav"
+                tmp_dl = os.path.join(td, f"{slug}{ext}")
+                if download_fn is not None:
+                    download_fn(chosen["url"], tmp_dl)
+                else:
+                    req = urllib.request.Request(chosen["url"], headers={"User-Agent": "HorrorEngineV15-OpenverseSFX/1.0"})
+                    with urllib.request.urlopen(req, timeout=30) as resp, open(tmp_dl, "wb") as fp:
+                        fp.write(resp.read())
+                convert_to_library_wav(tmp_dl, dst_wav, max_dur=max_dur, highpass_hz=hp_hz, peak_ceil_db=peak_ceil)
+
+            m = inspect_wav_metrics(dst_wav)
+            env = analyze_sfx_envelope(dst_wav)
+            mf_assets[slug] = {
+                "file": f"{slug}.wav",
+                "category": item["category"],
+                "desc": item["desc"] or chosen["title"],
+                "dur": m["dur"],
+                "peak_dbfs": m["peak_dbfs"],
+                "clips": m["clips"],
+                "onset_s": env["onset_s"],
+                "peak_s": env["peak_s"],
+                "tail_end_s": env["tail_end_s"],
+                "rms_dbfs": env["rms_dbfs"],
+                "license": chosen["license"].upper(),
+                "source": f"openverse:{chosen['source']}:{chosen['id']}",
+                "openverse_id": chosen["id"],
+                "creator": chosen["creator"],
+                "attribution": chosen["attribution"] or f'"{chosen["title"]}" by {chosen["creator"]} ({chosen["license"].upper()})',
+            }
+            if chosen.get("id"):
+                excl.add(str(chosen["id"]))
+            fetched.append(slug)
+            print(f"  [AUTO-SFX] Fetched {slug}.wav ({m['dur']:.2f}s | {chosen['license'].upper()}) <- '{item['query']}'")
+        except Exception as exc:
+            failed.append({"slug": slug, "query": item["query"], "error": str(exc)})
+
+    mf["version"] = "v15.0-sfx-library"
+    save_manifest(lib_dir, mf)
+    all_credits = [{"slug": k, **v} for k, v in sorted(mf_assets.items())]
+    write_credits_file(os.path.join(lib_dir, "credits.txt"), all_credits)
+    print(f"AUTO-FETCH DONE -> fetched={len(fetched)}, cached={len(skipped)}, failed={len(failed)} ({lib_dir})")
+    return {"fetched": fetched, "skipped": skipped, "failed": failed}
+
+
+def cmd_auto_fetch_for_script(args):
+    res = auto_fetch_for_script(
+        args.cues,
+        args.library,
+        allow_cc_by=args.allow_cc_by,
+        fresh=args.fresh,
+        sources=args.sources,
+        max_dur=args.max_dur,
+    )
+    if args.strict and res["failed"]:
+        for f in res["failed"]:
+            print(f"  [FAIL] {f['slug']} ({f['query']}): {f['error']}", file=sys.stderr)
+        sys.exit(1)
+
+
 def cmd_list(args):
     mf = load_manifest(args.library)
     assets = mf.get("assets") or {}
@@ -937,6 +1115,16 @@ def build_parser():
     p_exp.add_argument("--video", default=None, help="Optional video.mp4 path for MMAudio script")
     p_exp.add_argument("--out-dir", required=True)
     p_exp.set_defaults(func=cmd_export_sfx_pack)
+
+    p_af = sub.add_parser("auto-fetch-for-script", help="v15.0: Auto-download missing real CC0 SFX referenced in cues.json from Openverse")
+    p_af.add_argument("--cues", required=True, help="Path to cues.json or cues.draft.json")
+    p_af.add_argument("--library", default="audio/sfx_library")
+    p_af.add_argument("--allow-cc-by", action="store_true")
+    p_af.add_argument("--sources", default="freesound,jamendo")
+    p_af.add_argument("--max-dur", type=float, default=25.0)
+    p_af.add_argument("--fresh", action=argparse.BooleanOptionalAction, default=True)
+    p_af.add_argument("--strict", action="store_true", help="Exit non-zero if any required SFX failed to download")
+    p_af.set_defaults(func=cmd_auto_fetch_for_script)
 
     p_ls = sub.add_parser("list", help="List available normalized assets in audio/sfx_library")
     p_ls.add_argument("--library", default="audio/sfx_library")

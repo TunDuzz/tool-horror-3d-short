@@ -15,8 +15,8 @@ Chuyên thiết kế **kịch bản kinh dị giữ chân cao thực chiến th�
 
 ### Step 0 — Chốt Chế Độ Nhịp & Màu Sắc Vùng Miền
 1. **Chế độ nhịp (`pacingProfile` · chuẩn `pipeline_constitution.json` v14.0):**
-   - **`viral_short` *(Mặc định cho video `55s–120s`)*:** Nén nhanh, **thoại + âm thanh mồi nổ ngay ở `0.05–0.25s`**, mỗi `8–14s` mở 1 tình tiết/hội thoại gắt mới, kết bằng cú lật vật chứng sắc lạnh (`0` Jumpscare mặc định).
-   - **`deep_story` *(Cho Phim ngắn `2.5–6 phút` 3–5 chương & Series `8–16 phút` 8–15 chương)*:** Vẫn mở Chương 1 bằng Cold Hook `1–5s`, sau đó triển khai Đường cong Răng cưa đa hồi, `red_herring` và lật nghĩa manh mối toàn tập.
+   - **`viral_short` *(Mặc định cho video `55s–120s`)*:** Nén nhanh, **thoại + âm thanh mồi nổ ngay ở `0.05–0.25s`**, mỗi `8–14s` mở 1 tình tiết/hội thoại gắt mới, kết bằng cao trào + **bắt buộc `1–2` cú Jumpscare** (Thực thể chính tạo hình **Thang kinh dị bậc 4–7**).
+   - **`deep_story` *(Cho Phim ngắn `2.5–6 phút` 3–5 chương & Series `8–16 phút` 8–15 chương)*:** Vẫn mở Chương 1 bằng Cold Hook `1–5s`, sau đó triển khai Đường cong Răng cưa đa hồi, `red_herring`, lật nghĩa manh mối toàn tập và **tối thiểu `1` cú Jumpscare mỗi chương** (`min_jumpscares >= 1`).
 2. **Phương ngữ & Độ gắt khẩu ngữ (`dialectRegion` & `gritLevel`):**
    - `dialectRegion`: `"north"` (Bắc Bộ), `"central"` (Miền Trung), `"south"` (Nam Bộ / Miền Tây) — đồng bộ tự động từ xưng hô/thành ngữ tới dàn 25 giọng `VieNeu-TTS`.
    - `gritLevel`: Mặc định **`"platform_safe_raw"`** (cho phép buột miệng tự nhiên *"Mẹ kiếp"*, *"Chết tiệt"*, *"Chó chết"*, *"Bỏ mẹ rồi"*, *"Tổ cha nó"*, *"Khỉ gió"*, *"Má ơi"* đúng tâm lý hoảng sợ/ức chế mà vẫn an toàn 100% trên TikTok/YouTube) hoặc `"clean_folklore"`.
@@ -76,5 +76,5 @@ python3 scripts/horror_story.py export-blueprint story.json --out out/<project>/
 ## Bàn Giao Đồng Bộ Sang Sản Xuất (`export-blueprint`)
 
 - **`SCRIPT.skeleton.md`:** Vào thẳng câu `coldHook.openingLine` ngay dòng đầu (không còn `[VISUAL 2.60s]` làm chết 3 giây đầu!), nhúng sẵn `subtext`, `sensoryDetails`, giọng vùng miền tự động và `[SILENCE_DROP]` ở cao trào.
-- **`manifest.draft.json`:** Khởi tạo `Shot 1` (`cameraMode: "cold_hook"`) nối sang `Shot 2` (`cameraMode: "master"`) → chuỗi `Anchored POV` + `captionChunks[]` `4–8 từ` đồng bộ khung hình.
-- **`cues.draft.json`:** Phối sẵn 2 lớp nền + `motifs[]` + `max_jumpscares = 0` chuẩn `-16.0 LUFS`.
+- **`manifest.draft.json`:** Khởi tạo `characterMode: "sprite2d"`, `scareTier >= 4` cho thực thể chính, `Shot 1` (`cameraMode: "cold_hook"`) nối sang `Shot 2` (`cameraMode: "master"`) → chuỗi `Anchored POV` + `jumpscareClips[]` + `captionChunks[]` `4–8 từ` đồng bộ khung hình.
+- **`cues.draft.json`:** Phối sẵn 2 lớp nền + `motifs[]` + **`min_jumpscares = 1`** (Real-SFX-first) chuẩn `-16.0 LUFS` / `-1.0 dBTP`.

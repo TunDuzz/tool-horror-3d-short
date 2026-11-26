@@ -35,6 +35,8 @@ _CONST = load_constitution()
 _ENUMS = _CONST.get("enums") or {}
 _CAM_G = _CONST.get("cameraGrammar") or {}
 _CAP_G = _CONST.get("captions") or {}
+_JS_G = _CONST.get("jumpscare") or {}
+_TIER_G = _CONST.get("entityScareTiers") or {}
 
 VALID_LIGHTS = set(_ENUMS.get("validLights") or ["warmLamp", "coldMoon", "fluorescent", "duskFog", "flashlight"])
 VALID_CEILINGS = set(_ENUMS.get("validCeilings") or [
@@ -45,14 +47,32 @@ VALID_POSES = set(_ENUMS.get("validPoses") or [
     "sitCrossLegged", "sitChair", "sitBenchHunched", "walk", "creep", "peerForward", "recoil",
     "holdPhone", "holdLantern", "point", "lunge", "loomingStill", "peekAroundDoor",
     "turnHead", "stalkLoom", "jawUnlatch", "crawler", "doorwayPeek", "backbendCrab", "lungeCloseUp",
-])
+    "handoverProp", "fleePanic", "shrug", "startledFlinch",
+]) | {"shrug", "startledFlinch"}
+VALID_ACTING_GESTURES = {
+    "shrug", "sighDrop", "heavyPant", "breathHold", "shiver",
+    "nodSlow", "nodDouble", "headShake", "tiltListen", "glanceAside", "chinTuck",
+    "flinch", "leanIn", "leanBack", "cower", "stepSway",
+    "neckCrack", "neckTwitch", "jawStretch", "loomSwell",
+    "custom",
+}
+VALID_ACTING_CURVES = {"pulse", "hold", "oscillate", "snapHold", "ramp"}
+VALID_ACTING_SIDES = {"left", "right", "both"}
 VALID_ROLES = set(_ENUMS.get("validRoles") or ["human", "entity", "silhouette", "lurker"])
+VALID_CHARACTER_MODES = set(_ENUMS.get("validCharacterModes") or ["sprite2d", "rig3d"])
+VALID_SPRITE_EXPRS = set(_ENUMS.get("validSpriteExprs") or ["calm", "talk", "fear", "shock", "entity_scare"])
+VALID_JUMPSCARE_TRANSITIONS = set(_JS_G.get("validTransitionStyles") or [
+    "first_frame_seamless", "whip_pan_turn", "diegetic_reveal", "silence_hard_cut",
+])
+MIN_PRIMARY_ENTITY_TIER = int(_TIER_G.get("minPrimaryEntityTier", 4))
+MIN_JUMPSCARES_PER_PART = int(_JS_G.get("minPerPart", 1))
+MAX_JS_AV_DRIFT_S = float(_JS_G.get("maxAvSyncDriftSec", 0.15))
 VALID_HAIR_STYLES = set(_ENUMS.get("validHairStyles") or ["shortParted", "spiky", "elderThin", "bun", "longDraped", "messyFringe", "bald"])
 VALID_GARMENTS = set(_ENUMS.get("validGarments") or ["funeralRobe", "shirt", "coat", "hospitalGown", "casualJacket", "shroud"])
 VALID_EYE_HORROR = set(_ENUMS.get("validEyeHorror") or ["sanpaku", "voidSockets", "weepingIchor", "stitched", "multiEye"])
 VALID_EXPRS = set(_ENUMS.get("validExprs") or ["calm", "wary", "uneasy", "dread", "terrified", "deadStare", "unsettlingSmile", "hollow"])
 VALID_DIALOGUE_MODES = set(_ENUMS.get("validDialogueModes") or ["directSpeech", "voiceOver", "silent"])
-VALID_CAMERA_MODES = set(_CAM_G.get("validCameraModes") or ["master", "pov", "pov_turn", "pov_walk", "pov_interact", "ots_same_side"])
+VALID_CAMERA_MODES = set(_CAM_G.get("validCameraModes") or ["cold_hook", "master", "pov", "pov_turn", "pov_walk", "pov_interact", "ots_same_side"])
 VALID_AXIS_SIDES = set(_CAM_G.get("validAxisSides") or ["pov_center", "left", "right"])
 MASTER_MIN_FRAMES = int(_CAM_G.get("masterMinFrames", 60))
 MAX_OTS_RATIO = float(_CAM_G.get("maxOtsRatio", 0.22))
@@ -105,17 +125,37 @@ def check_location_similarity(loc_a: dict, loc_b: dict):
     return None
 
 
+def _sprite_asset_paths(bp: dict) -> list[str]:
+    sa = bp.get("spriteAssets") or {}
+    if not isinstance(sa, dict):
+        return []
+    paths = []
+    for k in ("calm", "talk", "fear", "shock", "entity_scare"):
+        v = str(sa.get(k) or "").strip()
+        if v:
+            paths.append(v.replace("\\", "/"))
+    return sorted(paths)
+
+
+def _desc_tokens(bp: dict) -> set[str]:
+    txt = norm_text(str(bp.get("storyDescription") or ""))
+    return {t for t in txt.split() if len(t) >= 2}
+
+
 def entity_signature(bp: dict) -> dict:
-    """Extract normalized story-driven visual signature of a horror entity blueprint for Anti-Clone checks."""
+    """Extract normalized story-driven visual signature of a 3D or 2.5D character/entity blueprint for Anti-Clone checks."""
     ap = bp.get("appearance") or {}
     ent = ap.get("entity") or {}
     bh = ent.get("bodyHorror") or {}
+    sa = bp.get("spriteAssets") or {}
     active_bh = sorted(
         k
         for k, v in bh.items()
         if (isinstance(v, bool) and v) or (isinstance(v, (int, float)) and not isinstance(v, bool) and v > 0) or (isinstance(v, str) and v)
     )
     return {
+        "role": str(bp.get("role", "human")).strip().lower(),
+        "characterMode": str(bp.get("characterMode", "")).strip().lower(),
         "hairStyle": str(ap.get("hairStyle", "shortParted")).strip().lower(),
         "garment": str(ap.get("garment", "shirt")).strip().lower(),
         "eyeHorror": str(bh.get("eyeHorror", "")).strip().lower(),
@@ -123,14 +163,65 @@ def entity_signature(bp: dict) -> dict:
         "suturesAndWounds": bool(bh.get("suturesAndWounds")),
         "extraArms": int(bh.get("extraArms") or 0),
         "traits": active_bh,
+        "scareTier": int(bp.get("scareTier") or 0),
+        "scareTraits": sorted(str(t).strip().lower() for t in (bp.get("scareTraits") or []) if str(t).strip()),
+        "promptSignature": str(sa.get("promptSignature") or "").strip().lower(),
+        "spritePaths": _sprite_asset_paths(bp),
+        "descTokens": sorted(_desc_tokens(bp)),
     }
 
 
-def check_entity_similarity(bp_a: dict, bp_b: dict):
-    """Return an ANTI_REPEAT_ENTITY_ERROR reason if two unrelated entities clone the same anatomy/outfit signature."""
+def _resolve_sprite_canonical_key(p: str, project_id: str) -> str:
+    norm_p = p.replace("\\", "/").lstrip("./")
+    if norm_p.startswith("src/") or "/" in norm_p and norm_p.split("/")[0] not in ("assets", "cast"):
+        return norm_p.lower()
+    return f"{project_id}/{norm_p}".lower()
+
+
+def check_entity_similarity(bp_a: dict, bp_b: dict, proj_a: str = "", proj_b: str = ""):
+    """Return an ANTI_REPEAT_ENTITY_ERROR reason if two unrelated characters/entities reuse 2.5D sprite paths or clone appearance signature."""
+    sa, sb = entity_signature(bp_a), entity_signature(bp_b)
+
+    # 1. Hard 2.5D Cast Asset Path Reuse Check (applies to BOTH humans AND entities across unrelated projects!)
+    paths_a = sa["spritePaths"]
+    paths_b = sb["spritePaths"]
+    if paths_a and paths_b:
+        # Cross-project explicit path collision (e.g. pointing into another project's assets/cast/ or identical shared path)
+        if proj_a and proj_b and proj_a != proj_b:
+            for pa in paths_a:
+                if f"/{proj_b}/" in f"/{pa}" or pa.startswith(f"../{proj_b}/") or pa.startswith(f"src/{proj_b}/"):
+                    return f"reuses 2.5D cast sprite path '{pa}' belonging to unrelated project '{proj_b}'"
+            raw_shared = {p.lower() for p in paths_a if p.startswith(("src/", "/", "../"))} & {
+                p.lower() for p in paths_b if p.startswith(("src/", "/", "../"))
+            }
+            if raw_shared:
+                return f"reuses identical 2.5D cast image path(s) {sorted(raw_shared)}"
+
+    # 2. Exact 2.5D visual promptSignature hash clone (human OR entity)
+    if sa["promptSignature"] and sb["promptSignature"] and sa["promptSignature"] == sb["promptSignature"]:
+        return f"identical 2.5D cast promptSignature={sa['promptSignature']!r}"
+
+    # 3. 2.5D Story Description + Scare Tier / Traits overlap check for unrelated projects
+    is_sprite_pair = (sa["characterMode"] == "sprite2d" or bool(paths_a)) and (sb["characterMode"] == "sprite2d" or bool(paths_b))
+    if is_sprite_pair and proj_a and proj_b and proj_a != proj_b:
+        ta, tb = set(sa["descTokens"]), set(sb["descTokens"])
+        if len(ta) >= 3 and len(tb) >= 3:
+            jacc = len(ta & tb) / float(max(1, len(ta | tb)))
+            if jacc >= 0.72 and sa["role"] == sb["role"]:
+                return f"2.5D character/entity storyDescription overlap {jacc * 100:.0f}% >= 72% across unrelated videos"
+        if (
+            sa["role"] == "entity"
+            and sb["role"] == "entity"
+            and sa["scareTier"] > 0
+            and sa["scareTier"] == sb["scareTier"]
+            and sa["scareTraits"]
+            and sa["scareTraits"] == sb["scareTraits"]
+        ):
+            return f"identical 2.5D entity scareTier={sa['scareTier']} and scareTraits={sa['scareTraits']}"
+
+    # 4. Classic 3D Entity anatomy/outfit clone check
     if bp_a.get("role") != "entity" or bp_b.get("role") != "entity":
         return None
-    sa, sb = entity_signature(bp_a), entity_signature(bp_b)
     if (
         sa["hairStyle"] == sb["hairStyle"]
         and sa["garment"] == sb["garment"]
@@ -139,10 +230,12 @@ def check_entity_similarity(bp_a: dict, bp_b: dict):
         and sa["suturesAndWounds"] == sb["suturesAndWounds"]
         and sa["extraArms"] == sb["extraArms"]
         and sa["traits"] == sb["traits"]
+        and sa["scareTier"] == sb["scareTier"]
+        and sa["scareTraits"] == sb["scareTraits"]
     ):
         return (
             f"exact entity appearance clone (garment={sa['garment']}, hair={sa['hairStyle']}, "
-            f"mattedLongHair={sa['mattedLongHair']}, sutures={sa['suturesAndWounds']}, extraArms={sa['extraArms']})"
+            f"scareTier={sa['scareTier']}, mattedLongHair={sa['mattedLongHair']}, sutures={sa['suturesAndWounds']}, extraArms={sa['extraArms']})"
         )
     return None
 
@@ -158,6 +251,8 @@ def main():
     ap.add_argument("--still-out", help="Output path for generated still_manifest.json")
     ap.add_argument("--strict-cinema", action="store_true", help="Enforce v11.0+ Anchored POV-First cinema gates (`shots[]`, Cold-Hook/Master Establishing, 180-axis)")
     ap.add_argument("--strict-retention", action="store_true", help="Enforce v14.0 1-5s retention rule: first spoken word in words.json must start <= 0.45s (zero opening dead air)")
+    ap.add_argument("--strict-jumpscare", action="store_true", help="Enforce v15.0 mandatory >= 1 synchronized visual+audio Jumpscare gate even without --cues")
+    ap.add_argument("--allow-zero-jumpscare", action="store_true", help="Explicitly opt out of v15.0 mandatory min_jumpscares >= 1 gate (legacy fixtures only)")
     args = ap.parse_args()
 
     with open(args.manifest, encoding="utf-8") as fp:
@@ -258,7 +353,11 @@ def main():
                     f"'{prev.get('projectId')}:{prev.get('id')}' ({reason}). Build a distinct environment or declare `sameLocationOf` if genuinely the same place."
                 )
 
-    # 1b. Validate story-driven castBlueprints & Anti-Clone Entity Gate (v5.0)
+    # 1b. Validate story-driven castBlueprints, 7-tier Entity Scare Scale & Anti-Clone Gate (v5.0 + v15.0 2.5D)
+    manifest_char_mode = manifest.get("characterMode")
+    if manifest_char_mode is not None and manifest_char_mode not in VALID_CHARACTER_MODES:
+        errors.append(f"Manifest invalid characterMode={manifest_char_mode!r} (allowed: {sorted(VALID_CHARACTER_MODES)})")
+
     cast_blueprints = manifest.get("castBlueprints") or []
     cast_bp_map = {}
     for bp in cast_blueprints:
@@ -275,6 +374,44 @@ def main():
             errors.append(f"CharacterBlueprint '{cid}' invalid role={role!r} (allowed: {sorted(VALID_ROLES)})")
         if not str(bp.get("storyDescription", "")).strip():
             errors.append(f"CharacterBlueprint '{cid}' missing non-empty `storyDescription` justifying its appearance")
+        c_mode = bp.get("characterMode") or manifest_char_mode
+        if c_mode is not None and c_mode not in VALID_CHARACTER_MODES:
+            errors.append(f"CharacterBlueprint '{cid}' invalid characterMode={c_mode!r}")
+
+        # v15.0: Enforce 7-Tier Horror Entity Scale (>= Tier 4 required for primary entities!)
+        scare_tier = bp.get("scareTier")
+        if scare_tier is not None:
+            if not isinstance(scare_tier, int) or not (1 <= scare_tier <= 7):
+                errors.append(f"ENTITY_SCARE_TIER_ERROR: CharacterBlueprint '{cid}' scareTier={scare_tier!r} must be integer 1..7")
+            elif role == "entity" and scare_tier < MIN_PRIMARY_ENTITY_TIER:
+                errors.append(
+                    f"ENTITY_SCARE_TIER_ERROR: Primary entity '{cid}' has scareTier={scare_tier} < {MIN_PRIMARY_ENTITY_TIER}. "
+                    "Upgrade entity visual design to Tier 4-7 Uncanny Valley horror (no mild/bland ghosts)!"
+                )
+        elif role == "entity" and c_mode == "sprite2d":
+            errors.append(
+                f"ENTITY_SCARE_TIER_ERROR: 2.5D entity '{cid}' must declare `scareTier` (4..7) matching story escalation!"
+            )
+
+        # v15.0: Validate project-isolated 2.5D cast asset paths (NEVER cross-reference another project's cast folder!)
+        sa = bp.get("spriteAssets")
+        if isinstance(sa, dict):
+            same_c = bp.get("sameCharacterOf")
+            for sp_key in ("dir", "calm", "talk", "fear", "shock", "entity_scare"):
+                sp_val = str(sa.get(sp_key) or "").strip().replace("\\", "/")
+                if not sp_val:
+                    continue
+                if not same_c and (sp_val.startswith("../") or "/../" in sp_val):
+                    errors.append(
+                        f"ANTI_REPEAT_ENTITY_ERROR: CharacterBlueprint '{cid}' spriteAssets.{sp_key}='{sp_val}' escapes project directory! "
+                        f"Store fresh cast sprites strictly inside src/{project_id}/assets/cast/ or declare `sameCharacterOf`."
+                    )
+                m_src = re.match(r"^/?src/([^/]+)/", sp_val)
+                if not same_c and m_src and m_src.group(1) != project_id:
+                    errors.append(
+                        f"ANTI_REPEAT_ENTITY_ERROR: CharacterBlueprint '{cid}' spriteAssets.{sp_key}='{sp_val}' references unrelated project '{m_src.group(1)}'!"
+                    )
+
         ap = bp.get("appearance") or {}
         if ap.get("hairStyle") is not None and ap.get("hairStyle") not in VALID_HAIR_STYLES:
             errors.append(f"CharacterBlueprint '{cid}' invalid hairStyle={ap.get('hairStyle')!r}")
@@ -292,30 +429,31 @@ def main():
             ref_a, ref_b = ba.get("sameCharacterOf"), bb.get("sameCharacterOf")
             if ref_a in (bb["id"], f"{project_id}:{bb['id']}") or ref_b in (ba["id"], f"{project_id}:{ba['id']}"):
                 continue
-            reason = check_entity_similarity(ba, bb)
+            reason = check_entity_similarity(ba, bb, proj_a=project_id, proj_b=project_id)
             if reason:
                 errors.append(
                     f"ANTI_REPEAT_ENTITY_ERROR: unrelated entities '{ba['id']}' and '{bb['id']}' in project '{project_id}' "
                     f"share identical appearance ({reason}). Customize each villain to match its storyDescription!"
                 )
 
-    # Cross-video entity anti-clone check
+    # Cross-video character & entity anti-clone check (entities + any 2.5D cast blueprint!)
     for bp in bp_list:
-        if bp.get("role") != "entity":
+        is_tracked_cast = (bp.get("role") == "entity") or bool(bp.get("spriteAssets")) or (bp.get("characterMode") == "sprite2d")
+        if not is_tracked_cast:
             continue
         same_c = bp.get("sameCharacterOf")
         if same_c:
             if same_c in (bp["id"], f"{project_id}:{bp['id']}"):
-                errors.append(f"ANTI_REPEAT_ENTITY_ERROR: entity '{bp['id']}' cannot reference itself in sameCharacterOf='{same_c}'")
+                errors.append(f"ANTI_REPEAT_ENTITY_ERROR: cast '{bp['id']}' cannot reference itself in sameCharacterOf='{same_c}'")
             continue
         for prev in ent_registry:
             if prev.get("projectId") == project_id and prev.get("id") == bp.get("id"):
                 continue
-            reason = check_entity_similarity(bp, prev)
+            reason = check_entity_similarity(bp, prev, proj_a=project_id, proj_b=str(prev.get("projectId") or ""))
             if reason:
                 errors.append(
-                    f"ANTI_REPEAT_ENTITY_ERROR: project '{project_id}' entity '{bp['id']}' clones unrelated "
-                    f"'{prev.get('projectId')}:{prev.get('id')}' ({reason}). Customize appearance to storyDescription or declare `sameCharacterOf`."
+                    f"ANTI_REPEAT_ENTITY_ERROR: project '{project_id}' cast '{bp['id']}' clones unrelated "
+                    f"'{prev.get('projectId')}:{prev.get('id')}' ({reason}). Generate fresh cast sprites matching storyDescription or declare `sameCharacterOf`."
                 )
 
     # 2. Validate beats timeline contiguity, lightState, castStates, propStates & script sync
@@ -334,6 +472,7 @@ def main():
     words_data = []
     visual_beats_data = []
     dead_silences_data = []
+    silence_drops_data = []
     if args.words:
         with open(args.words, encoding="utf-8") as fp:
             raw_w = json.load(fp)
@@ -343,6 +482,7 @@ def main():
                 words_data = raw_w.get("words", [])
                 visual_beats_data = raw_w.get("visual_beats", [])
                 dead_silences_data = raw_w.get("dead_silences", [])
+                silence_drops_data = raw_w.get("silence_drops", [])
     norm_words = [
         (
             norm_text(str(w.get("w", w.get("word", "")))),
@@ -424,6 +564,49 @@ def main():
             expr = cst.get("expr")
             if expr is not None and expr not in VALID_EXPRS:
                 errors.append(f"Beat '{bid}' cast '{cid}' invalid expr={expr!r}")
+
+            # v15.2: Validate script-driven `actingCues[]` choreography entries
+            acting_cues = cst.get("actingCues")
+            if acting_cues is not None:
+                if not isinstance(acting_cues, list):
+                    errors.append(f"ACTING_CUE_ERROR: Beat '{bid}' cast '{cid}' actingCues must be a list")
+                else:
+                    for idx_c, cue in enumerate(acting_cues):
+                        if not isinstance(cue, dict):
+                            errors.append(f"ACTING_CUE_ERROR: Beat '{bid}' cast '{cid}' actingCues[{idx_c}] must be an object")
+                            continue
+                        g_name = cue.get("gesture")
+                        if g_name not in VALID_ACTING_GESTURES:
+                            errors.append(
+                                f"ACTING_CUE_ERROR: Beat '{bid}' cast '{cid}' actingCues[{idx_c}] invalid gesture={g_name!r} "
+                                f"(allowed: {sorted(VALID_ACTING_GESTURES)})"
+                            )
+                        elif g_name == "custom":
+                            cd = cue.get("customDeform")
+                            if not isinstance(cd, dict) or not cd:
+                                errors.append(
+                                    f"ACTING_CUE_ERROR: Beat '{bid}' cast '{cid}' actingCues[{idx_c}] gesture='custom' requires non-empty `customDeform` dict"
+                                )
+                        c_curve = cue.get("curve")
+                        if c_curve is not None and c_curve not in VALID_ACTING_CURVES:
+                            errors.append(
+                                f"ACTING_CUE_ERROR: Beat '{bid}' cast '{cid}' actingCues[{idx_c}] invalid curve={c_curve!r}"
+                            )
+                        c_side = cue.get("side")
+                        if c_side is not None and c_side not in VALID_ACTING_SIDES:
+                            errors.append(
+                                f"ACTING_CUE_ERROR: Beat '{bid}' cast '{cid}' actingCues[{idx_c}] invalid side={c_side!r}"
+                            )
+                        c_expr = cue.get("exprTo")
+                        if c_expr is not None and c_expr not in VALID_SPRITE_EXPRS:
+                            errors.append(
+                                f"ACTING_CUE_ERROR: Beat '{bid}' cast '{cid}' actingCues[{idx_c}] invalid exprTo={c_expr!r}"
+                            )
+                        c_at = cue.get("atFrame")
+                        if c_at is not None and (not isinstance(c_at, int) or not (0 <= c_at < total_frames)):
+                            errors.append(
+                                f"ACTING_CUE_ERROR: Beat '{bid}' cast '{cid}' actingCues[{idx_c}] atFrame={c_at!r} outside [0, {total_frames})"
+                            )
             d_mode = cst.get("dialogueMode")
             if d_mode is not None and d_mode not in VALID_DIALOGUE_MODES:
                 errors.append(f"Beat '{bid}' cast '{cid}' invalid dialogueMode={d_mode!r}")
@@ -732,6 +915,117 @@ def main():
         if shot_still_entries:
             still_entries = shot_still_entries
 
+    # 2d. v15.0 Mandatory Jumpscare Clip Schema & Audio-Visual Sync Gate (`min_jumpscares >= 1`)
+    js_clips = manifest.get("jumpscareClips")
+    valid_js_clips = []
+    if isinstance(js_clips, list):
+        for j_idx, jc in enumerate(js_clips):
+            if not isinstance(jc, dict):
+                errors.append(f"jumpscareClips[{j_idx}] must be an object")
+                continue
+            jid = str(jc.get("id") or f"js_{j_idx + 1}")
+            ja, jb = jc.get("a"), jc.get("b")
+            if not isinstance(ja, int) or not isinstance(jb, int) or ja < 0 or ja >= jb:
+                errors.append(f"jumpscareClips['{jid}'] invalid frame range [{ja}, {jb})")
+                continue
+            if total_frames and jb > total_frames:
+                errors.append(f"jumpscareClips['{jid}'] end frame {jb} exceeds totalFrames={total_frames}")
+            t_style = jc.get("transitionStyle")
+            if t_style not in VALID_JUMPSCARE_TRANSITIONS:
+                errors.append(
+                    f"jumpscareClips['{jid}'] invalid transitionStyle={t_style!r} (allowed: {sorted(VALID_JUMPSCARE_TRANSITIONS)})"
+                )
+            if not str(jc.get("src") or "").strip():
+                errors.append(f"jumpscareClips['{jid}'] missing `src` path (e.g. assets/jumpscare_{jid}.mp4)")
+            dur_js = (jb - ja) / FPS
+            if not (1.2 <= dur_js <= 4.8):
+                errors.append(f"jumpscareClips['{jid}'] duration {dur_js:.2f}s outside recommended 1.8-4.2s window")
+            valid_js_clips.append(jc)
+
+    def _resolve_cue_time_s(ev: dict):
+        if "at" in ev and ev["at"] is not None:
+            return float(ev["at"]) + float(ev.get("offset_s", 0.0))
+        if ev.get("at_silence_drop") is not None and isinstance(raw_w_obj := (cues_raw or {}), dict):
+            sd_i = int(ev["at_silence_drop"])
+            if 0 <= sd_i < len(silence_drops_data):
+                edge = str(ev.get("edge", "end")).lower()
+                return float(silence_drops_data[sd_i]["s" if edge == "start" else "e"]) + float(ev.get("offset_s", 0.0))
+        if ev.get("at_dead_silence") is not None:
+            ds_i = int(ev["at_dead_silence"])
+            if 0 <= ds_i < len(dead_silences_data):
+                edge = str(ev.get("edge", "end")).lower()
+                return float(dead_silences_data[ds_i]["s" if edge == "start" else "e"]) + float(ev.get("offset_s", 0.0))
+        if ev.get("at_word") and norm_words:
+            needle = norm_text(str(ev["at_word"]))
+            occ = int(ev.get("occurrence", 1))
+            seen_occ = 0
+            for wt, ws, we in norm_words:
+                if needle and needle in wt:
+                    seen_occ += 1
+                    if seen_occ == occ:
+                        edge = str(ev.get("edge", "start")).lower()
+                        return float(we if edge == "end" else ws) + float(ev.get("offset_s", 0.0))
+        return None
+
+    enforce_jumpscare = (not getattr(args, "allow_zero_jumpscare", False)) and (
+        cues_raw is not None or getattr(args, "strict_jumpscare", False) or (manifest_char_mode == "sprite2d" and getattr(args, "strict_cinema", False))
+    )
+    if enforce_jumpscare:
+        cues_js_events = [
+            ev for ev in ((cues_raw or {}).get("events") or [])
+            if isinstance(ev, dict) and (ev.get("jumpscare") or ev.get("is_jumpscare"))
+        ]
+        if cues_raw is not None and len(cues_js_events) < MIN_JUMPSCARES_PER_PART:
+            errors.append(
+                f"MISSING_JUMPSCARE_ERROR: cues.json has {len(cues_js_events)} jumpscare event(s) (< required min_jumpscares={MIN_JUMPSCARES_PER_PART}). "
+                "Every video/chapter MUST include >= 1 synchronized audio+visual Jumpscare!"
+            )
+
+        # Count visual jumpscares declared via `jumpscareClips[]` OR beats referencing a jumpscare `audioCueId`
+        js_audio_ids = {str(ev.get("id")) for ev in cues_js_events if ev.get("id")}
+        beat_js_refs = [
+            b for b in sorted_beats
+            if any(str(qid) in js_audio_ids for qid in (b.get("audioCueIds") or [])) or b.get("jumpscareId") or b.get("isJumpscare")
+        ]
+        visual_js_count = len(valid_js_clips) if valid_js_clips else len(beat_js_refs)
+        if visual_js_count < MIN_JUMPSCARES_PER_PART:
+            errors.append(
+                f"MISSING_JUMPSCARE_ERROR: manifest '{project_id}' declares 0 visual jumpscares "
+                f"(add >= {MIN_JUMPSCARES_PER_PART} entry to `jumpscareClips[]` synchronized with `cues.json`)!"
+            )
+
+        # Verify tight A/V synchronization between `jumpscareClips[]` and `cues.json` jumpscare events
+        if cues_raw is not None and valid_js_clips and cues_js_events:
+            for jc in valid_js_clips:
+                jid = str(jc.get("id") or "js")
+                j_time_s = float(jc["a"]) / FPS
+                ac_id = jc.get("audioCueId")
+                matched_ev = None
+                if ac_id:
+                    matched_ev = cues_events_by_id.get(str(ac_id))
+                    if matched_ev is None or not (matched_ev.get("jumpscare") or matched_ev.get("is_jumpscare")):
+                        errors.append(
+                            f"JUMPSCARE_AV_SYNC_ERROR: jumpscareClips['{jid}'] audioCueId={ac_id!r} not found as a jumpscare event in cues.json"
+                        )
+                        continue
+                else:
+                    # Match closest jumpscare event in cues.json
+                    scored = []
+                    for ev in cues_js_events:
+                        et = _resolve_cue_time_s(ev)
+                        if et is not None:
+                            scored.append((abs(et - j_time_s), ev, et))
+                    if scored:
+                        scored.sort(key=lambda x: x[0])
+                        matched_ev = scored[0][1]
+                if matched_ev is not None:
+                    ev_t = _resolve_cue_time_s(matched_ev)
+                    if ev_t is not None and abs(ev_t - j_time_s) > MAX_JS_AV_DRIFT_S:
+                        errors.append(
+                            f"JUMPSCARE_AV_SYNC_ERROR: jumpscareClips['{jid}'] visual start {j_time_s:.2f}s drifts {abs(ev_t - j_time_s):.2f}s "
+                            f"from cues.json jumpscare at {ev_t:.2f}s (> {MAX_JS_AV_DRIFT_S:.2f}s max drift)"
+                        )
+
     if total_frames and cursor < total_frames:
         errors.append(f"Timeline gap at end of manifest: beats end at {cursor} < totalFrames {total_frames}")
     elif total_frames and cursor > total_frames:
@@ -763,7 +1057,8 @@ def main():
             if not loc.get("sameLocationOf"):
                 kept.append({**loc, "projectId": project_id})
         for bp in bp_list:
-            if bp.get("role") == "entity" and not bp.get("sameCharacterOf"):
+            is_tracked_cast = (bp.get("role") == "entity") or bool(bp.get("spriteAssets")) or (bp.get("characterMode") == "sprite2d")
+            if is_tracked_cast and not bp.get("sameCharacterOf"):
                 kept.append({**bp, "entryType": "entity", "projectId": project_id})
         reg_dir = os.path.dirname(args.registry)
         if reg_dir:

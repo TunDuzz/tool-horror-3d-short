@@ -62,6 +62,157 @@ export type HorrorHudConfig = {
 
 export type CharacterRole = "human" | "entity" | "silhouette" | "lurker";
 
+export type CharacterMode = "sprite2d" | "rig3d";
+
+export type SpriteExpr = "calm" | "talk" | "fear" | "shock" | "entity_scare";
+
+export type EntityScareTier = 1 | 2 | 3 | 4 | 5 | 6 | 7;
+
+export type JumpscareTransitionStyle =
+  | "first_frame_seamless"
+  | "whip_pan_turn"
+  | "diegetic_reveal"
+  | "silence_hard_cut";
+
+export type JumpscareClipSpec = {
+  id: string;
+  /** Video source URL (imported .mp4 or staticFile path from src/<project>/assets/jumpscare_<id>.mp4). */
+  src: string;
+  /** Inclusive global start frame of the AI Jumpscare clip. */
+  a: number;
+  /** Exclusive global end frame of the AI Jumpscare clip. */
+  b: number;
+  /** Story-driven transition mode connecting 3D scene -> AI Video clip (never force flashlight). */
+  transitionStyle: JumpscareTransitionStyle;
+  /** Synchronized audio cue id inside cues.json (`ev.id`). */
+  audioCueId?: string;
+  /** Clean 3D anchor frame captured right before `a` (defaults to `Math.max(0, a - 1)`). */
+  anchorFrame?: number;
+  /** Optional entity id in `castBlueprints[]` featured in this jumpscare. */
+  entityId?: string;
+  /** Optional narrative motion prompt for `gen_jumpscare_clip.py`. */
+  prompt?: string;
+  /** Optional phrase anchor in `words.json` resolved by `align_manifest.py`. */
+  triggerPhrase?: string;
+  /** Optional light preset for GradeEffect matching (defaults to active shot light). */
+  light?: LightKey;
+  /** Optional VHS glitch boost during clip playback (default 0.65). */
+  glitchBoost?: number;
+  /** Optional crossfade frames at clip start (0 for hard/seamless cuts, 2 for whip/diegetic). */
+  blendInFrames?: number;
+  /** Optional playback rate multiplier (default 1.0). */
+  playbackRate?: number;
+};
+
+export type SpriteMicroMotion = "natural" | "tense" | "shrug" | "still" | "uncannyNeck";
+
+export type ActingGesture =
+  // Shoulders & Breathing
+  | "shrug"
+  | "sighDrop"
+  | "heavyPant"
+  | "breathHold"
+  | "shiver"
+  // Head & Gaze
+  | "nodSlow"
+  | "nodDouble"
+  | "headShake"
+  | "tiltListen"
+  | "glanceAside"
+  | "chinTuck"
+  // Torso & Reflexes
+  | "flinch"
+  | "leanIn"
+  | "leanBack"
+  | "cower"
+  | "stepSway"
+  // Uncanny Horror Entity
+  | "neckCrack"
+  | "neckTwitch"
+  | "jawStretch"
+  | "loomSwell"
+  // Freeform script-defined parametric motion
+  | "custom";
+
+export type ActingCueCurve = "pulse" | "hold" | "oscillate" | "snapHold" | "ramp";
+
+export type ActingCustomDeform = {
+  shoulderShrug?: number;
+  shrugAsym?: number;
+  chestBreath?: number;
+  headRoll?: number;
+  headNod?: number;
+  headShiftX?: number;
+  neckStretch?: number;
+  torsoSway?: number;
+  torsoLeanZ?: number;
+  armSway?: number;
+  armRecoil?: number;
+  jawTalk?: number;
+  shiverAmp?: number;
+};
+
+export type ActingCue = {
+  /** Atomic 2.5D gesture primitive or `"custom"` paired with `customDeform`. */
+  gesture: ActingGesture;
+  /** Exact Vietnamese phrase in `words.json` (`align_manifest.py` locks `atFrame`). */
+  onPhrase?: string;
+  /** Optional frame offset relative to `onPhrase` (e.g. `-4` anticipation or `+6` delayed beat). */
+  offsetFrames?: number;
+  /** Resolved global start frame (or explicit frame when no `onPhrase`). */
+  atFrame?: number;
+  /** Cue duration in frames (defaults cleanly per gesture, typically 18..48 frames). */
+  durationFrames?: number;
+  /** Smooth fade-in / fade-out envelope frames (optional override). */
+  attackFrames?: number;
+  releaseFrames?: number;
+  /** Time envelope shape (`pulse` | `hold` | `oscillate` | `snapHold` | `ramp`). */
+  curve?: ActingCueCurve;
+  /** 0..1.5 intensity multiplier (default 1.0). */
+  intensity?: number;
+  /** Directional bias for asymmetric gestures (`tiltListen` / `glanceAside` / `neckCrack`). */
+  side?: "left" | "right" | "both";
+  /** Number of oscillation cycles within `durationFrames` (e.g. `nodDouble=2`, `heavyPant=3`). */
+  cycles?: number;
+  /** Optional smooth expression crossfade triggered right at this cue's onset! */
+  exprTo?: SpriteExpr;
+  /** Crossfade frames for `exprTo` (default 6; set 0 for instant snap). */
+  exprBlendFrames?: number;
+  /** Direct anatomical deform channels for `"custom"` gestures (or fine-tuning any preset). */
+  customDeform?: ActingCustomDeform;
+};
+
+export type SpriteRigMeta = {
+  /** Normalized vertical coordinate (0=feet, 1=head top) of the neck pivot (default 0.80). */
+  neckV: number;
+  /** Normalized vertical coordinate of shoulder line (default 0.72). */
+  shoulderV: number;
+  /** Normalized vertical coordinate of waist/hips anchor (default 0.48). */
+  waistV: number;
+  /** Normalized vertical coordinate of jaw/chin center for subtle vocal articulation (default 0.845). */
+  mouthV: number;
+  /** Half-width of torso at shoulders in normalized [-1..1] horizontal space (default 0.44). */
+  shoulderSpan: number;
+  /** Horizontal center offset of head/neck in normalized [-1..1] space (supports crooked-neck ghosts, default 0.0). */
+  headCenterX: number;
+};
+
+export type SpriteAssetMap = {
+  /** Project-local directory (must live under `src/<project>/assets/cast/`). */
+  dir?: string;
+  calm?: string;
+  talk?: string;
+  fear?: string;
+  shock?: string;
+  entity_scare?: string;
+  /** Normal map filename suffix (default `"_normal.png"`). */
+  normalSuffix?: string;
+  /** Deterministic visual fingerprint hash recorded by `gen_cast_assets.py` for anti-repeat checks. */
+  promptSignature?: string;
+  /** Auto-detected anatomical landmark coordinates for 2.5D Live2D-style puppet mesh deformation. */
+  rigMeta?: SpriteRigMeta;
+};
+
 export type DialogueMode = "directSpeech" | "voiceOver" | "silent";
 
 export type CameraMode = "cold_hook" | "master" | "pov" | "pov_turn" | "pov_walk" | "pov_interact" | "ots_same_side";
@@ -123,6 +274,14 @@ export type ManifestShotSpec = {
 export type CharacterBlueprint = {
   id: string;
   role: CharacterRole;
+  /** v15.0 Default `"sprite2d"` (2.5D photorealistic normal-mapped billboard); `"rig3d"` stays available for legacy projects. */
+  characterMode?: CharacterMode;
+  /** v15.0 7-tier ghost scare escalation scale (primary horror entity MUST be >= 4, Uncanny Valley focus). */
+  scareTier?: EntityScareTier;
+  /** Explicit story-specific visual scare traits (e.g. `["ceiling_cling", "elongated_smile", "pinpoint_eyes"]`). */
+  scareTraits?: string[];
+  /** Auto-generated project-local 2.5D cast asset paths (`src/<project>/assets/cast/`). */
+  spriteAssets?: SpriteAssetMap;
   /** Natural-language appearance description lifted directly from SCRIPT.md / story lore. */
   storyDescription: string;
   /** Explicit story-driven visual spec — ALL horror/gore flags default OFF unless declared here. */
@@ -211,7 +370,9 @@ export type PoseAction =
   | "backbendCrab"
   | "lungeCloseUp"
   | "handoverProp"
-  | "fleePanic";
+  | "fleePanic"
+  | "shrug"
+  | "startledFlinch";
 
 export type FaceExpr =
   | "calm"
@@ -242,8 +403,28 @@ export type CastBeatState = {
   moveFromAnchor?: string;
   /** Optional destination anchor at the end of this beat (verified for continuity by validate_manifest.py). */
   moveToAnchor?: string;
-  /** Optional frame duration for movement/pose transition (e.g. `8` for an explosive jumpscare lunge; defaults to full beat length). */
+  /** Optional frame duration for movement/pose transition (e.g. `6` for an explosive reaction snap; defaults to full beat length unless `actionTriggerFrame` is set). */
   moveFrames?: number;
+  /** v15.0 Phrase in `words.json` that snaps a climax reaction sharply (`align_manifest.py` resolves `actionTriggerFrame`). */
+  actionTriggerPhrase?: string;
+  /** v15.0 Exact global frame where climax acting/recoil/lunge snaps decisively (hold -> snap -> hold). */
+  actionTriggerFrame?: number;
+  /** v15.0 Number of frames for the explosive snap transition at `actionTriggerFrame` (default `6`). */
+  actionSnapFrames?: number;
+  /** v15.0 Optional expression triggered sharply at `actionTriggerFrame`. */
+  triggerExpr?: FaceExpr | SpriteExpr;
+  /** v15.0 Optional explicit 2.5D sprite expression (`calm` | `talk` | `fear` | `shock` | `entity_scare`). */
+  spriteExpr?: SpriteExpr;
+  /** v15.0 Optional stop-motion framerate (e.g. `10` or `12`) for uncanny tense 2.5D movement. */
+  steppedFps?: number;
+  /** v15.1 Optional 2.5D anatomical micro-motion style (shoulder shrug, tense heave, dead-still uncanny neck twist). */
+  microMotion?: SpriteMicroMotion;
+  /** v15.1 Optional 0..1 shoulder shrug / tense hunch intensity override for this beat. */
+  shrugIntensity?: number;
+  /** v15.1 Frames used to smoothly crossfade between sprite expressions (default 6; set 0 for instant snap). */
+  exprBlendFrames?: number;
+  /** v15.2 Multi-step script-driven acting choreography timeline (phrase-locked by `align_manifest.py`). */
+  actingCues?: ActingCue[];
   /** "smooth" (default continuous lerp) or "blinkStep" (freezes while lit and snaps forward only inside blackout windows!). */
   motionMode?: "smooth" | "blinkStep";
   pose: PoseAction;
@@ -313,11 +494,15 @@ export type SceneManifest = {
   title: string;
   totalFrames: number;
   aspect: "9:16" | "16:9";
+  /** v15.0 Default character renderer mode (`"sprite2d"` default; `"rig3d"` supported for legacy projects). */
+  characterMode?: CharacterMode;
   locations: LocationBlueprint[];
   castBlueprints?: CharacterBlueprint[];
   beats: ScriptBeat[];
   /** v11.0 Single-source-of-truth phrase-locked shot list aligned by align_manifest.py and consumed via shotsFromManifest(). */
   shots?: ManifestShotSpec[];
+  /** v15.0 Mandatory >= 1 First-Frame-conditioned AI Video Jumpscare clip(s) synced with `cues.json`. */
+  jumpscareClips?: JumpscareClipSpec[];
   /** Word-timed 4-8 word subtitle chunks generated automatically by align_manifest.py from words.json (kills wall-of-text!). */
   captionChunks?: HudCaption[];
   header?: { title: string; subtitle?: string; badge?: string };
@@ -326,6 +511,21 @@ export type SceneManifest = {
   timeSkips?: HudTimeSkip[];
   choiceCard?: HudChoiceCard;
 };
+
+/** Resolve active character rendering mode for a manifest or blueprint (defaults to `"sprite2d"` in Engine v15.0). */
+export const resolveCharacterMode = (
+  manifestOrBp?: Pick<SceneManifest, "characterMode"> | Pick<CharacterBlueprint, "characterMode">,
+): CharacterMode => manifestOrBp?.characterMode ?? "sprite2d";
+
+/** Return normalized `JumpscareClipSpec[]` from a `SceneManifest` with optional resolved asset URL overrides. */
+export const jumpscareClipsFromManifest = (
+  manifest: SceneManifest,
+  srcOverrides?: Record<string, string>,
+): JumpscareClipSpec[] =>
+  (manifest.jumpscareClips ?? []).map((c) => ({
+    ...c,
+    src: srcOverrides?.[c.id] ?? c.src,
+  }));
 
 export type RawWordTiming = {
   w?: string;

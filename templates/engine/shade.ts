@@ -288,6 +288,76 @@ export function stylizedShade<T extends THREE.MeshLambertMaterial | THREE.MeshPh
 /** Alias kept strictly for internal convenience. */
 export const twoTone = stylizedShade;
 
+export type SpriteBlendUniforms = {
+  uMapB: { value: THREE.Texture | null };
+  uNormalMapB: { value: THREE.Texture | null };
+  uExprMix: { value: number };
+  uHasNormalB: { value: number };
+};
+
+const SPRITE_MAP_FRAGMENT = /* glsl */ `
+#ifdef USE_MAP
+  vec4 sampledDiffuseColor = texture2D( map, vMapUv );
+  if ( uExprMix > 0.001 ) {
+    vec4 sampledB = texture2D( uMapB, vMapUv );
+    float outA = mix( sampledDiffuseColor.a, sampledB.a, uExprMix );
+    vec3 premulRgb = mix( sampledDiffuseColor.rgb * sampledDiffuseColor.a, sampledB.rgb * sampledB.a, uExprMix );
+    sampledDiffuseColor = vec4( premulRgb / max( outA, 0.001 ), outA );
+  }
+  diffuseColor *= sampledDiffuseColor;
+#endif
+`;
+
+const SPRITE_NORMAL_FRAGMENT = /* glsl */ `
+#ifdef USE_NORMALMAP_TANGENTSPACE
+  vec3 mapN = texture2D( normalMap, vNormalMapUv ).xyz * 2.0 - 1.0;
+  if ( uExprMix > 0.001 && uHasNormalB > 0.5 ) {
+    vec3 mapNB = texture2D( uNormalMapB, vNormalMapUv ).xyz * 2.0 - 1.0;
+    mapN = normalize( mix( mapN, mapNB, uExprMix ) );
+  }
+  mapN.xy *= normalScale;
+  normal = normalize( tbn * mapN );
+#endif
+`;
+
+/**
+ * Horror Engine v15.1: Specialized `stylizedShade` extension for 2.5D Photorealistic Characters (`sprite2d.ts`).
+ * Enables zero-z-fighting, single-draw-call smooth crossfade between two Albedo + Normal Map expressions
+ * (`uMapB`, `uNormalMapB`, `uExprMix`) while preserving all 6 PointLights, 1 SpotLight, lightning flash, and fog!
+ */
+export function stylizedSpriteShade(
+  m: THREE.MeshPhongMaterial,
+  liftK = 1.05,
+  grimeK = 0.22,
+): { material: THREE.MeshPhongMaterial; blendUniforms: SpriteBlendUniforms } {
+  const blendUniforms: SpriteBlendUniforms = {
+    uMapB: { value: m.map },
+    uNormalMapB: { value: m.normalMap ?? m.map },
+    uExprMix: { value: 0.0 },
+    uHasNormalB: { value: m.normalMap ? 1.0 : 0.0 },
+  };
+  m.onBeforeCompile = (sh) => {
+    Object.assign(sh.uniforms, TONE, DYNAMIC_LIGHTS, PSX_UNIFORMS, blendUniforms);
+    sh.vertexShader = sh.vertexShader
+      .replace("#include <common>", "#include <common>\nuniform float uPsxSnap;\nvarying vec3 vToneWorldPos;\nvarying vec3 vToneWorldNormal;")
+      .replace("#include <project_vertex>", "#include <project_vertex>\n" + VERT_WORLD_POS);
+    sh.fragmentShader = sh.fragmentShader
+      .replace(
+        "#include <common>",
+        "#define USE_STYLIZED_SPEC\n" +
+          DECL +
+          "\nuniform sampler2D uMapB; uniform sampler2D uNormalMapB; uniform float uExprMix; uniform float uHasNormalB;" +
+          `\n#define LIFT_K ${liftK.toFixed(3)}\n#define GRIME_K ${grimeK.toFixed(3)}`,
+      )
+      .replace("#include <map_fragment>", SPRITE_MAP_FRAGMENT)
+      .replace("#include <normal_fragment_maps>", SPRITE_NORMAL_FRAGMENT)
+      .replace("#include <lights_fragment_begin>", "float sunVis = 1.0;\n" + LFB)
+      .replace("#include <lights_fragment_end>", "#include <lights_fragment_end>\n" + STYLIZED_SHADE);
+  };
+  m.customProgramCacheKey = () => `stylizedSpriteShadeV151_${liftK.toFixed(3)}_${grimeK.toFixed(3)}`;
+  return { material: m, blendUniforms };
+}
+
 // ---------------- tone-map inversion ----------------
 const neutral = (c: number[]) => {
   const x = Math.min(c[0], c[1], c[2]), off = x < 0.08 ? x - 6.25 * x * x : 0.04;

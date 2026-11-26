@@ -7,4 +7,6 @@ __pycache__/
 Thumbs.db
 *.tmp
 *.log
+.env
+.env.*
 out/**/*.mp4

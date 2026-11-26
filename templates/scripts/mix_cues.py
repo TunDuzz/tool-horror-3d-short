@@ -332,18 +332,49 @@ def audit_cues(cfg: dict, resolved_events: list[dict], wdata: dict, dur: float) 
             "detail": f"Found {len(rev_sucks)} `reverse_suck` trailer risers — prefer `[SILENCE_DROP Xs]` natural uncanny hush!",
         })
 
+    # v15.0 Real-SFX-First policy: forbid procedural `synth:` beds/events unless explicitly opted in (`allow_synth: true`)
+    global_allow_synth = bool(cfg.get("allow_synth", False))
+    for b in beds:
+        if isinstance(b, dict) and b.get("synth") and not (global_allow_synth or b.get("allow_synth")):
+            warnings.append({
+                "code": "SYNTH_SFX_FORBIDDEN",
+                "severity": "ERROR",
+                "detail": (
+                    f"Bed uses procedural synth='{b.get('synth')}' without `allow_synth: true`. "
+                    "v15.0 prefers 100% real recorded CC0 WAVs (fetch via `sfx_manager.py auto-fetch-for-script`)."
+                ),
+            })
+    for ev in resolved_events:
+        if ev.get("synth") and not ev.get("jumpscare") and not (global_allow_synth or ev.get("allow_synth")):
+            warnings.append({
+                "code": "SYNTH_SFX_FORBIDDEN",
+                "severity": "ERROR",
+                "detail": (
+                    f"Event '{ev['label']}' uses procedural synth='{ev.get('synth')}' without `allow_synth: true`. "
+                    "Replace with a real recorded CC0 WAV in audio/sfx_library/!"
+                ),
+            })
+
     js_events = [e for e in resolved_events if e.get("jumpscare") or e.get("is_jumpscare")]
-    v13_mode = _is_v13_soundscape(cfg, wdata)
-    default_max_js = 0 if v13_mode else (2 if dur <= 95.0 else max(2, int(round((dur / 60.0) * 0.8))))
+    min_js = int(cfg.get("min_jumpscares", 1))
+    default_max_js = 2 if dur <= 95.0 else max(2, int(round((dur / 60.0) * 1.2)))
     max_js = int(cfg.get("max_jumpscares", default_max_js))
+    if len(js_events) < min_js:
+        warnings.append({
+            "code": "MISSING_JUMPSCARE_ERROR",
+            "severity": "ERROR",
+            "detail": (
+                f"Found {len(js_events)} jumpscare event(s) < mandatory min_jumpscares={min_js}. "
+                "v15.0 Option A requires >= 1 synchronized audio+visual Jumpscare per short/chapter!"
+            ),
+        })
     if len(js_events) > max_js:
         warnings.append({
             "code": "JUMPSCARE_FATIGUE_WARN",
             "severity": "ERROR",
             "detail": (
                 f"Found {len(js_events)} jumpscares > max_jumpscares={max_js} "
-                f"({'v13 psychological mode defaults to 0 jumpscares' if v13_mode else f'recommended <= {max_js}'}). "
-                "Rely on dialogue, motifs & uncanny silence unless explicitly justified!"
+                f"(recommended 1-{max_js} for high-impact horror pacing)."
             ),
         })
     return warnings
@@ -397,29 +428,33 @@ def _build_jumpscare_composite(ev: dict, lib_dir: str, mf_assets: dict, r, recor
         _fit_add(out, sub_syn, dbg(-2.0) / max(float(np.max(np.abs(sub_syn))), 1e-7))
 
     bite_cands = [ev["sound"]] + spec["bite_candidates"] if ev.get("sound") else spec["bite_candidates"]
-    got_real_bite = _load_trimmed_first(bite_cands, target_pk_db=-1.5, hp_hz=spec["bite_hp_hz"])
-    edge_db = float(ev.get("edge_db", spec["synth_edge_db"] if got_real_bite else -1.5))
+    got_real_bite = _load_trimmed_first(bite_cands, target_pk_db=-1.2, hp_hz=spec["bite_hp_hz"])
 
-    sb = spec["synth_bite"]
-    if sb == "shriek":
-        edge = _apply_dialog_safe_eq(stinger("shriek", vel=0.95, r=r, dur=min(dur_s, 1.5)), hp_hz=1200.0)
-    elif sb == "entity_shriek":
-        edge = _apply_dialog_safe_eq(entity_rattle(dur=min(dur_s, 1.6), vel=0.92, r=r, kind="shriek_gasp"), hp_hz=550.0)
-        edge = _fit_add(edge.copy(), _apply_dialog_safe_eq(stinger("shriek", vel=0.8, r=r, dur=min(dur_s, 1.2)), hp_hz=1600.0), 0.55)
-    elif sb == "braam":
-        edge = _apply_dialog_safe_eq(stinger("braam", vel=0.92, r=r, dur=min(dur_s, 1.8), f0=73.4), hp_hz=260.0)
-        edge = _fit_add(edge.copy(), pan(bowed_metal(f=620.0, dur=min(dur_s, 1.4), vel=0.75, r=r, att=0.015), 0.2), 0.65)
-    else:
-        vhs = vhs_static_burst(dur=min(dur_s, 0.55), vel=0.95, r=r)
-        shr = _apply_dialog_safe_eq(stinger("shriek", vel=0.9, r=r, dur=min(dur_s, 1.15)), hp_hz=1350.0)
-        edge = np.zeros((2, max(vhs.shape[1], shr.shape[1])), dtype=np.float64)
-        _fit_add(edge, vhs, 1.0)
-        _fit_add(edge, shr, 0.72)
-        edge = np.tanh(edge * 1.65)
+    # v15.0 Real-SFX-First: when a real recorded jumpscare bite WAV loaded, do NOT layer procedural shriek
+    # unless the cue explicitly opts in with `synth_edge: true`!
+    use_synth_edge = (not got_real_bite) or bool(ev.get("synth_edge", False))
+    if use_synth_edge:
+        edge_db = float(ev.get("edge_db", spec["synth_edge_db"] if got_real_bite else -1.5))
+        sb = spec["synth_bite"]
+        if sb == "shriek":
+            edge = _apply_dialog_safe_eq(stinger("shriek", vel=0.95, r=r, dur=min(dur_s, 1.5)), hp_hz=1200.0)
+        elif sb == "entity_shriek":
+            edge = _apply_dialog_safe_eq(entity_rattle(dur=min(dur_s, 1.6), vel=0.92, r=r, kind="shriek_gasp"), hp_hz=550.0)
+            edge = _fit_add(edge.copy(), _apply_dialog_safe_eq(stinger("shriek", vel=0.8, r=r, dur=min(dur_s, 1.2)), hp_hz=1600.0), 0.55)
+        elif sb == "braam":
+            edge = _apply_dialog_safe_eq(stinger("braam", vel=0.92, r=r, dur=min(dur_s, 1.8), f0=73.4), hp_hz=260.0)
+            edge = _fit_add(edge.copy(), pan(bowed_metal(f=620.0, dur=min(dur_s, 1.4), vel=0.75, r=r, att=0.015), 0.2), 0.65)
+        else:
+            vhs = vhs_static_burst(dur=min(dur_s, 0.55), vel=0.95, r=r)
+            shr = _apply_dialog_safe_eq(stinger("shriek", vel=0.9, r=r, dur=min(dur_s, 1.15)), hp_hz=1350.0)
+            edge = np.zeros((2, max(vhs.shape[1], shr.shape[1])), dtype=np.float64)
+            _fit_add(edge, vhs, 1.0)
+            _fit_add(edge, shr, 0.72)
+            edge = np.tanh(edge * 1.65)
 
-    epk = float(np.max(np.abs(edge)))
-    if epk > 1e-7:
-        _fit_add(out, edge * (dbg(edge_db) / epk), 1.0)
+        epk = float(np.max(np.abs(edge)))
+        if epk > 1e-7:
+            _fit_add(out, edge * (dbg(edge_db) / epk), 1.0)
 
     if ev.get("body_crack"):
         crk = neck_crack_wet(dur=0.45, vel=0.9, r=r)
@@ -807,7 +842,7 @@ def render_cues_mix(cues_path: str, out_wav: str, library_dir: str | None = None
         tinn_arr = None
         if ev.get("jumpscare"):
             arr, tinn_arr = _build_jumpscare_composite(ev, lib_dir, mf_assets, r, _record_usage)
-            ev.setdefault("target_peak_dbfs", -1.5)
+            ev.setdefault("target_peak_dbfs", -1.0)
             ev.setdefault("reverb", 0.22)
             ms_s = float(ev.get("micro_silence_s", 0.0))
             if ms_s > 0.02:
@@ -884,7 +919,7 @@ def render_cues_mix(cues_path: str, out_wav: str, library_dir: str | None = None
         music,
         sfx_combined,
         target_lufs=target_lufs,
-        ceil_db=float(cfg.get("ceil_db", -1.2)),
+        ceil_db=float(cfg.get("ceil_db", -1.0)),
         fade_out=float(cfg.get("fade_out", 0.12)),
         dead_silences=dead_silences,
         ds_floor_db=float(cfg.get("dead_silence_floor_db", -48.0)),

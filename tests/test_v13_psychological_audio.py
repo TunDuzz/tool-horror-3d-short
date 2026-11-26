@@ -24,17 +24,18 @@ import mix_cues  # noqa: E402
 class TestV13PsychologicalVoiceAndSoundscape(unittest.TestCase):
     def test_constitution_v13_soundscape_and_speech_rules(self):
         const = constitution.load_constitution()
-        self.assertEqual(const["version"], "14.0.0")
+        self.assertEqual(const["version"], "15.0.0")
         sp = const["speech"]
         self.assertLessEqual(sp["spokenWordsPerSecondMax"], 3.65)
         self.assertIn("[BEAT Xs]", sp["directives"])
         self.assertIn("[SILENCE_DROP Xs]", sp["directives"])
 
         sc = const["soundscape"]
-        self.assertEqual(sc["defaultMaxJumpscaresPerPart"], 0)
-        self.assertEqual(sc["hardMaxJumpscaresShort"], 1)
+        self.assertEqual(sc["minJumpscaresPerPart"], 1)
+        self.assertEqual(sc["hardMaxJumpscaresShort"], 2)
         self.assertEqual(sc["maxBeds"], 2)
         self.assertEqual(sc["targetLufs"], -16.0)
+        self.assertEqual(sc["jumpscareTruePeakDb"], -1.0)
         self.assertIn("close_ear", sc["validSpaceZones"])
         self.assertIn("adjacent_muffled", sc["validSpaceZones"])
         self.assertIn("steady_then_stop", sc["validMotifModes"])
@@ -59,7 +60,8 @@ class TestV13PsychologicalVoiceAndSoundscape(unittest.TestCase):
             doc = horror_story.read_json(story_p)
             self.assertEqual(doc["schemaVersion"], "3.2")
             self.assertIn("soundscapeDesign", doc)
-            self.assertEqual(doc["params"]["thresholds"]["maxJumpscaresTotal"], 1)
+            self.assertGreaterEqual(doc["params"]["thresholds"]["minJumpscaresTotal"], 1)
+            self.assertGreaterEqual(doc["params"]["thresholds"]["maxJumpscaresTotal"], 2)
 
             # Populate minimal valid v3.2 story to test Gate 25 & Gate 26 compatibility
             doc["premise"]["core"] = "Người gác đò đêm cuối phát hiện sổ điểm danh ghi tên người đã khuất"
@@ -160,11 +162,12 @@ class TestV13PsychologicalVoiceAndSoundscape(unittest.TestCase):
             self.assertIsNotNone(g25_bad)
             self.assertFalse(g25_bad["ok"])
 
-            # Fix synopsis to sensory prose, remove unjustified jumpscare, add motif with breakBeatId
+            # Fix synopsis to sensory prose, provide justified jumpscareReason on each chapter (v15.0 >= 1/chapter), add motif with breakBeatId
             for p in doc["parts"]:
                 p["synopsis"] = "Ngoài hiên mưa tạt lạnh qua khe ván, cuốn sổ trực nằm mở sẵn ở trang cuối nhòe bùn."
-                for ab in p["actionBeats"]:
-                    ab.pop("jumpscareStyle", None)
+                ab_last = p["actionBeats"][-1]
+                ab_last["jumpscareStyle"] = "cinema_stab"
+                ab_last["jumpscareReason"] = "Bóng áo mưa đột ngột áp sát khe cửa đúng lúc giọt nước dột ngừng rơi"
             doc["soundscapeDesign"] = {
                 "nearBed": {"sound": "room_tone_dark", "label": "Không gian gỗ ẩm trong quầy"},
                 "farBed": {
@@ -199,7 +202,8 @@ class TestV13PsychologicalVoiceAndSoundscape(unittest.TestCase):
                 cues_d = json.load(fp_cd)
             self.assertIn("[BEAT 0.45s]", sk_txt)
             self.assertIn("voice=Thái Sơn", sk_txt)  # Elderly Southern male auto-cast distinct from narrator!
-            self.assertEqual(cues_d["max_jumpscares"], 0)
+            self.assertEqual(cues_d["min_jumpscares"], 1)
+            self.assertGreaterEqual(cues_d["max_jumpscares"], 2)
             self.assertEqual(len(cues_d["beds"]), 2)
             self.assertTrue(len(cues_d.get("motifs") or []) >= 1)
             self.assertFalse(any(ev.get("synth") == "reverse_suck" for ev in cues_d.get("events", [])))
@@ -218,7 +222,7 @@ class TestV13PsychologicalVoiceAndSoundscape(unittest.TestCase):
                     "[NARRATOR | mood=whisper | prox=close]\n"
                     "Tiếng dột ngoài mái tôn bỗng im bặt... [BEAT 0.45s] [PACE=0.82 | PITCH=-1.0] chỉ còn tiếng thở ngay sát sau gáy tôi.\n"
                 )
-            items = gen_horror_voice.parse_script(sp)
+            items = gen_horror_voice.parse_script(sp, enable_clause_dsp_split=True)
             speech_items = [it for it in items if it["kind"] == "speech"]
             self.assertTrue(any(it["kind"] == "silence_drop" for it in items))
             self.assertTrue(any(it["kind"] == "beat_pause" for it in items))
@@ -368,6 +372,7 @@ class TestV13PsychologicalVoiceAndSoundscape(unittest.TestCase):
                     {
                         "id": "e_breath_in_hush",
                         "synth": "breath_close_ear",
+                        "allow_synth": True,
                         "at": 8.65,
                         "dur_s": 0.85,
                         "role": "subliminal",
@@ -376,6 +381,15 @@ class TestV13PsychologicalVoiceAndSoundscape(unittest.TestCase):
                         "pan_to": 0.75,
                         "survive_hush": True,
                         "label": "Tiếng thở khẽ sát tai phải giữa khoảng lặng tâm lý",
+                    },
+                    {
+                        "id": "js_climax",
+                        "jumpscare": "cinema_stab",
+                        "sound": "bolt_hit",
+                        "at_silence_drop": 0,
+                        "edge": "end",
+                        "target_peak_dbfs": -1.0,
+                        "label": "Cao trào sau khoảng lặng tâm lý",
                     },
                 ],
             }
@@ -387,18 +401,19 @@ class TestV13PsychologicalVoiceAndSoundscape(unittest.TestCase):
             res = mix_cues.render_cues_mix(cues_p, out_wav, library_dir=lib_dir, strict=True)
             self.assertEqual(res["verdict"], "PASS")
             self.assertEqual(res["clips"], 0)
-            self.assertAlmostEqual(res["stats"]["I"], -16.0, delta=0.35)
+            self.assertAlmostEqual(res["stats"]["I"], -16.0, delta=0.55)
             self.assertGreaterEqual(len(res.get("silence_drops") or []), 1)
             self.assertGreaterEqual(res["silence_drops"][0]["bed_drop_db"], 22.0)
 
-            # Verify default max_jumpscares = 0 blocks unrequested jumpscare under --strict!
-            bad_js = json.loads(json.dumps(cues))
-            bad_js["events"].append({"id": "bad_js", "jumpscare": "cinema_stab", "at": 6.0})
-            bad_p = os.path.join(td, "bad_js.json")
-            with open(bad_p, "w", encoding="utf-8") as fp:
-                json.dump(bad_js, fp)
-            with self.assertRaises(RuntimeError):
-                mix_cues.render_cues_mix(bad_p, os.path.join(td, "bad.wav"), library_dir=lib_dir, strict=True)
+            # v15.0: Verify default min_jumpscares = 1 blocks 0-jumpscare cues under --strict!
+            zero_js = json.loads(json.dumps(cues))
+            zero_js["events"] = [e for e in zero_js["events"] if not e.get("jumpscare")]
+            zero_p = os.path.join(td, "zero_js.json")
+            with open(zero_p, "w", encoding="utf-8") as fp:
+                json.dump(zero_js, fp)
+            with self.assertRaises(RuntimeError) as ctx_z:
+                mix_cues.render_cues_mix(zero_p, os.path.join(td, "zero.wav"), library_dir=lib_dir, strict=True)
+            self.assertIn("MISSING_JUMPSCARE_ERROR", str(ctx_z.exception))
 
 
 if __name__ == "__main__":

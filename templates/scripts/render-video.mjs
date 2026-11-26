@@ -1,10 +1,10 @@
-// Cross-platform Hardware-GPU-Accelerated Video Renderer for Horror Engine v3.
+// Cross-platform Hardware-GPU-Accelerated Video Renderer for Horror Engine v15.0 (GTX 960 VRAM-Safe).
 // Auto-detects Linux NVIDIA/DRM EGL ("angle-egl") with graceful fallback to "swangle",
-// supports fast --draft preview mode (scale 0.5, MSAA off, crf 24), enforces Remotion-safe scales,
-// and cleans its temporary webpack bundle on exit.
+// defaults to `concurrency=1` to protect 4-6GB VRAM GPUs from OOM / swangle fallback,
+// logs GPU mode + live/final FPS, supports --draft / --low-vram, and cleans temp webpack bundles on exit.
 //
 // Usage:
-//   node scripts/render-video.mjs <CompositionId> <out.mp4> [--scale 1|0.5|1.25|1.5] [--crf 16] [--concurrency 2] [--draft] [--gl angle-egl|swangle|angle]
+//   node scripts/render-video.mjs <CompositionId> <out.mp4> [--scale 1|0.5|1.25|1.5] [--crf 16] [--concurrency 1] [--draft] [--low-vram|--no-low-vram] [--gl auto|angle-egl|swangle|angle]
 
 import fs from "node:fs";
 import os from "node:os";
@@ -19,6 +19,10 @@ for (let i = 0; i < rawArgs.length; i++) {
     const k = a.slice(2);
     if (k === "draft") {
       flags.draft = true;
+    } else if (k === "low-vram") {
+      flags.lowVram = true;
+    } else if (k === "no-low-vram") {
+      flags.lowVram = false;
     } else if (i + 1 < rawArgs.length) {
       flags[k] = rawArgs[++i];
     }
@@ -29,7 +33,9 @@ for (let i = 0; i < rawArgs.length; i++) {
 
 const [compId, outPath] = positional;
 if (!compId || !outPath) {
-  console.error("Usage: node scripts/render-video.mjs <CompositionId> <out.mp4> [--scale 1] [--crf 16] [--concurrency 2] [--draft] [--gl auto]");
+  console.error(
+    "Usage: node scripts/render-video.mjs <CompositionId> <out.mp4> [--scale 1] [--crf 16] [--concurrency 1] [--draft] [--low-vram|--no-low-vram] [--gl auto]",
+  );
   process.exit(1);
 }
 
@@ -41,7 +47,8 @@ if (!validScales.has(scale)) {
   process.exit(1);
 }
 const crf = Number(flags.crf ?? (draft ? 24 : 16));
-const concurrency = Number(flags.concurrency ?? (draft ? 3 : 2));
+// Default concurrency=1 prevents 4-6GB VRAM overflow (e.g. GTX 960 / 960M) and avoids software swangle fallback!
+const concurrency = Math.max(1, Number(flags.concurrency ?? 1));
 
 const isWin = process.platform === "win32";
 const defaultTmp = isWin && fs.existsSync("D:/") ? "D:/remotion-tmp" : path.join(os.tmpdir(), "remotion-tmp");
@@ -62,12 +69,21 @@ const detectedChrome = chromeCandidates.find((p) => fs.existsSync(p));
 const browserExecutable = process.env.CHROME_EXE || detectedChrome || undefined;
 
 function detectDefaultGl() {
-  if (flags.gl && flags.gl !== "auto") return flags.gl;
-  if (process.env.REMOTION_GL) return process.env.REMOTION_GL;
-  if (process.platform !== "linux") return "angle";
   const hasNvidiaEgl = fs.existsSync("/usr/share/glvnd/egl_vendor.d/10_nvidia.json");
   const hasDrmGpu = fs.existsSync("/dev/dri/renderD128");
-  return hasNvidiaEgl || hasDrmGpu ? "angle-egl" : "swangle";
+  if (flags.gl && flags.gl !== "auto") {
+    return { gl: flags.gl, reason: "explicit --gl", hasNvidiaEgl, hasDrmGpu };
+  }
+  if (process.env.REMOTION_GL) {
+    return { gl: process.env.REMOTION_GL, reason: "REMOTION_GL env", hasNvidiaEgl, hasDrmGpu };
+  }
+  if (process.platform !== "linux") {
+    return { gl: "angle", reason: `platform=${process.platform}`, hasNvidiaEgl, hasDrmGpu };
+  }
+  if (hasNvidiaEgl || hasDrmGpu) {
+    return { gl: "angle-egl", reason: hasNvidiaEgl ? "NVIDIA EGL detected" : "DRM GPU detected", hasNvidiaEgl, hasDrmGpu };
+  }
+  return { gl: "swangle", reason: "no hardware EGL/DRM device", hasNvidiaEgl, hasDrmGpu };
 }
 
 const outDir = path.dirname(path.resolve(outPath));
@@ -80,11 +96,17 @@ const serveUrl = await bundle({
   ...(fs.existsSync(publicDir) ? { publicDir } : {}),
 });
 
-const inputProps = draft ? { draft: true } : {};
+const inputProps = {
+  ...(draft ? { draft: true } : {}),
+  ...(flags.lowVram !== undefined ? { lowVram: flags.lowVram } : {}),
+};
 
-async function renderWithGl(glMode) {
+async function renderWithGl(glMode, glReason) {
   const chromiumOptions = { gl: glMode };
-  console.log(`[render-video] comp=${compId} out=${outPath} gl=${glMode} scale=${scale} crf=${crf} concurrency=${concurrency} draft=${draft}`);
+  const hwLabel = glMode === "swangle" ? "SOFTWARE (swangle)" : `HARDWARE GPU (${glMode})`;
+  console.log(
+    `[render-video] comp=${compId} out=${outPath} gpu=${hwLabel} [${glReason}] scale=${scale} crf=${crf} concurrency=${concurrency} draft=${draft} lowVram=${flags.lowVram ?? "auto"}`,
+  );
   const t0 = Date.now();
   const composition = await selectComposition({
     serveUrl,
@@ -107,28 +129,32 @@ async function renderWithGl(glMode) {
     ...(browserExecutable ? { browserExecutable } : {}),
     chromiumOptions,
     timeoutInMilliseconds: 180000,
-    onProgress: ({ progress }) => {
+    onProgress: ({ progress, renderedFrames }) => {
       const pct = Math.floor(progress * 100);
       if (pct >= lastPct + 10 || pct === 100) {
         lastPct = pct;
-        const elapsed = ((Date.now() - t0) / 1000).toFixed(1);
-        console.log(`[render-video] ${pct}% (${elapsed}s)`);
+        const elapsed = Math.max(0.1, (Date.now() - t0) / 1000);
+        const curFrames = typeof renderedFrames === "number" ? renderedFrames : Math.round(progress * composition.durationInFrames);
+        const liveFps = curFrames / elapsed;
+        console.log(`[render-video] ${pct}% (${curFrames}/${composition.durationInFrames}f in ${elapsed.toFixed(1)}s | ${liveFps.toFixed(2)} fps | gl=${glMode})`);
       }
     },
   });
   const totalSec = (Date.now() - t0) / 1000;
   const fpsEff = composition.durationInFrames / Math.max(0.1, totalSec);
-  console.log(`[render-video] DONE ${outPath} (${composition.durationInFrames}f in ${totalSec.toFixed(1)}s = ${fpsEff.toFixed(2)} fps, gl=${glMode})`);
+  console.log(
+    `[render-video] DONE ${outPath} (${composition.durationInFrames}f in ${totalSec.toFixed(1)}s = ${fpsEff.toFixed(2)} fps, gl=${glMode}, concurrency=${concurrency})`,
+  );
 }
 
-const preferredGl = detectDefaultGl();
+const detected = detectDefaultGl();
 try {
   try {
-    await renderWithGl(preferredGl);
+    await renderWithGl(detected.gl, detected.reason);
   } catch (err) {
-    if (!flags.gl && !process.env.REMOTION_GL && preferredGl !== "swangle") {
-      console.warn(`[render-video] gl=${preferredGl} failed (${err?.message || err}); falling back to swangle...`);
-      await renderWithGl("swangle");
+    if (!flags.gl && !process.env.REMOTION_GL && detected.gl !== "swangle") {
+      console.warn(`[render-video] gl=${detected.gl} failed (${err?.message || err}); falling back to swangle...`);
+      await renderWithGl("swangle", "fallback after hardware GL error");
     } else {
       throw err;
     }

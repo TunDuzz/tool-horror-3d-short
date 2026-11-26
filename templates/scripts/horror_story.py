@@ -33,7 +33,7 @@ VALID_ENGINE_POSES = {
     "sitCrossLegged", "sitChair", "sitBenchHunched", "walk", "creep", "peerForward", "recoil",
     "holdPhone", "holdLantern", "point", "lunge", "loomingStill", "peekAroundDoor",
     "turnHead", "stalkLoom", "jawUnlatch", "crawler", "doorwayPeek", "backbendCrab", "lungeCloseUp",
-    "handoverProp", "fleePanic",
+    "handoverProp", "fleePanic", "shrug", "startledFlinch",
 }
 DIALOGUE_QUOTE_RE = re.compile(r'["“”«»「」『』]')
 CHAPTER_RE = re.compile(r"^\s*(?:chương|hồi|phần|tập|chapter)\s+[0-9ivxlcdm]+", re.IGNORECASE | re.MULTILINE)
@@ -138,7 +138,8 @@ def default_thresholds(params, schema_version="3.0"):
             "maxProps": 8,
             "maxBeatGap": 1,
             "maxPrimaryScenes": 3,
-            "maxJumpscaresTotal": 0 if v31 else 2,
+            "minJumpscaresTotal": 1,
+            "maxJumpscaresTotal": 2,
         }
     elif fmt == "short":
         base = {
@@ -148,7 +149,8 @@ def default_thresholds(params, schema_version="3.0"):
             "maxProps": 10,
             "maxBeatGap": 1,
             "maxPrimaryScenes": 5,
-            "maxJumpscaresTotal": 1 if v31 else 4,
+            "minJumpscaresTotal": max(1, parts_n),
+            "maxJumpscaresTotal": max(2, parts_n * 2),
         }
     else:
         base = {
@@ -158,7 +160,8 @@ def default_thresholds(params, schema_version="3.0"):
             "maxProps": 16,
             "maxBeatGap": 2,
             "maxPrimaryScenes": max(5, min(12, 4 + math.ceil(parts_n / 3))),
-            "maxJumpscaresTotal": 2 if v31 else max(5, int(round((total_sec / 60.0) * 0.65))),
+            "minJumpscaresTotal": max(1, parts_n),
+            "maxJumpscaresTotal": max(5, parts_n * 2),
         }
     custom = params.get("thresholds") or {}
     if isinstance(custom, dict):
@@ -1258,13 +1261,14 @@ def evaluate_gates(doc, stage="full", strict_spatial=False, strict_story=False):
                 exp_words = float(p.get("target_sec") or 60) * wps_cfg
                 if part_wb > 0 and not (exp_words * 0.55 <= part_wb <= exp_words * 1.45):
                     x_errs.append(f"P{pid} tổng wordBudget={part_wb} lệch nhiều so với chuẩn ~{int(exp_words)} từ")
+            min_js_total = int(th.get("minJumpscaresTotal", 1 if sv[:3] >= "3.2" else 0))
+            if sv[:3] >= "3.2" and total_js < min_js_total:
+                x_errs.append(f"Tổng toàn phim mới có {total_js} Jumpscare < tối thiểu {min_js_total} cho '{fmt}' (v15.0 bắt buộc >= 1 cú cao trào!)")
             if total_js > th["maxJumpscaresTotal"]:
                 x_errs.append(f"Tổng toàn phim có {total_js} Jumpscare > trần {th['maxJumpscaresTotal']} cho '{fmt}' (gây nhờn!)")
-            if fmt == "series" and zero_js_parts < 1:
-                x_errs.append("Series 8–15 phút bắt buộc có >= 1 chương thở tâm lý (0 Jumpscare)")
             add_gate(
                 "cross-part-continuity-and-dialogue-briefs",
-                "24. Liên tục Xuyên Chương, Subtext/Cảm giác & Trần Jumpscare Toàn Phim",
+                "24. Liên tục Xuyên Chương, Subtext/Cảm giác & Nhịp Jumpscare Toàn Phim",
                 not x_errs,
                 f"0 lỗi xuyên chương, đủ subtext/sensory/spokenBeat, tổng {total_js}/{th['maxJumpscaresTotal']} Jumpscare"
                 if not x_errs
@@ -1325,16 +1329,16 @@ def evaluate_gates(doc, stage="full", strict_spatial=False, strict_story=False):
 
             add_gate(
                 "psychological-soundscape-and-subtext",
-                "25. Thoại Gợi Mở (Anti-Exposition), Âm Lặp (`motifs`) & Kỷ Luật 0-Jumpscare",
+                "25. Thoại Gợi Mở (Anti-Exposition), Âm Lặp (`motifs`) & Kỷ Luật Jumpscare Có Mục Đích",
                 not p25_errs,
-                "Thoại giàu ẩn ý không kể hộ cảm xúc, có Motif âm thanh biến đổi quy luật & kiểm soát chặt Jumpscare"
+                "Thoại giàu ẩn ý không kể hộ cảm xúc, có Motif âm thanh biến đổi quy luật & Jumpscare có lý do rõ ràng"
                 if not p25_errs
                 else "; ".join(p25_errs[:4]),
             )
         elif v31_mode:
             add_gate(
                 "psychological-soundscape-and-subtext",
-                "25. Thoại Gợi Mở (Anti-Exposition), Âm Lặp (`motifs`) & Kỷ Luật 0-Jumpscare",
+                "25. Thoại Gợi Mở (Anti-Exposition), Âm Lặp (`motifs`) & Kỷ Luật Jumpscare Có Mục Đích",
                 True,
                 "Kiểm ở stage full",
                 applies=False,
@@ -2204,6 +2208,67 @@ def cmd_export_outline(args):
         print(text)
 
 
+_HUMAN_ACTING_RULES = [
+    (("thở dài", "mệt mỏi", "kiệt sức", "buông xuôi", "chán nản", "sigh"), "sighDrop", None, "both"),
+    (("nhún vai", "mặc xác", "kệ nó", "chịu thua", "chẳng rõ", "shrug"), "shrug", None, "both"),
+    (("thở dốc", "hổn hển", "thở gấp", "hụt hơi", "pant"), "heavyPant", "fear", "both"),
+    (("nín thở", "chết lặng", "im bặt", "không dám thở", "đứng chết trân", "freeze"), "breathHold", None, "both"),
+    (("rùng mình", "lạnh gáy", "nổi da gà", "ớn lạnh", "run rẩy", "run bần bật", "shiver"), "shiver", "fear", "both"),
+    (("giật mình", "giật bắn", "điếng người", "đứng tim", "khựng lại", "hoảng hồn", "flinch"), "flinch", "shock", "both"),
+    (("lắng nghe", "tiếng gõ", "bước chân", "dỏng tai", "nghe ngóng", "listen"), "tiltListen", None, "left"),
+    (("liếc", "ngoái", "nhìn sang", "quay sang", "ngó quanh", "glance"), "glanceAside", None, "right"),
+    (("rụt cổ", "cúi gằm", "thu người", "nép vào", "chin tuck"), "chinTuck", None, "both"),
+    (("ghé sát", "nhìn kỹ", "cúi sát", "rướn người", "soi kỹ", "lean in"), "leanIn", None, "both"),
+    (("lùi lại", "ngả người", "lùi bước", "né tránh", "lean back"), "leanBack", "fear", "both"),
+    (("co rúm", "run sợ", "ôm đầu", "co người", "cower"), "cower", "fear", "both"),
+    (("lắc đầu", "không thể", "không phải", "đừng", "shake head"), "headShake", None, "both"),
+    (("gật lia", "vội gật", "gật liên tiếp", "gật gù"), "nodDouble", None, "both"),
+    (("gật đầu", "đúng rồi", "đồng ý", "nod"), "nodSlow", None, "both"),
+    (("loạng choạng", "bước đi", "đi tới", "step"), "stepSway", None, "both"),
+]
+
+_ENTITY_ACTING_RULES = [
+    (("ngoẹo cổ", "vặn cổ", "bẻ cổ", "nghiêng cổ", "gập cổ", "crack neck"), "neckCrack", None, "right"),
+    (("rung giật", "giật liên hồi", "co giật", "twitch"), "neckTwitch", None, "both"),
+    (("há miệng", "há hàm", "cười ngoác", "nhe răng", "nụ cười", "grin", "jaw"), "jawStretch", "entity_scare", "both"),
+    (("tiến sát", "áp sát", "lao tới", "phình lớn", "dí sát", "loom"), "loomSwell", "entity_scare", "both"),
+    (("đứng im", "bất động", "chết lặng", "im phăng phắc", "motionless"), "breathHold", None, "both"),
+]
+
+
+def infer_acting_cues_from_text(text: str, role: str = "human", max_cues: int = 3) -> list:
+    """Infer story-driven 2.5D `actingCues[]` directly from Vietnamese beat action/dialogue text (zero hardcoded loops!)."""
+    raw = str(text or "").strip()
+    if not raw:
+        return []
+    low = raw.lower()
+    is_entity = str(role or "human").lower() in ("entity", "lurker", "silhouette")
+    rules = _ENTITY_ACTING_RULES if is_entity else _HUMAN_ACTING_RULES
+    hits = []
+    seen_gestures = set()
+    for keywords, gesture, expr_to, side in rules:
+        if gesture in seen_gestures:
+            continue
+        best_pos = -1
+        best_kw = ""
+        for kw in keywords:
+            pos = low.find(kw)
+            if pos >= 0 and (best_pos < 0 or pos < best_pos):
+                best_pos = pos
+                best_kw = raw[pos : pos + len(kw)]
+        if best_pos >= 0:
+            seen_gestures.add(gesture)
+            cue = {"gesture": gesture, "onPhrase": best_kw, "intensity": 0.9}
+            if side != "both":
+                cue["side"] = side
+            if expr_to:
+                cue["exprTo"] = expr_to
+                cue["exprBlendFrames"] = 6
+            hits.append((best_pos, cue))
+    hits.sort(key=lambda x: x[0])
+    return [c for _, c in hits[:max_cues]]
+
+
 def _export_single_part_blueprint(doc, part, out_dir, base_project_id, aspect, bed_sound, first_seen_locs=None, first_seen_chars=None):
     parts = doc.get("parts") or []
     part_no = int(part.get("part", 1))
@@ -2349,12 +2414,14 @@ def _export_single_part_blueprint(doc, part, out_dir, base_project_id, aspect, b
         cast_blueprints.append({
             "id": cid,
             "role": role_t if role_t in VALID_ROLE_TYPES else "human",
+            "characterMode": "sprite2d",
+            **({"scareTier": int(c.get("scareTier") or 5)} if role_t == "entity" else {}),
             "storyDescription": c.get("appearanceBrief") or c.get("trait") or c.get("role", ""),
             "appearance": {
                 "height": float(c.get("heightMeters") or (1.82 if role_t == "entity" else 1.72)),
                 "lowPoly": True,
                 "outlineMode": "off",
-                **({"entity": {"heightScale": 1.15, "breathing": False, "steppedFps": 8}} if role_t == "entity" else {}),
+                **({"entity": {"heightScale": 1.15, "breathing": False, "steppedFps": 10}} if role_t == "entity" else {}),
             },
             **revisit_c,
         })
@@ -2363,11 +2430,23 @@ def _export_single_part_blueprint(doc, part, out_dir, base_project_id, aspect, b
     cur_f = 0
     m_beats = []
     cues_events = []
+    js_clips_draft = []
+    primary_entity_id = next((cb["id"] for cb in cast_blueprints if cb.get("role") == "entity"), None)
     for idx_ab, ab in enumerate(abeats, 1):
         dur_f = max(15, int(round(float(ab.get("durationSec") or 5.0) * fps)))
         a_f, b_f = cur_f, cur_f + dur_f
         cur_f = b_f
         cast_states = {}
+        role_by_id = {str(b.get("id")): str(b.get("role") or "human") for b in cast_blueprints}
+        beat_text_hint = " ".join(
+            str(x)
+            for x in (
+                ab.get("actionSummary") or "",
+                ab.get("dialogueCue") or "",
+                ab.get("spokenLine") or "",
+            )
+            if x
+        )
         for act in ab.get("actors") or []:
             frm = act.get("fromLandmark") or act.get("landmark") or ""
             to = act.get("toLandmark") or frm
@@ -2385,6 +2464,11 @@ def _export_single_part_blueprint(doc, part, out_dir, base_project_id, aspect, b
                 st_obj["alignPart"] = act["alignPart"]
             if act.get("allowTeleport"):
                 st_obj["allowTeleport"] = True
+            act_role = role_by_id.get(str(act.get("id")), "human")
+            act_hint = str(act.get("actingNote") or "") + " " + beat_text_hint
+            inferred_cues = infer_acting_cues_from_text(act_hint, role=act_role)
+            if inferred_cues:
+                st_obj["actingCues"] = inferred_cues
             cast_states[act["id"]] = st_obj
         prop_states = {}
         for pc in ab.get("propChanges") or []:
@@ -2399,12 +2483,28 @@ def _export_single_part_blueprint(doc, part, out_dir, base_project_id, aspect, b
         if ab.get("jumpscareStyle"):
             cid_ev = f"js_{ab.get('beatId')}"
             beat_cue_ids.append(cid_ev)
+            js_dur_f = min(max(60, dur_f), 90)
+            js_a = a_f
+            js_b = min(b_f, js_a + js_dur_f)
+            if js_b - js_a < 54:
+                js_b = js_a + 60
+            js_clips_draft.append({
+                "id": f"js{len(js_clips_draft) + 1}",
+                "src": f"assets/jumpscare_js{len(js_clips_draft) + 1}.mp4",
+                "a": js_a,
+                "b": js_b,
+                "anchorFrame": max(0, js_a - 1),
+                "transitionStyle": str(ab.get("transitionStyle") or "first_frame_seamless"),
+                "audioCueId": cid_ev,
+                **({"entityId": primary_entity_id} if primary_entity_id else {}),
+                "prompt": str(ab.get("actionSummary") or "Sudden uncanny horror reveal"),
+            })
             cues_events.append({
                 "id": cid_ev,
                 "jumpscare": ab["jumpscareStyle"],
                 "bus": "sfx",
-                "at": round(a_f / fps, 2),
-                "target_peak_dbfs": -1.2,
+                "at": round(js_a / fps, 2),
+                "target_peak_dbfs": -1.0,
                 "tinnitus": True,
                 "label": f"Jumpscare {ab['jumpscareStyle']} ({ab.get('beatId')}): {ab.get('actionSummary', '')}",
             })
@@ -2572,16 +2672,47 @@ def _export_single_part_blueprint(doc, part, out_dir, base_project_id, aspect, b
                     })
                     sh_id += 1
 
+    # v15.0: Ensure every exported part has >= 1 synchronized Jumpscare clip + cues event (min_jumpscares >= 1)!
+    if not js_clips_draft and m_beats:
+        climax_b = m_beats[-1]
+        js_dur_f = min(75, max(54, climax_b["b"] - climax_b["a"]))
+        js_a = max(climax_b["a"], climax_b["b"] - js_dur_f)
+        js_b = min(total_f_draft, js_a + js_dur_f)
+        cid_ev = f"js_{climax_b['beatId']}"
+        climax_b.setdefault("audioCueIds", []).append(cid_ev)
+        js_clips_draft.append({
+            "id": "js1",
+            "src": "assets/jumpscare_js1.mp4",
+            "a": js_a,
+            "b": js_b,
+            "anchorFrame": max(0, js_a - 1),
+            "transitionStyle": "first_frame_seamless",
+            "audioCueId": cid_ev,
+            **({"entityId": primary_entity_id} if primary_entity_id else {}),
+            "prompt": str(climax_b.get("cameraIntent") or "Sudden climax horror reveal"),
+        })
+        cues_events.append({
+            "id": cid_ev,
+            "jumpscare": "cinema_stab",
+            "bus": "sfx",
+            "at": round(js_a / fps, 2),
+            "target_peak_dbfs": -1.0,
+            "tinnitus": True,
+            "label": f"Climax Jumpscare ({climax_b['beatId']})",
+        })
+
     manifest_draft = {
         "projectId": project_id,
         "title": f"{doc.get('title', project_id)} — Chương {part_no}" if len(parts) > 1 else doc.get("title", project_id),
         "totalFrames": total_f_draft,
         "aspect": aspect,
+        "characterMode": "sprite2d",
         "headerStyle": "camcorder" if pov_mode == "found_footage_tape" else "minimal",
         "locations": loc_blueprints,
         "castBlueprints": cast_blueprints,
         "beats": m_beats,
         **({"shots": starter_shots} if starter_shots else {}),
+        **({"jumpscareClips": js_clips_draft} if js_clips_draft else {}),
     }
     sc_design = doc.get("soundscapeDesign") if isinstance(doc.get("soundscapeDesign"), dict) else {}
     far_cfg = sc_design.get("farBed") if isinstance(sc_design.get("farBed"), dict) else {}
@@ -2638,14 +2769,15 @@ def _export_single_part_blueprint(doc, part, out_dir, base_project_id, aspect, b
             "label": mf.get("meaning") or "Âm thanh lặp dẫn dắt tâm lý rồi phá vỡ quy luật",
         })
 
-    explicit_js = sum(1 for ab in abeats if ab.get("jumpscareStyle"))
+    explicit_js = max(1, len(js_clips_draft))
     cues_draft = {
         "voice": "voice/voice.wav",
         "words": "voice/words.json",
         "target_lufs": -16.0,
-        "ceil_db": -1.2,
+        "ceil_db": -1.0,
         "dead_silence_floor_db": -48.0,
-        "max_jumpscares": explicit_js,
+        "min_jumpscares": 1,
+        "max_jumpscares": max(2, explicit_js),
         "beds": draft_beds,
         **({"motifs": draft_motifs} if draft_motifs else {}),
         "events": cues_events,

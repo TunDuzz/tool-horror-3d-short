@@ -14,6 +14,8 @@ import path from "node:path";
 const rawArgs = process.argv.slice(2);
 let audit = false;
 let strictAudit = false;
+let rawAnchor = false;
+let pngFormat = false;
 let scaleOverride = null;
 const cleanArgs = [];
 
@@ -24,6 +26,11 @@ for (let i = 0; i < rawArgs.length; i++) {
   } else if (a === "--strict-audit") {
     audit = true;
     strictAudit = true;
+  } else if (a === "--raw-anchor") {
+    rawAnchor = true;
+    pngFormat = true;
+  } else if (a === "--png") {
+    pngFormat = true;
   } else if (a === "--scale" && i + 1 < rawArgs.length) {
     scaleOverride = rawArgs[++i];
   } else {
@@ -140,11 +147,14 @@ const onBrowserLog = (l) => {
   }
 };
 
-const inputProps = audit ? { auditStills: true } : {};
+const inputProps = {
+  ...(audit ? { auditStills: true } : {}),
+  ...(rawAnchor ? { hideHud: true, post: { psx: false, grade: false, grain: false } } : {}),
+};
 
 async function runWithGl(glMode) {
   const chromiumOptions = { gl: glMode };
-  console.log(`[render-stills] gl=${glMode} scale=${scale} frames=${jobs.length} audit=${audit}`);
+  console.log(`[render-stills] gl=${glMode} scale=${scale} frames=${jobs.length} audit=${audit} rawAnchor=${rawAnchor}`);
   const browser = await openBrowser("chrome", {
     ...(browserExecutable ? { browserExecutable } : {}),
     chromiumOptions,
@@ -158,9 +168,10 @@ async function runWithGl(glMode) {
       chromiumOptions,
     });
     const tAll = Date.now();
+    const ext = pngFormat ? ".png" : ".jpg";
     for (const job of jobs) {
       const t0 = Date.now();
-      const output = `${prefix}${job.tag}.jpg`;
+      const output = `${prefix}${job.tag}${ext}`;
       job.imagePath = path.resolve(output);
       await renderStill({
         composition,
@@ -169,8 +180,8 @@ async function runWithGl(glMode) {
         frame: job.frame,
         inputProps,
         output,
-        imageFormat: "jpeg",
-        jpegQuality: 90,
+        imageFormat: pngFormat ? "png" : "jpeg",
+        ...(pngFormat ? {} : { jpegQuality: 90 }),
         scale: Number(scale),
         chromiumOptions,
         timeoutInMilliseconds: 180000,

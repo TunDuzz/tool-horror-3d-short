@@ -1,41 +1,37 @@
-# Horror Sound Cues & Psychological Soundscape Cookbook v8.0 / v13.0
+# Horror Sound Cues & Clean Real-SFX Soundscape Cookbook v15.0
 
 ## 0. Six Golden Rules of Narrative Horror Soundscape (Enforced by `mix_cues.py --strict`)
 
 1. **Dual-Layer Living Setting Beds With Occlusion Automation (`near` + `far` — Max 2 Distinct Roles):**
-   - Pair up to **2 complementary spatial layers**: `"role": "far"` (exterior weather/river/wind) + `"role": "near"` (intimate interior room tone, lamp wick, damp timber), with automatic organic anti-loop drift (`organic_drift=True`).
+   - Pair up to **2 complementary spatial layers**: `"role": "far"` (exterior weather/river/wind) + `"role": "near"` (intimate interior room tone, elevator hum, damp timber), with automatic organic anti-loop drift (`organic_drift=True`).
    - Drive `"automation": [{"at_word": "chốt", "gain_delta_db": -6.5, "lp_hz": 580, "transition_s": 0.75}]` so closing doors/windows physically muffles the outside world!
 2. **Obsessive / Rhythmic Sound Motifs & Pattern Breaks (`motifs[]`):**
-   - Declare at least **1 recurring diegetic motif** (`steady_then_stop`, `accelerate`, `decelerate`, `approach`, `stutter_break`) — e.g., a water drip or clock tick that repeats steadily and **stops dead** at `[SILENCE_DROP]` or steps progressively closer (`pan_from` → `pan_to`, `far` → `close_ear` binaural ITD).
-3. **4-Zone Acoustic Distance & Role-Tiered Dynamics (`-16.0 LUFS`, `LRA 7–12 LU`):**
-   - Assign `"space": "close_ear" | "room" | "adjacent_muffled" | "exterior_occluded" | "otherworld"` and `"role": "subliminal" (-20.5 dBFS) | "motif" (-16.0 dBFS) | "foley" (-11.5 dBFS) | "tension" (-6.8 dBFS) | "impact" (-3.2 dBFS)` so subtle paper rustles never blast as loud as iron door bolts!
-4. **Psychological Uncanny Hush (`[SILENCE_DROP Xs]` + `survive_hush: true`) Over Trailer Clichés:**
-   - Prefer `[SILENCE_DROP Xs]` (smooth `-42 dB` environmental hush, ZERO cliché `reverse_suck` riser!), optionally leaving a single `survive_hush: true` close-ear breath (`synth: "breath_close_ear"`) or floorboard tick inside the silence. Reserve `[DEAD SILENCE Xs]` (`-48 dB`) strictly for major climax cuts.
-5. **Jumpscare Demotion (`max_jumpscares = 0` Default):**
-   - Jumpscares default to **`0`** on v13 soundscapes. Only enable `max_jumpscares: 1` when genuinely justified by the story (`cinema_stab | entity_shriek | metal_dread | vhs_psx_glitch`).
-4. **Exact `onset` / `peak` / `end` Alignment via `cues.json`:**
-   - Hits / door latches / flashlight clicks → `"align": "onset"` anchored to `at_act`, `at_word`, or `at_dead_silence`.
-   - Whip-pan whooshes → `"align": "peak"` on the cut midpoint.
-   - Pre-silence `reverse_suck` / risers → `"align": "end"` at `at_dead_silence: 0, edge: "start"`.
-5. **Measurement-First Verification & Attribution:**
-   - Always run `scripts/mix_cues.py --cues cues.json --out mix.wav --strict`, confirm `PASS 7/7`, verify Jumpscare `+dB` contrast & `1.4–6.5 kHz` bite in `mix_report.md`, ship `credits.txt`, and hand the user the 5 headphone timestamps.
+   - Declare at least **1 recurring diegetic motif** (`steady_then_stop`, `accelerate`, `decelerate`, `approach`, `stutter_break`) — e.g., a water drip, elevator relay click, or clock tick that repeats steadily and **stops dead** at `[SILENCE_DROP]` before the Jumpscare.
+3. **Real-SFX-First & Automated CC0 Fetching (`sfx_manager.py auto-fetch-for-script`):**
+   - Run `python3 scripts/sfx_manager.py auto-fetch-for-script --cues out/<project>/cues.json --library shorts-project/audio/sfx_library` to automatically fetch any missing real CC0 WAVs from Openverse!
+   - Procedural `synth:` beds/events are blocked by `SYNTH_SFX_FORBIDDEN` unless `allow_synth: true` is explicitly set.
+4. **Psychological Uncanny Hush (`[SILENCE_DROP Xs]` + `survive_hush: true`) Before Jumpscare Impact:**
+   - Compress dread with `[SILENCE_DROP 0.5–1.2s]` (`-42 dB` environmental hush) right before the climax reveal so the Jumpscare hits with maximum dynamic contrast (`+20..30 dB`).
+5. **Mandatory Synchronized Jumpscare (`min_jumpscares >= 1`, `-1.0 dBTP` Ceiling):**
+   - Legacy `max_jumpscares = 0` default is REMOVED. Every short (`55–90s`) requires **`1–2` Jumpscares** (and `>= 1` per chapter on long-form series), using real recorded CC0 WAV composites (`cinema_stab | entity_shriek | metal_dread | vhs_psx_glitch`, zero automatic procedural shriek overlay when real bite WAV exists), mastered to **`-16.0 LUFS`** and **`-1.0 dBTP`**.
+6. **Exact `onset` / `peak` / `end` Alignment & Measurement-First Verification:**
+   - Always run `scripts/mix_cues.py --cues cues.json --out mix.wav --strict`, confirm `PASS`, verify Jumpscare `+dB` contrast & `0` clips in `mix_report.md`, ship `credits.txt`, and hand the user 5 headphone timestamps.
 
 ```json
 {
   "voice": "voice/voice.wav",
   "words": "voice/words.json",
-  "target_lufs": -15.0,
-  "ceil_db": -1.2,
+  "target_lufs": -16.0,
+  "ceil_db": -1.0,
+  "min_jumpscares": 1,
+  "max_jumpscares": 2,
   "dead_silence_floor_db": -48.0,
   "beds": [
-    {"sound": "night_rain_indoor", "gain_db": -27.0, "hp_hz": 120, "lp_hz": 2400, "voice_notch_db": -4.5, "duck_db": -5.5, "whisper_duck_db": -14.0, "label": "Story-matched rainy night bed"}
+    {"sound": "room_tone_dark", "role": "near", "target_rms_dbfs": -34.0, "hp_hz": 80, "lp_hz": 2600, "duck_db": -3.5, "label": "Story-matched interior bed"}
   ],
   "events": [
-    {"sound": "wooden_door_creak_ov", "bus": "sfx", "at_act": 2, "offset_s": -0.18, "align": "onset", "gain_db": -12.0, "pan": -0.35, "label": "Door creak in pause before Act 2"},
-    {"synth": "reverse_suck", "bus": "score", "at_dead_silence": 0, "edge": "start", "align": "end", "dur_s": 0.72, "gain_db": -10.5, "label": "Vacuum pull into Dead Silence"},
-    {"sound": "door_bolt_latch", "bus": "sfx", "at_dead_silence": 0, "edge": "end", "offset_s": 0.04, "align": "onset", "gain_db": -9.0, "pan": -0.25, "label": "Iron bolt sliding after Dead Silence"},
-    {"sound": "heavy_door_slam", "bus": "sfx", "at_act": 5, "offset_s": -0.08, "align": "onset", "gain_db": -8.0, "pan": -0.15, "label": "Door slams open on panic act"},
-    {"sound": "cello_dread_sting", "bus": "score", "at_act": 6, "offset_s": 0.35, "align": "onset", "gain_db": -15.0, "lp_hz": 1200, "reverb": 0.25, "label": "Low C2 cello swell under final twist"}
+    {"sound": "wooden_door_creak_ov", "bus": "sfx", "at_act": 2, "offset_s": -0.18, "align": "onset", "role": "foley", "pan": -0.35, "label": "Door creak in pause before Act 2"},
+    {"id": "js_climax", "jumpscare": "cinema_stab", "bus": "sfx", "at_silence_drop": 0, "edge": "end", "target_peak_dbfs": -1.0, "tinnitus": true, "label": "Synchronized climax jumpscare"}
   ]
 }
 ```

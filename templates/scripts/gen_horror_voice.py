@@ -41,6 +41,79 @@ SR_VC = 44100
 SR_FINAL = 48000
 VC_PACK_PAD_SEC = 0.35
 
+
+def _load_dotenv_key(name: str = "GEMINI_API_KEY") -> str | None:
+    """Auto-load API key from environment or nearest `.env` file without extra dependencies."""
+    val = os.environ.get(name)
+    if val:
+        return val.strip()
+    here = os.path.dirname(os.path.abspath(__file__))
+    candidates = [
+        os.path.join(os.getcwd(), ".env"),
+        os.path.join(here, "..", ".env"),
+        os.path.join(here, "..", "..", ".env"),
+        os.path.join(here, "..", "..", "..", ".env"),
+    ]
+    for p in candidates:
+        ap = os.path.abspath(p)
+        if not os.path.isfile(ap):
+            continue
+        try:
+            with open(ap, encoding="utf-8") as fp:
+                for raw in fp:
+                    line = raw.strip()
+                    if not line or line.startswith("#") or "=" not in line:
+                        continue
+                    k, v = line.split("=", 1)
+                    if k.strip() == name:
+                        v = v.strip().strip('"').strip("'")
+                        if v:
+                            return v
+        except Exception:
+            pass
+    return None
+
+
+def resolve_gemini_voice(
+    speaker_name: str,
+    profile: str = "",
+    is_narrator: bool = True,
+    default_narrator_voice: str = "Charon",
+) -> str:
+    """Map narrator & NPCs onto distinct natural Gemini prebuilt voices."""
+    if is_narrator or str(speaker_name).strip().upper() == "NARRATOR":
+        return default_narrator_voice or "Charon"
+    blob = f"{speaker_name} {profile}".lower()
+    is_female = any(k in blob for k in ("female", "woman", "girl", "nữ", "bà", "cô", "chị", "mẹ", "má", "dì", "bé gái"))
+    is_elder = any(k in blob for k in ("elder", "old", "già", "lão", "ông", "bà", "chú", "bác", "cụ"))
+    if is_female:
+        return "Aoede" if is_elder else "Kore"
+    if is_elder:
+        return "Orus" if default_narrator_voice != "Orus" else "Fenrir"
+    return "Fenrir" if default_narrator_voice != "Fenrir" else "Puck"
+
+
+def extract_rms_envelope_30fps(samples: np.ndarray, sr: int, fps: int = 30) -> list[float]:
+    """Compute normalized [0..1] per-frame vocal RMS envelope at `fps` (30fps default) for lip-sync & cadence."""
+    x = np.asarray(samples, dtype=np.float64).reshape(-1)
+    if len(x) == 0 or sr <= 0 or fps <= 0:
+        return []
+    spf = float(sr) / float(fps)
+    n_frames = max(1, int(math.ceil(len(x) / spf)))
+    raw = np.zeros(n_frames, dtype=np.float64)
+    for fi in range(n_frames):
+        s0 = int(round(fi * spf))
+        s1 = min(len(x), max(s0 + 1, int(round((fi + 1) * spf))))
+        seg = x[s0:s1]
+        if len(seg) > 0:
+            raw[fi] = math.sqrt(float(np.mean(seg * seg)) + 1e-18)
+    nz = raw[raw > 1e-4]
+    ref = float(np.percentile(nz, 92)) if len(nz) >= 4 else float(np.max(raw))
+    if ref < 1e-6:
+        return [0.0] * n_frames
+    norm = np.clip(raw / ref, 0.0, 1.0)
+    return [round(float(v), 4) for v in norm]
+
 PAUSE_RE = re.compile(
     r"(\[(?:PAUSE|BEAT|KHỰNG|VISUAL|SILENCE_DROP|DEAD\s+SILENCE)\s+(\d+(?:\.\d+)?)\s*s?\])",
     re.IGNORECASE,
@@ -63,18 +136,18 @@ PACE_NAMED = {
     "fast": 1.10,
 }
 
-# Clean high-retention oral-horror mood profiles (v14.0):
-#   - `clean_tempo` & `tail_pad`: calibrated from measured VieNeu-TTS cadence so spoken delivery lands cleanly in 3.10-3.55 w/s (~0.5-1.0s snappier per sentence than v13) without rushing into >3.65 w/s garbling
+# Clean high-retention oral-horror mood profiles (v15.0):
+#   - `speed` & `clean_tempo` = 1.00, `pitch_semi` = 0.0 by default (ZERO tempo/pitch DSP distortion!)
 #   - `target_rms_dbfs`: preserves true 6-8 dB vocal dynamic range (whispers & dread stay genuinely intimate)
 MOOD_PROFILES = {
     "calm_omen": {
-        "speed": 0.94,
-        "clean_tempo": 0.83,
+        "speed": 1.00,
+        "clean_tempo": 1.00,
         "vn_silence_p": 0.24,
         "vn_temp": 0.70,
-        "f0_offset_st": -0.3,
+        "f0_offset_st": 0.0,
         "multi_style_voice": "Thiền Tâm Đức",
-        "pitch_semi": -0.35,
+        "pitch_semi": 0.0,
         "target_rms_dbfs": -18.8,
         "gain_db": 0.0,
         "tail_pad": 0.18,
@@ -83,13 +156,13 @@ MOOD_PROFILES = {
         "acting_prompt": "Kể chuyện kinh dị truyền miệng tiếng Việt gọn sắc, đời thường, tự nhiên và cuốn hút ngay từ đầu",
     },
     "curious": {
-        "speed": 0.96,
-        "clean_tempo": 0.85,
+        "speed": 1.00,
+        "clean_tempo": 1.00,
         "vn_silence_p": 0.22,
         "vn_temp": 0.84,
-        "f0_offset_st": +0.4,
+        "f0_offset_st": 0.0,
         "multi_style_voice": "Thiện Minh",
-        "pitch_semi": +0.15,
+        "pitch_semi": 0.0,
         "target_rms_dbfs": -19.2,
         "gain_db": 0.0,
         "tail_pad": 0.18,
@@ -98,13 +171,13 @@ MOOD_PROFILES = {
         "acting_prompt": "Đọc tiếng Việt tự nhiên với sắc thái tò mò, gạn hỏi, nghi hoặc sắc gọn",
     },
     "uneasy": {
-        "speed": 0.94,
-        "clean_tempo": 0.76,
+        "speed": 1.00,
+        "clean_tempo": 1.00,
         "vn_silence_p": 0.26,
         "vn_temp": 0.76,
-        "f0_offset_st": -0.2,
+        "f0_offset_st": 0.0,
         "multi_style_voice": "Thiện Minh",
-        "pitch_semi": -0.25,
+        "pitch_semi": 0.0,
         "target_rms_dbfs": -19.8,
         "gain_db": 0.0,
         "tail_pad": 0.20,
@@ -114,10 +187,10 @@ MOOD_PROFILES = {
     },
     "tense": {
         "speed": 1.00,
-        "clean_tempo": 0.83,
+        "clean_tempo": 1.00,
         "vn_silence_p": 0.14,
         "vn_temp": 0.86,
-        "f0_offset_st": +0.4,
+        "f0_offset_st": 0.0,
         "multi_style_voice": "Hải Đăng",
         "pitch_semi": 0.0,
         "target_rms_dbfs": -17.0,
@@ -128,13 +201,13 @@ MOOD_PROFILES = {
         "acting_prompt": "Đọc tiếng Việt gắt gọn, nghiêm nghị, cảnh báo dứt khoát",
     },
     "whisper": {
-        "speed": 0.88,
-        "clean_tempo": 0.84,
+        "speed": 1.00,
+        "clean_tempo": 1.00,
         "vn_silence_p": 0.34,
         "vn_temp": 0.72,
-        "f0_offset_st": -1.0,
+        "f0_offset_st": 0.0,
         "multi_style_voice": "Thiền Tâm Đức",
-        "pitch_semi": -0.65,
+        "pitch_semi": 0.0,
         "target_rms_dbfs": -24.0,
         "gain_db": 0.0,
         "tail_pad": 0.22,
@@ -143,13 +216,13 @@ MOOD_PROFILES = {
         "acting_prompt": "Nói nhỏ nhẹ, hạ giọng sát tai khẩn trương như sợ thứ bên ngoài nghe thấy",
     },
     "fear": {
-        "speed": 0.98,
-        "clean_tempo": 0.77,
+        "speed": 1.00,
+        "clean_tempo": 1.00,
         "vn_silence_p": 0.16,
         "vn_temp": 0.88,
-        "f0_offset_st": +0.9,
+        "f0_offset_st": 0.0,
         "multi_style_voice": "Thiện Minh",
-        "pitch_semi": +0.35,
+        "pitch_semi": 0.0,
         "target_rms_dbfs": -18.0,
         "gain_db": 0.0,
         "tail_pad": 0.16,
@@ -158,13 +231,13 @@ MOOD_PROFILES = {
         "acting_prompt": "Đọc tiếng Việt gấp hơn, bàng hoàng và hụt hơi thật khi đụng chuyện tà ma",
     },
     "dread": {
-        "speed": 0.88,
-        "clean_tempo": 0.78,
+        "speed": 1.00,
+        "clean_tempo": 1.00,
         "vn_silence_p": 0.36,
         "vn_temp": 0.68,
-        "f0_offset_st": -0.9,
+        "f0_offset_st": 0.0,
         "multi_style_voice": "Thiền Tâm Đức",
-        "pitch_semi": -0.75,
+        "pitch_semi": 0.0,
         "target_rms_dbfs": -20.6,
         "gain_db": 0.0,
         "tail_pad": 0.22,
@@ -173,13 +246,13 @@ MOOD_PROFILES = {
         "acting_prompt": "Đọc tiếng Việt trầm đục, gai người nhưng giữ nhịp gọn chắc không rề rà",
     },
     "panic": {
-        "speed": 1.06,
-        "clean_tempo": 0.89,
+        "speed": 1.00,
+        "clean_tempo": 1.00,
         "vn_silence_p": 0.06,
         "vn_temp": 0.92,
-        "f0_offset_st": +1.4,
+        "f0_offset_st": 0.0,
         "multi_style_voice": "Hải Đăng",
-        "pitch_semi": +0.55,
+        "pitch_semi": 0.0,
         "target_rms_dbfs": -16.2,
         "gain_db": 0.0,
         "tail_pad": 0.12,
@@ -188,13 +261,13 @@ MOOD_PROFILES = {
         "acting_prompt": "Đọc tiếng Việt dồn dập, hoảng loạn và khẩn cấp thực sự",
     },
     "cold_twist": {
-        "speed": 0.86,
-        "clean_tempo": 0.80,
+        "speed": 1.00,
+        "clean_tempo": 1.00,
         "vn_silence_p": 0.38,
         "vn_temp": 0.64,
-        "f0_offset_st": -1.2,
+        "f0_offset_st": 0.0,
         "multi_style_voice": "Thiền Tâm Đức",
-        "pitch_semi": -0.90,
+        "pitch_semi": 0.0,
         "target_rms_dbfs": -21.2,
         "gain_db": 0.0,
         "tail_pad": 0.23,
@@ -203,13 +276,13 @@ MOOD_PROFILES = {
         "acting_prompt": "Đọc tiếng Việt lạnh, sắc gọn, dứt khoát chốt sự thật rợn tóc gáy",
     },
     "ghost_entity": {
-        "speed": 0.86,
-        "clean_tempo": 0.78,
+        "speed": 1.00,
+        "clean_tempo": 1.00,
         "vn_silence_p": 0.36,
         "vn_temp": 0.66,
-        "f0_offset_st": -1.8,
+        "f0_offset_st": 0.0,
         "multi_style_voice": "Thiền Tâm Đức",
-        "pitch_semi": -1.50,
+        "pitch_semi": 0.0,
         "target_rms_dbfs": -20.2,
         "gain_db": 0.0,
         "tail_pad": 0.22,
@@ -359,14 +432,18 @@ def _parse_pitch_val(raw_st: str | None) -> float | None:
         return None
 
 
-def parse_script(path: str, default_voice: str = "vi-VN-NamMinhNeural", narrator_vieneu: str = "Thiện Minh"):
-    """Parse SCRIPT.md into clause-aware speech items, pauses, beat_pauses, visual_beats, silence_drops & dead_silences.
+def parse_script(
+    path: str,
+    default_voice: str = "vi-VN-NamMinhNeural",
+    narrator_vieneu: str = "Thiện Minh",
+    enable_clause_dsp_split: bool = False,
+):
+    """Parse SCRIPT.md into coherent whole-act speech items, pauses, visual_beats, silence_drops & dead_silences.
 
-    Supports v13.0 psychological delivery directives:
-      - `[BEAT Xs]` / `[KHỰNG Xs]` : intra-sentence psychological hesitation pause
-      - `[SILENCE_DROP Xs]`        : uncanny environmental hush (beds & motifs drop quiet)
-      - `[PACE=0.82 | PITCH=-1.0 | PROX=close]` : inline clause-level cadence, pitch & mic-proximity shaping
-      - Automatic 25-voice VieNeu character casting via `profile=` or Vietnamese speaker honorifics
+    v15.0 Clean Voice Delivery:
+      - Does NOT fragment sentences on inline `[PACE=...]` / `[PITCH=...]` tags by default (`enable_clause_dsp_split=False`),
+        keeping contiguous paragraphs intact for natural whole-act Gemini TTS or `--import-voice` delivery.
+      - Preserves `[BEAT Xs]`, `[SILENCE_DROP Xs]`, `[DEAD SILENCE Xs]`, `[VISUAL Xs]`, and clean `[PROX=close]` mic-proximity EQ.
     """
     with open(path, encoding="utf-8") as fp:
         raw = fp.read()
@@ -380,6 +457,7 @@ def parse_script(path: str, default_voice: str = "vi-VN-NamMinhNeural", narrator
         "is_narrator": True,
         "voice": default_voice,
         "vieneu_voice": narrator_vieneu,
+        "profile": "",
         "cast_pitch_st": 0.0,
         "mood": "calm_omen",
         "acting": None,
@@ -428,6 +506,7 @@ def parse_script(path: str, default_voice: str = "vi-VN-NamMinhNeural", narrator
             "is_narrator": cur["is_narrator"],
             "voice": cur["voice"],
             "vieneu_voice": cur["vieneu_voice"],
+            "profile": cur.get("profile", ""),
             "cast_pitch_st": cur["cast_pitch_st"],
             "mood": cur["mood"],
             "acting": cur["acting"],
@@ -450,12 +529,13 @@ def parse_script(path: str, default_voice: str = "vi-VN-NamMinhNeural", narrator
             if j + 1 < len(sub_parts):
                 mod_raw = sub_parts[j + 1].strip()[1:-1]
                 mkv = _parse_kv(mod_raw)
-                if "pace" in mkv:
-                    p_raw = str(mkv["pace"]).strip().lower()
-                    cur["clause_pace"] = None if p_raw in ("normal", "reset", "default") else _parse_pace_val(mkv["pace"])
-                if "pitch" in mkv:
-                    p_st_raw = str(mkv["pitch"]).strip().lower()
-                    cur["clause_pitch_st"] = None if p_st_raw in ("0", "normal", "reset", "default") else _parse_pitch_val(mkv["pitch"])
+                if enable_clause_dsp_split:
+                    if "pace" in mkv:
+                        p_raw = str(mkv["pace"]).strip().lower()
+                        cur["clause_pace"] = None if p_raw in ("normal", "reset", "default") else _parse_pace_val(mkv["pace"])
+                    if "pitch" in mkv:
+                        p_st_raw = str(mkv["pitch"]).strip().lower()
+                        cur["clause_pitch_st"] = None if p_st_raw in ("0", "normal", "reset", "default") else _parse_pitch_val(mkv["pitch"])
                 if "prox" in mkv:
                     cur["prox"] = mkv["prox"].strip().lower()
             j += 2
@@ -482,16 +562,17 @@ def parse_script(path: str, default_voice: str = "vi-VN-NamMinhNeural", narrator
                     "is_narrator": True,
                     "voice": kv.get("voice", default_voice),
                     "vieneu_voice": kv.get("vieneu_voice") or (kv["voice"] if "voice" in kv and not kv["voice"].lower().startswith("vi-vn-") else narrator_vieneu),
+                    "profile": kv.get("profile", ""),
                     "cast_pitch_st": 0.0,
                     "mood": resolved_m,
                     "acting": kv.get("acting"),
                     "ref_audio": kv.get("ref") or kv.get("ref_audio"),
-                    "speed": _parse_pace_val(kv.get("speed") or kv.get("pace")),
-                    "pitch": kv.get("pitch"),
+                    "speed": _parse_pace_val(kv.get("speed") or kv.get("pace")) if enable_clause_dsp_split else None,
+                    "pitch": kv.get("pitch") if enable_clause_dsp_split else None,
                     "fx": kv.get("fx", "dry").lower(),
                     "prox": kv.get("prox", default_prox).lower(),
-                    "clause_pace": _parse_pace_val(kv.get("pace")),
-                    "clause_pitch_st": _parse_pitch_val(kv.get("pitch")),
+                    "clause_pace": _parse_pace_val(kv.get("pace")) if enable_clause_dsp_split else None,
+                    "clause_pitch_st": _parse_pitch_val(kv.get("pitch")) if enable_clause_dsp_split else None,
                 }
             else:
                 sp_name = head.split(":", 1)[1].strip() if ":" in head else "SPEAKER"
@@ -507,16 +588,17 @@ def parse_script(path: str, default_voice: str = "vi-VN-NamMinhNeural", narrator
                     "is_narrator": is_nar,
                     "voice": kv.get("voice", default_voice),
                     "vieneu_voice": cast_v,
-                    "cast_pitch_st": cast_st,
+                    "profile": kv.get("profile", ""),
+                    "cast_pitch_st": cast_st if enable_clause_dsp_split else 0.0,
                     "mood": _resolve_mood(raw_m),
                     "acting": kv.get("acting"),
                     "ref_audio": kv.get("ref") or kv.get("ref_audio"),
-                    "speed": _parse_pace_val(kv.get("speed") or kv.get("pace")),
-                    "pitch": kv.get("pitch"),
+                    "speed": _parse_pace_val(kv.get("speed") or kv.get("pace")) if enable_clause_dsp_split else None,
+                    "pitch": kv.get("pitch") if enable_clause_dsp_split else None,
                     "fx": kv.get("fx", "room").lower(),
                     "prox": kv.get("prox", "normal").lower(),
-                    "clause_pace": _parse_pace_val(kv.get("pace")),
-                    "clause_pitch_st": _parse_pitch_val(kv.get("pitch")),
+                    "clause_pace": _parse_pace_val(kv.get("pace")) if enable_clause_dsp_split else None,
+                    "clause_pitch_st": _parse_pitch_val(kv.get("pitch")) if enable_clause_dsp_split else None,
                 }
             continue
 
@@ -1229,10 +1311,16 @@ def _slice_expressive_codes(codes: np.ndarray | None, max_frames: int) -> np.nda
     return arr[start : start + max_frames]
 
 
-def _align_ref_f0_to_anchor(ref_path: str, target_f0: float, mood_offset_st: float | None, tmp_dir: str | None) -> tuple[str, float, bool]:
-    """Gently align a reference clip's baseline F0 to the narrator's natural vocal register BEFORE codec encoding.
-    Never alters output audio directly; leaves unvoiced whispers (`mood_offset_st is None`) and close clips (`|delta|<1.2st`) untouched."""
-    if mood_offset_st is None or target_f0 <= 0.0 or not shutil.which("ffmpeg"):
+def _align_ref_f0_to_anchor(
+    ref_path: str,
+    target_f0: float,
+    mood_offset_st: float | None,
+    tmp_dir: str | None,
+    enabled: bool = False,
+) -> tuple[str, float, bool]:
+    """v15.0: Disabled by default (`enabled=False`) to preserve 100% natural vocal formants without pitch-DSP artifacts.
+    Only shifts reference clip F0 when explicitly opted in via `--enable-legacy-tempo-dsp`."""
+    if not enabled or mood_offset_st is None or target_f0 <= 0.0 or not shutil.which("ffmpeg"):
         return ref_path, 0.0, False
     ref_f0 = measure_median_f0(ref_path)
     if ref_f0 <= 0.0:
@@ -1444,7 +1532,13 @@ def synth_vieneu_chunk(item: dict, sr: int, args, cache_dir: str | None = None, 
                 anchor = _resolve_narrator_anchor(tts, args)
                 if anchor is not None:
                     f0_off = prof.get("f0_offset_st", 0.0)
-                    aligned_ref, shift_st, is_tmp = _align_ref_f0_to_anchor(ref_audio, anchor["target_f0"], f0_off, tmp_dir)
+                    aligned_ref, shift_st, is_tmp = _align_ref_f0_to_anchor(
+                        ref_audio,
+                        anchor["target_f0"],
+                        f0_off,
+                        tmp_dir,
+                        enabled=bool(getattr(args, "enable_legacy_tempo_dsp", False)),
+                    )
                     if is_tmp:
                         tmp_shifted = aligned_ref
                     _, emo_codes = tts.encode_reference(aligned_ref, denoise=True)
@@ -1476,7 +1570,8 @@ def synth_vieneu_chunk(item: dict, sr: int, args, cache_dir: str | None = None, 
 
     eff_tempo = 1.0
     pitch_st = 0.0
-    if not getattr(args, "no_tempo_trim", False):
+    # v15.0: Tempo/pitch DSP is OFF by default (`--enable-legacy-tempo-dsp` required to opt in)
+    if bool(getattr(args, "enable_legacy_tempo_dsp", False)) and not getattr(args, "no_tempo_trim", False):
         base_tempo = float(item["speed"]) if item.get("speed") is not None else float(prof.get("clean_tempo", 1.0)) * float(getattr(args, "speed_scale", 1.0))
         if item.get("clause_pace") is not None:
             cp = float(item["clause_pace"])
@@ -1549,11 +1644,24 @@ def probe_dur(path: str) -> float:
     return float(out)
 
 
-def synth_edge_chunk(item: dict, sr: int, tmp_dir: str, idx: int, base_speed_scale: float = 1.0, cache_dir: str | None = None):
-    """Clean, distortion-free whole-act `edge-tts` fallback with subtle transparent tempo."""
+def synth_edge_chunk(
+    item: dict,
+    sr: int,
+    tmp_dir: str,
+    idx: int,
+    base_speed_scale: float = 1.0,
+    cache_dir: str | None = None,
+    enable_legacy_tempo_dsp: bool = False,
+):
+    """Clean, distortion-free whole-act `edge-tts` fallback (v15.0: exact 1.0x tempo, 0.0 pitch DSP by default)."""
     prof = MOOD_PROFILES.get(item["mood"], MOOD_PROFILES["calm_omen"])
-    speed = float(item["speed"]) if item["speed"] is not None else float(prof["speed"]) * base_speed_scale
-    speed = max(0.75, min(1.25, speed))
+    if enable_legacy_tempo_dsp:
+        speed = float(item["speed"]) if item["speed"] is not None else float(prof["speed"]) * base_speed_scale
+        speed = max(0.75, min(1.25, speed))
+        pitch_semi = float(prof.get("pitch_semi", 0.0))
+    else:
+        speed = 1.0
+        pitch_semi = 0.0
 
     tts_text = item.get("tts_text") or normalize_vi_for_tts(item["text"])
     key = hashlib.sha256(f"edge6|{item['voice']}|{tts_text}".encode("utf-8")).hexdigest()[:16]
@@ -1579,62 +1687,89 @@ def synth_edge_chunk(item: dict, sr: int, tmp_dir: str, idx: int, base_speed_sca
     t1 = min(raw_dur, events[-1]["e"] + 0.06)
     wav = os.path.join(tmp_dir, f"seg_{idx:03d}.wav")
 
-    pitch_semi = float(prof.get("pitch_semi", 0.0))
-    pitch_ratio = 2.0 ** (pitch_semi / 12.0)
-    if abs(pitch_semi) > 0.05 and _ffmpeg_has_rubberband():
-        af = f"rubberband=pitch={pitch_ratio:.5f}:tempo={speed:.5f}:formant=preserved"
-    elif _ffmpeg_has_rubberband():
-        af = f"rubberband=tempo={speed:.5f}:formant=preserved"
-    else:
-        af = _atempo_chain(speed)
-
-    subprocess.run(
-        ["ffmpeg", "-y", "-v", "error", "-ss", f"{t0:.4f}", "-to", f"{t1:.4f}", "-i", mp3, "-af", af, "-ar", str(sr), "-ac", "1", "-sample_fmt", "s16", wav],
-        check=True,
-    )
+    cmd = ["ffmpeg", "-y", "-v", "error", "-ss", f"{t0:.4f}", "-to", f"{t1:.4f}", "-i", mp3]
+    if enable_legacy_tempo_dsp and (abs(speed - 1.0) >= 0.015 or abs(pitch_semi) > 0.05):
+        pitch_ratio = 2.0 ** (pitch_semi / 12.0)
+        if abs(pitch_semi) > 0.05 and _ffmpeg_has_rubberband():
+            af = f"rubberband=pitch={pitch_ratio:.5f}:tempo={speed:.5f}:formant=preserved"
+        elif _ffmpeg_has_rubberband():
+            af = f"rubberband=tempo={speed:.5f}:formant=preserved"
+        else:
+            af = _atempo_chain(speed)
+        cmd.extend(["-af", af])
+    cmd.extend(["-ar", str(sr), "-ac", "1", "-sample_fmt", "s16", wav])
+    subprocess.run(cmd, check=True)
     samples, _ = read_wav_mono(wav)
     words = align_chunk_words(item["text"], events, t0, speed, len(samples) / float(sr), item["speaker"], item["mood"])
     return samples, words
 
 
-def synth_gemini_chunk(item: dict, sr: int, tmp_dir: str, idx: int, api_key: str, model: str, voice_name: str, cache_dir: str | None = None):
-    """Synthesize ONE coherent act paragraph via Gemini 2.5 Flash Preview TTS REST API (pure urllib, 0 extra deps)."""
+def synth_gemini_chunk(
+    item: dict,
+    sr: int,
+    tmp_dir: str,
+    idx: int,
+    api_key: str,
+    model: str,
+    voice_name: str,
+    cache_dir: str | None = None,
+    aligner_mode: str = "auto",
+    whisper_model: str = "base",
+):
+    """Synthesize ONE coherent act paragraph via Gemini Preview TTS REST API (pure urllib, 1.0x zero DSP)."""
     prof = MOOD_PROFILES.get(item["mood"], MOOD_PROFILES["calm_omen"])
     style = item.get("acting") or prof.get("acting_prompt", "Đọc truyền cảm tự nhiên")
     tts_text = item.get("tts_text") or normalize_vi_for_tts(item["text"])
-    prompt = f"{style}:\n{tts_text}"
+    eff_voice = resolve_gemini_voice(
+        item.get("speaker", "NARRATOR"),
+        item.get("profile", ""),
+        bool(item.get("is_narrator", True)),
+        default_narrator_voice=voice_name,
+    )
+    prompt = f"Read aloud in Vietnamese with the following vocal tone ({style}). Output speech audio only:\n{tts_text}"
 
-    key = hashlib.sha256(f"gem6|{model}|{voice_name}|{prompt}".encode("utf-8")).hexdigest()[:16]
+    key = hashlib.sha256(f"gem15|{model}|{eff_voice}|{prompt}".encode("utf-8")).hexdigest()[:16]
     wav_cache = os.path.join(cache_dir, f"gem_{key}.wav") if cache_dir else None
 
     if wav_cache and os.path.isfile(wav_cache) and os.path.getsize(wav_cache) >= 512:
         raw_x = load_audio_mono(wav_cache, sr)
     else:
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}"
-        body = {
-            "contents": [{"parts": [{"text": prompt}]}],
-            "generationConfig": {
-                "responseModalities": ["AUDIO"],
-                "speechConfig": {"voiceConfig": {"prebuiltVoiceConfig": {"voiceName": voice_name}}},
-            },
-        }
-        req = urllib.request.Request(url, data=json.dumps(body).encode("utf-8"), headers={"Content-Type": "application/json"}, method="POST")
-        with urllib.request.urlopen(req, timeout=45) as resp:
-            data = json.loads(resp.read().decode("utf-8"))
-
+        model_chain = []
+        for m in (model, "gemini-2.5-flash-preview-tts", "gemini-3.1-flash-tts-preview"):
+            if m and m not in model_chain:
+                model_chain.append(m)
+        last_exc = None
         audio_bytes = None
         mime = "audio/L16;rate=24000"
-        for cand in data.get("candidates") or []:
-            for part in (cand.get("content") or {}).get("parts") or []:
-                inline = part.get("inlineData") or part.get("inline_data")
-                if inline and inline.get("data"):
-                    audio_bytes = base64.b64decode(inline["data"])
-                    mime = str(inline.get("mimeType") or inline.get("mime_type") or mime)
+        for m_try in model_chain:
+            try:
+                url = f"https://generativelanguage.googleapis.com/v1beta/models/{m_try}:generateContent?key={api_key}"
+                body = {
+                    "contents": [{"parts": [{"text": prompt}]}],
+                    "generationConfig": {
+                        "responseModalities": ["AUDIO"],
+                        "speechConfig": {"voiceConfig": {"prebuiltVoiceConfig": {"voiceName": eff_voice}}},
+                    },
+                }
+                req = urllib.request.Request(url, data=json.dumps(body).encode("utf-8"), headers={"Content-Type": "application/json"}, method="POST")
+                with urllib.request.urlopen(req, timeout=60) as resp:
+                    data = json.loads(resp.read().decode("utf-8"))
+                for cand in data.get("candidates") or []:
+                    for part in (cand.get("content") or {}).get("parts") or []:
+                        inline = part.get("inlineData") or part.get("inline_data")
+                        if inline and inline.get("data"):
+                            audio_bytes = base64.b64decode(inline["data"])
+                            mime = str(inline.get("mimeType") or inline.get("mime_type") or mime)
+                            break
+                    if audio_bytes:
+                        break
+                if audio_bytes:
+                    print(f"  [Gemini-TTS] model={m_try} voice={eff_voice} mood={item['mood']} ({len(tts_text.split())}w)")
                     break
-            if audio_bytes:
-                break
+            except Exception as exc:
+                last_exc = exc
         if not audio_bytes:
-            raise RuntimeError("Gemini TTS returned no inline audio data")
+            raise RuntimeError(f"Gemini TTS failed across {model_chain}: {last_exc}")
 
         if "l16" in mime.lower() or "pcm" in mime.lower():
             m_sr = re.search(r"rate=(\d+)", mime)
@@ -1653,17 +1788,40 @@ def synth_gemini_chunk(item: dict, sr: int, tmp_dir: str, idx: int, api_key: str
             os.makedirs(cache_dir, exist_ok=True)
             write_wav_mono16(wav_cache, raw_x, sr)
 
-    words, _ = align_audio_words_v11(item["text"], raw_x, sr, 0.0, item["speaker"], item["mood"])
+    w_cache = (wav_cache + f".{whisper_model}.words_v15.json") if wav_cache else None
+    words, _ = align_audio_words_v11(
+        item["text"], raw_x, sr, 0.0, item["speaker"], item["mood"],
+        aligner_mode=aligner_mode, whisper_model=whisper_model, cache_path=w_cache,
+    )
     return raw_x, words
 
 
 def synth_line_auto(item: dict, sr: int, tmp_dir: str, idx: int, args, cache_dir: str | None = None, synth_fn=None):
-    """Dispatch whole-act synthesis: `synth_fn` -> `vieneu` (48kHz CPU default when installed) -> `gemini` -> `edge`."""
+    """v15.0 whole-act dispatcher: `synth_fn` -> `gemini` (when GEMINI_API_KEY available!) -> `vieneu` -> `edge`."""
     if synth_fn is not None:
         return synth_fn(item, sr, idx)
 
     engine = getattr(args, "tts_engine", "auto")
-    api_key = getattr(args, "gemini_api_key", None) or os.environ.get("GEMINI_API_KEY")
+    api_key = getattr(args, "gemini_api_key", None) or _load_dotenv_key("GEMINI_API_KEY")
+    aligner_mode = getattr(args, "word_aligner", "auto")
+    whisper_model = getattr(args, "whisper_model", "base")
+
+    if engine == "gemini" or (engine == "auto" and api_key):
+        if not api_key:
+            raise RuntimeError("GEMINI_API_KEY is not set for --tts-engine gemini (set env var, .env, or --gemini-api-key)")
+        try:
+            return synth_gemini_chunk(
+                item, sr, tmp_dir, idx, api_key=api_key,
+                model=getattr(args, "gemini_model", "gemini-2.5-flash-preview-tts"),
+                voice_name=getattr(args, "gemini_voice", "Charon"),
+                cache_dir=cache_dir,
+                aligner_mode=aligner_mode,
+                whisper_model=whisper_model,
+            )
+        except Exception as exc:
+            if engine == "gemini":
+                raise
+            print(f"  [WARN] Gemini TTS fallback -> local/edge on act #{idx}: {exc}")
 
     if engine == "vieneu" or (engine == "auto" and _has_vieneu()):
         try:
@@ -1673,19 +1831,12 @@ def synth_line_auto(item: dict, sr: int, tmp_dir: str, idx: int, args, cache_dir
                 raise
             print(f"  [WARN] VieNeu-TTS fallback -> edge on act #{idx}: {exc}")
 
-    if engine == "gemini" or (engine == "auto" and api_key):
-        if api_key:
-            try:
-                return synth_gemini_chunk(
-                    item, sr, tmp_dir, idx, api_key=api_key,
-                    model=getattr(args, "gemini_model", "gemini-2.5-flash-preview-tts"),
-                    voice_name=getattr(args, "gemini_voice", "Charon"),
-                    cache_dir=cache_dir,
-                )
-            except Exception as exc:
-                print(f"  [WARN] Gemini TTS fallback -> edge on act #{idx}: {exc}")
-
-    return synth_edge_chunk(item, sr, tmp_dir, idx, base_speed_scale=getattr(args, "speed_scale", 1.0), cache_dir=cache_dir)
+    return synth_edge_chunk(
+        item, sr, tmp_dir, idx,
+        base_speed_scale=getattr(args, "speed_scale", 1.0),
+        cache_dir=cache_dir,
+        enable_legacy_tempo_dsp=bool(getattr(args, "enable_legacy_tempo_dsp", False)),
+    )
 
 
 # ---------------- External Audio Ingestion, GPU Voice Pack & 1-File So-VITS-SVC VC-Pack ----------------
@@ -2015,8 +2166,144 @@ def run_local_svc(in_wav: str, out_wav: str, args):
     subprocess.run(cmd, env=vc_env, check=True)
 
 
+def _assemble_imported_voice(items: list, args):
+    """v15.0: Ingest ONE single real-recorded / RVC clean WAV (`--import-voice`) with 0% tempo/pitch DSP + Whisper forced alignment."""
+    src_path = args.import_voice
+    if not os.path.isfile(src_path):
+        raise FileNotFoundError(f"Imported voice file not found: {src_path}")
+    aligner_mode = getattr(args, "word_aligner", "auto")
+    whisper_model = getattr(args, "whisper_model", "base")
+
+    raw_48k = load_audio_mono(src_path, SR_FINAL)
+    clean_48k = _hp(raw_48k, 45.0, SR_FINAL, order=2)
+    clean_48k = normalize_rms(clean_48k, target_dbfs=-19.0, max_peak=0.92)
+    pk = float(np.max(np.abs(clean_48k)))
+    if pk > 0.94:
+        clean_48k *= 0.94 / pk
+
+    speech_items = [it for it in items if it["kind"] == "speech"]
+    token_meta = []
+    full_tokens = []
+    for act_idx, it in enumerate(speech_items, 1):
+        for tok in it["text"].split():
+            if tok.strip():
+                full_tokens.append(tok)
+                token_meta.append((act_idx, it["speaker"], it["mood"], it["fx"], it.get("prox", "normal"), it.get("vieneu_voice")))
+
+    full_text = " ".join(full_tokens)
+    aligned, used_mode = align_audio_words_v11(
+        full_text, clean_48k, SR_FINAL, 0.0,
+        "NARRATOR", "calm_omen",
+        aligner_mode=aligner_mode, whisper_model=whisper_model,
+    )
+
+    all_words = []
+    by_act: dict[int, list[dict]] = {}
+    for w_obj, meta in zip(aligned, token_meta):
+        act_idx, spk, mood, fx, prox, vv = meta
+        entry = {
+            "w": w_obj["w"],
+            "s": round(float(w_obj["s"]), 4),
+            "e": round(float(w_obj["e"]), 4),
+            "speaker": spk,
+            "mood": mood,
+            "prox": prox,
+        }
+        all_words.append(entry)
+        by_act.setdefault(act_idx, []).append(entry)
+
+    sentences = []
+    for act_idx, it in enumerate(speech_items, 1):
+        aw = by_act.get(act_idx) or []
+        if not aw:
+            continue
+        s_dur = max(0.05, aw[-1]["e"] - aw[0]["s"])
+        sentences.append({
+            "sent": act_idx,
+            "speaker": it["speaker"],
+            "mood": it["mood"],
+            "fx": it["fx"],
+            "prox": it.get("prox", "normal"),
+            "vieneu_voice": it.get("vieneu_voice"),
+            "s": aw[0]["s"],
+            "e": aw[-1]["e"],
+            "wps": round(len(aw) / s_dur, 2),
+            "text": it["text"],
+        })
+
+    # Map script silence_drops / dead_silences onto real inter-act gaps in the recording
+    dead_silences = []
+    silence_drops = []
+    visual_beats = []
+    speech_seen = 0
+    for it in items:
+        if it["kind"] == "speech":
+            speech_seen += 1
+        elif it["kind"] in ("dead_silence", "silence_drop", "visual"):
+            prev_end = by_act[speech_seen][-1]["e"] if speech_seen in by_act and by_act[speech_seen] else 0.0
+            next_start = by_act[speech_seen + 1][0]["s"] if (speech_seen + 1) in by_act and by_act[speech_seen + 1] else min(len(clean_48k) / float(SR_FINAL), prev_end + float(it["dur"]))
+            if next_start <= prev_end + 0.05:
+                next_start = min(len(clean_48k) / float(SR_FINAL), prev_end + float(it["dur"]))
+            rec = {"s": round(prev_end, 4), "e": round(next_start, 4), "dur": round(max(0.0, next_start - prev_end), 4)}
+            if it["kind"] == "dead_silence":
+                dead_silences.append({"s": rec["s"], "e": rec["e"]})
+            elif it["kind"] == "silence_drop":
+                silence_drops.append(rec)
+            else:
+                visual_beats.append(rec)
+
+    os.makedirs(args.out_dir, exist_ok=True)
+    final_wav = os.path.join(args.out_dir, args.out_wav)
+    write_wav_mono16(final_wav, clean_48k, SR_FINAL)
+
+    final_dur = len(clean_48k) / float(SR_FINAL)
+    total_frames = int(math.ceil((final_dur + 0.35) * args.fps))
+    rms_env = extract_rms_envelope_30fps(clean_48k, SR_FINAL, fps=args.fps)
+    wps = round(len(all_words) / max(0.1, final_dur), 2)
+
+    payload = {
+        "engine": "horror-voice-v15",
+        "version": "15.0.0",
+        "voice": os.path.basename(src_path),
+        "narrator_source": "imported_voice_clean",
+        "dsp_tempo_pitch_enabled": False,
+        "alignment_mode": used_mode,
+        "dur": round(final_dur, 4),
+        "fps": args.fps,
+        "total_frames": total_frames,
+        "words_per_sec": wps,
+        "spoken_words_per_sec": wps,
+        "visual_breathing_ratio": round(sum(x["e"] - x["s"] for x in dead_silences + silence_drops + visual_beats) / max(0.1, final_dur), 3),
+        "rms_threshold": 0.08,
+        "rms_envelope_30fps": rms_env,
+        "words": all_words,
+        "sentences": sentences,
+        "dead_silences": dead_silences,
+        "silence_drops": silence_drops,
+        "visual_beats": visual_beats,
+    }
+    words_json = os.path.join(args.out_dir, "words.json")
+    with open(words_json, "w", encoding="utf-8") as fp:
+        json.dump(payload, fp, ensure_ascii=False, indent=2)
+
+    if args.words_ts:
+        os.makedirs(os.path.dirname(os.path.abspath(args.words_ts)), exist_ok=True)
+        with open(args.words_ts, "w", encoding="utf-8") as fp:
+            fp.write("// Auto-generated by scripts/gen_horror_voice.py (v15.0 Clean Studio Voice + RMS Envelope)\n")
+            fp.write(f"export const VOICE_DUR = {round(final_dur, 4)};\n")
+            fp.write(f"export const TOTAL_FRAMES = {total_frames};\n")
+            fp.write("export type WordTiming = { w: string; s: number; e: number; speaker?: string; mood?: string; prox?: string };\n")
+            fp.write("export const WORDS: WordTiming[] = " + json.dumps(all_words, ensure_ascii=False) + ";\n")
+            fp.write("export const RMS_ENVELOPE: number[] = " + json.dumps(rms_env) + ";\n")
+
+    print(f"VOICE IMPORT OK -> {final_wav} ({final_dur:.3f}s, {total_frames}f @ {args.fps}fps, {len(all_words)} words, aligner={used_mode}, 0% tempo/pitch DSP)")
+    return final_wav, words_json, payload
+
+
 def assemble_voice(items: list, args, tmp_dir: str, synth_fn=None):
-    """Assemble studio-clean 48 kHz mono `voice.wav` + `words.json` from whole-act clips with exact `[DEAD SILENCE]` lock."""
+    """Assemble studio-clean 48 kHz mono `voice.wav` + `words.json` (with 30fps RMS envelope & 0% tempo/pitch DSP by default)."""
+    if getattr(args, "import_voice", None):
+        return _assemble_imported_voice(items, args)
     cache_dir = getattr(args, "tts_cache", None) or os.path.join(os.path.dirname(os.path.abspath(args.out_dir)), ".tts_cache")
     speech_indices = [i for i, it in enumerate(items) if it["kind"] == "speech"]
     narrator_indices = [i for i in speech_indices if items[i]["is_narrator"]]
@@ -2123,8 +2410,8 @@ def assemble_voice(items: list, args, tmp_dir: str, synth_fn=None):
         else:
             raw_seg, rel_words = synth_line_auto(it, SR_FINAL, tmp_dir, idx, args, cache_dir=cache_dir, synth_fn=synth_fn)
 
-        # Apply clause-level pace/pitch shaping for external/synth_fn clips when not already shaped inside synth_vieneu_chunk
-        if not it.get("_clause_shaped_in_synth") and not getattr(args, "no_tempo_trim", False):
+        # v15.0: Clause-level tempo/pitch stretching is OFF by default (`--enable-legacy-tempo-dsp` required to opt in)
+        if bool(getattr(args, "enable_legacy_tempo_dsp", False)) and not it.get("_clause_shaped_in_synth") and not getattr(args, "no_tempo_trim", False):
             c_pace = float(it["clause_pace"]) if it.get("clause_pace") is not None else 1.0
             c_pst = float(it.get("clause_pitch_st") or 0.0)
             if abs(c_pace - 1.0) >= 0.02 or abs(c_pst) >= 0.08:
@@ -2225,6 +2512,7 @@ def assemble_voice(items: list, args, tmp_dir: str, synth_fn=None):
     visual_ratio = round((pause_total_s + ds_total) / max(0.1, final_dur), 3)
 
     eng_choice = getattr(args, "tts_engine", "auto")
+    api_key_present = bool(getattr(args, "gemini_api_key", None) or _load_dotenv_key("GEMINI_API_KEY"))
     if getattr(args, "import_acts", None):
         src_label = "gpu_acts_imported"
     elif args.vc_pack and args.narrator_vc_wav:
@@ -2237,18 +2525,21 @@ def assemble_voice(items: list, args, tmp_dir: str, synth_fn=None):
         src_label = "narrator_audio"
     elif use_local_vc:
         src_label = "local_svc"
+    elif (eng_choice == "gemini" or (eng_choice == "auto" and api_key_present)) and synth_fn is None:
+        src_label = "gemini_tts"
     elif eng_choice == "vieneu" or (eng_choice == "auto" and _has_vieneu() and synth_fn is None):
         src_label = f"vieneu_{getattr(args, 'vieneu_mode', 'v3turbo')}_48k"
-    elif eng_choice == "gemini":
-        src_label = "gemini_tts"
     else:
         src_label = "edge_tts_clean"
 
+    rms_env = extract_rms_envelope_30fps(full_48k, SR_FINAL, fps=args.fps)
+
     payload = {
         "engine": "horror-voice-v6",
-        "version": "14.0.0",
+        "version": "15.0.0",
         "voice": getattr(args, "vieneu_voice", None) or args.base_voice,
         "narrator_source": src_label,
+        "dsp_tempo_pitch_enabled": bool(getattr(args, "enable_legacy_tempo_dsp", False)),
         "alignment_mode": getattr(args, "word_aligner", "auto"),
         "dur": round(final_dur, 4),
         "fps": args.fps,
@@ -2256,6 +2547,8 @@ def assemble_voice(items: list, args, tmp_dir: str, synth_fn=None):
         "words_per_sec": wps,
         "spoken_words_per_sec": spoken_wps,
         "visual_breathing_ratio": visual_ratio,
+        "rms_threshold": 0.08,
+        "rms_envelope_30fps": rms_env,
         "words": all_words,
         "sentences": sentences,
         "dead_silences": dead_silences,
@@ -2269,11 +2562,12 @@ def assemble_voice(items: list, args, tmp_dir: str, synth_fn=None):
     if args.words_ts:
         os.makedirs(os.path.dirname(os.path.abspath(args.words_ts)), exist_ok=True)
         with open(args.words_ts, "w", encoding="utf-8") as fp:
-            fp.write("// Auto-generated by scripts/gen_horror_voice.py (v13.0 Clause-Prosody Neural Voice + Forced Word Alignment)\n")
+            fp.write("// Auto-generated by scripts/gen_horror_voice.py (v15.0 Clean Studio Voice + RMS Envelope + Forced Word Alignment)\n")
             fp.write(f"export const VOICE_DUR = {round(final_dur, 4)};\n")
             fp.write(f"export const TOTAL_FRAMES = {total_frames};\n")
             fp.write("export type WordTiming = { w: string; s: number; e: number; speaker?: string; mood?: string; prox?: string };\n")
             fp.write("export const WORDS: WordTiming[] = " + json.dumps(all_words, ensure_ascii=False) + ";\n")
+            fp.write("export const RMS_ENVELOPE: number[] = " + json.dumps(rms_env) + ";\n")
 
     first_word_s = float(all_words[0]["s"]) if all_words else 0.0
     print(f"VOICE OK -> {final_wav} ({final_dur:.3f}s, {total_frames}f @ {args.fps}fps, {len(all_words)} words, {wps:.2f} w/s effective [{spoken_wps:.2f} spoken], first_word={first_word_s:.2f}s, visual_ratio={visual_ratio:.2f}, src={src_label})")
@@ -2308,7 +2602,9 @@ def build_parser():
     ap.add_argument("--speaker-lock-source", default="auto", choices=["auto", "preset", "calm", "anchor"], help="Single-voice anchor source when --speaker-lock is enabled (default: auto -> narrator_anchor.wav else --vieneu-voice preset)")
     ap.add_argument("--ref-codes-max-frames", type=int, default=84, help="Max MOSS codec ref_codes frames for full Vietnamese tonal cadence transfer under --speaker-lock (default: 84; 0=full)")
     ap.add_argument("--no-auto-refs", action="store_true", help="Disable auto-detection of audio/emotion_refs/")
-    ap.add_argument("--no-tempo-trim", action="store_true", help="Disable clean rubberband tempo trim (0.82x..1.08x) on VieNeu-TTS acts")
+    ap.add_argument("--no-tempo-trim", action="store_true", help="Compatible no-op (tempo/pitch DSP is already OFF by default in v15.0)")
+    ap.add_argument("--enable-legacy-tempo-dsp", action="store_true", help="Opt-in legacy tempo/pitch/F0 DSP stretching & clause splitting (OFF by default in v15.0)")
+    ap.add_argument("--import-voice", default=None, help="v15.0: Import ONE real-recorded or RVC clean WAV (0%% tempo/pitch DSP) + Whisper forced alignment + 30fps RMS envelope")
     ap.add_argument("--multi-style-guide", action="store_true", help="Vary built-in VieNeu presets by mood when exporting a So-VITS-SVC VC-Pack guide")
     ap.add_argument("--human-guide", default=None, help="Voice-to-Voice Directing: your own 1-take rough acting recording (.m4a/.wav) for So-VITS-SVC -na or direct assembly")
     ap.add_argument("--base-voice", default="vi-VN-NamMinhNeural", help="Fallback edge-tts voice")
@@ -2354,7 +2650,12 @@ def build_parser():
 
 def main(argv=None):
     args = build_parser().parse_args(argv)
-    items = parse_script(args.script, default_voice=args.base_voice, narrator_vieneu=args.vieneu_voice or "Thiện Minh")
+    items = parse_script(
+        args.script,
+        default_voice=args.base_voice,
+        narrator_vieneu=args.vieneu_voice or "Thiện Minh",
+        enable_clause_dsp_split=bool(getattr(args, "enable_legacy_tempo_dsp", False)),
+    )
 
     if args.export_narrator_script:
         export_narrator_script(items, args.export_narrator_script)

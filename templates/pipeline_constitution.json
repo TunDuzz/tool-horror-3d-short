@@ -1,6 +1,15 @@
 {
-  "version": "14.0.0",
+  "version": "15.0.0",
   "fps": 30,
+  "rendering": {
+    "defaultCharacterMode": "sprite2d",
+    "lowVramDefaultForPsx": true,
+    "lowVramDpr": 0.45,
+    "lowVramDraftDpr": 0.35,
+    "lowVramMaxBloomLevels": 3,
+    "defaultConcurrency": 1,
+    "singleWebglContext": true
+  },
   "speech": {
     "wordsPerSecondMin": 2.05,
     "wordsPerSecondTarget": 2.65,
@@ -9,6 +18,8 @@
     "spokenWordsPerSecondTarget": 3.25,
     "spokenWordsPerSecondMax": 3.65,
     "minVisualBreathingRatio": 0.14,
+    "cleanTempoDefault": 1.0,
+    "defaultDisableTempoPitchDsp": true,
     "directives": [
       "[VISUAL Xs]",
       "[PAUSE Xs]",
@@ -48,13 +59,16 @@
     ]
   },
   "soundscape": {
-    "defaultMaxJumpscaresPerPart": 0,
-    "hardMaxJumpscaresShort": 1,
-    "hardMaxJumpscaresSeries": 2,
+    "minJumpscaresPerPart": 1,
+    "recommendedJumpscaresShort": [1, 2],
+    "hardMaxJumpscaresShort": 2,
+    "hardMaxJumpscaresSeriesPerPart": 2,
     "maxBeds": 2,
+    "preferRealSfxOnly": true,
     "requireAcousticMotif": true,
     "forbidAutoReverseSuckBeforeSilence": true,
     "targetLufs": -16.0,
+    "jumpscareTruePeakDb": -1.0,
     "targetLraMin": 6.5,
     "validSpaceZones": [
       "close_ear",
@@ -70,6 +84,34 @@
       "approach",
       "stutter_break"
     ]
+  },
+  "jumpscare": {
+    "minPerPart": 1,
+    "recommendedShort": [1, 2],
+    "clipDurationSec": {
+      "min": 1.8,
+      "max": 4.2
+    },
+    "maxAvSyncDriftSec": 0.15,
+    "validTransitionStyles": [
+      "first_frame_seamless",
+      "whip_pan_turn",
+      "diegetic_reveal",
+      "silence_hard_cut"
+    ]
+  },
+  "entityScareTiers": {
+    "minPrimaryEntityTier": 4,
+    "maxTier": 7,
+    "tiers": {
+      "1": "backlit_dark_silhouette",
+      "2": "familiar_uncanny_detail_tilted_neck",
+      "3": "blank_or_static_blurred_face",
+      "4": "corner_ceiling_or_doorcrack_clinger",
+      "5": "elongated_smile_hollow_eyes_pinpoint_glints",
+      "6": "elongated_twisted_neck_rapid_spasm_twitch",
+      "7": "dead_still_stare_into_sudden_lens_distortion"
+    }
   },
   "partDurationSec": {
     "min": 45,
@@ -110,6 +152,17 @@
     ]
   },
   "enums": {
+    "validCharacterModes": [
+      "sprite2d",
+      "rig3d"
+    ],
+    "validSpriteExprs": [
+      "calm",
+      "talk",
+      "fear",
+      "shock",
+      "entity_scare"
+    ],
     "validLights": [
       "warmLamp",
       "coldMoon",
@@ -199,7 +252,32 @@
       "backbendCrab",
       "lungeCloseUp",
       "handoverProp",
-      "fleePanic"
+      "fleePanic",
+      "shrug",
+      "startledFlinch"
+    ],
+    "validActingGestures": [
+      "shrug",
+      "sighDrop",
+      "heavyPant",
+      "breathHold",
+      "shiver",
+      "nodSlow",
+      "nodDouble",
+      "headShake",
+      "tiltListen",
+      "glanceAside",
+      "chinTuck",
+      "flinch",
+      "leanIn",
+      "leanBack",
+      "cower",
+      "stepSway",
+      "neckCrack",
+      "neckTwitch",
+      "jawStretch",
+      "loomSwell",
+      "custom"
     ]
   },
   "stillAccuracyGate": {

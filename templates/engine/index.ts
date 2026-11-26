@@ -14,6 +14,7 @@ export * from "./build";
 export * from "./face2d";
 export * from "./bodyHorror";
 export * from "./rig3d";
+export * from "./sprite2d";
 export * from "./stage";
 export * from "./povRig";
 export * from "./sceneAudit";

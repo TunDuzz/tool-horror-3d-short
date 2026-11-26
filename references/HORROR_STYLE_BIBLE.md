@@ -1,34 +1,33 @@
-# Horror Style Bible v5.0 ("PSX Low-Poly VHS/CRT & Maximum Dread POV")
+# Horror Style Bible v15.0 ("Option A: GTX 960 Lightweight 3D World · 2.5D Photorealistic Cast · AI Jumpscare")
 
-Reference visual standard calibrated for **Horror Engine v5.0** (`templates/engine/`), combining **PS1/PSX low-poly VHS/CRT dread (`1A+2A+3A`)**, **story-driven `CharacterBlueprint` anatomy**, and **5 opt-in Maximum Dread pillars** across radically distinct non-repeating environments (`ruralFuneralRoom`, `hospitalCorridor`, `foggyVillageAlley`).
+Reference visual standard calibrated for **Horror Engine v15.0** (`templates/engine/`), combining **GTX 960 low-VRAM PSX VHS/CRT 3D environments**, **2.5D photorealistic normal-mapped characters (`sprite2d.ts`)**, **7-tier Uncanny Valley ghosts (`scareTier >= 4`)**, and **First-Frame-conditioned AI Video Jumpscares (`gen_jumpscare_clip.py`)** routed through the exact same Grade + Grain + RetroPsx VHS pipeline under `HorrorHUD`.
 
 ---
 
-## 1. Visual Render Modes (`renderStyle` on `<ShortPlayer />`)
+## 1. Visual Render Modes & GTX 960 Low-VRAM Pipeline (`renderStyle` on `<ShortPlayer />`)
 
-Engine v5.0 supports 4 clean deterministic visual modes selectable per story, defaulting to **`psxHorror`**:
+Engine v15.0 defaults to **`psxHorror` with `lowVram: true`**: disables full-res `OpaqueNormalPass`, `SSAOEffect`, and `LensBlur`; caps `BloomEffect` to `<= 3` mip levels; renders internal WebGL at `dpr: 0.45` (`0.35` draft); mounts strictly **ONE `<ThreeCanvas>`** context.
 
 | `renderStyle` | Geometry & Shading | Post-Processing & Outlines |
 |---|---|---|
-| **`"psxHorror"` *(default)*** | Angular low-poly meshes (`lowPoly: true`), PS1 `vertexSnap` (`280`), 11 PBR Albedo+BumpMap surface pairs, SSAO contact darkening, wrapped practical lighting. | 360×640 virtual pixel grid (`pixelScale: 3.0`), 22-level RGB quantization + 4×4 Bayer dithering, luminance-preserving CRT scanlines & subtle barrel curvature, VHS horizontal tracking wave + razor-thin `tapeTear` tracking band (`dreadLevel`), `outlineMode: "off"`. |
-| `"semiReal"` | Smooth high-poly meshes (`lowPoly: false`), full PBR BumpMaps + SSAO, clammy specular shading. | Clean cinematic HDR Bloom + subtle `0.008` grain, `outlineMode: "off"`, zero retro CRT/pixelation. |
-| `"painterly"` | Smooth or sculptural 3D meshes + PBR BumpMaps + SSAO. | Gritty thin outline accents (`outlineMode: "grittyThin"`), subtle brushwork grain. |
-| `"comic"` | Clean stylized 3D meshes, soft wrapped cel-influenced shading. | Dual-layer outlines: bold `~5–7 px` Inverted-Hull shells on `NOINK` (layer 3) + clean architectural `InkPass` on layer 0. |
+| **`"psxHorror"` *(default)*** | Angular low-poly meshes (`lowPoly: true`), PS1 `vertexSnap` (`280`), 11 PBR Albedo+BumpMap surface pairs, `lowVram: true` (`dpr 0.45`, no SSAO/LensBlur). | 360×640 virtual pixel grid (`pixelScale: 3.0`), 22-level RGB quantization + 4×4 Bayer dithering, luminance-preserving CRT scanlines & subtle curvature, VHS `tapeTear` (`dreadLevel`), `outlineMode: "off"`. |
+| `"semiReal"` | Smooth high-poly meshes (`lowPoly: false`), full PBR BumpMaps, clammy specular shading. | Clean cinematic HDR Bloom + subtle `0.008` grain, `outlineMode: "off"`, zero retro CRT/pixelation. |
+| `"painterly"` | Smooth or sculptural 3D meshes + PBR BumpMaps. | Gritty thin outline accents (`outlineMode: "grittyThin"`), subtle brushwork grain. |
+| `"comic"` | Clean stylized 3D meshes, soft wrapped cel-influenced shading. | Dual-layer outlines: bold `~5–7 px` Inverted-Hull shells on `NOINK` (layer 3) + architectural `InkPass` on layer 0. |
 
 ---
 
-## 2. Story-Driven 3D Characters & Uncanny Entities (`CharacterBlueprint`)
+## 2. 2.5D Photorealistic Normal-Mapped Characters (`sprite2d.ts`) & 7-Tier Uncanny Ghosts (`>= Tier 4`)
 
-- **100% Real 3D Articulated Characters — ZERO 2D Billboards, ZERO Cute Chibi (`rig3d.ts`, `face2d.ts`, `bodyHorror.ts`):**
-  - Human characters use **non-chibi adult horror proportions (`~5.6–6.0` head heights)** with sculpted angular jaws, 3D nose bridges, ears, sloping shoulder yokes, 3D garment collars/belts, UV garment folds, and 20 named articulation sockets.
-  - Curved spherical-patch 512×512 2D face decals (`face2d.ts`) draw clean **sharp almond eyes, contracted pinpoint horror pupils, subtle under-eye hollows, furrowed brows, and restrained tense mouths** (`calm`, `wary`, `uneasy`, `dread`, `terrified`, `deadStare`, `unsettlingSmile`, `hollow`) with deterministic `autoBlink` and Vietnamese vowel-aware `mouthFromWords`.
-- **ZERO Hardcoded Monster Templates — Strictly Driven by Story Lore:**
-  - Every actor and supernatural entity MUST be declared in `manifest.json` `castBlueprints[]` with `storyDescription` lifted from the story's `appearanceBrief` / `SCRIPT.md`, and instantiated via **`createCharacterFromBlueprint(bp)`**.
-  - **All visceral/body-horror flags default OFF (`false`/`0`)** and are toggled ONLY when matching the story:
-    - *Ordinary human / ghost / quiet specter:* Clean `createCharacter3D` proportions, zero gore flags.
-    - *Pitch-black faceless silhouette:* `silhouetteMode: true`, `eyeGlow: true`, `breathing: false`, zero body-horror gore.
-    - *Visceral folklore / corpse entity (when story calls for it):* Opt-in `bodyHorror` flags (`skullHollows`, `jawDrop3D`, `crookedTeeth`, `neckStretch`, `exposedRibs`, `protrudingSpine`, `clawHands`, `twistedJoints`, `extraArms`, `cadaverSkin`, `bloodStainLevel`, `eyeHorror`, `cheekSplitGrin`, `tatteredCloth`, plus v5.0 opt-ins `mattedLongHair`, `suturesAndWounds`, `uncannySkullMask`).
-- **Outline Layer Discipline (`NOINK`):** All characters, entities, and POV rigs stay isolated on layer 3 (`NOINK`) so architectural passes never double-outline actors.
+- **Default `characterMode: "sprite2d"` (`gen_cast_assets.py` + `sprite2d.ts`):**
+  - Automated script `gen_cast_assets.py` reads `castBlueprints[]` -> generates dark found-footage / photorealistic human & ghost cutouts (never flat cartoons) -> removes background -> synthesizes Tangent-Space Normal Maps -> saves into `src/<project>/assets/cast/`.
+  - `sprite2d.ts` renders Y-axis billboards with Albedo + Normal Map + `stylizedShade` so every character receives real 3D practical lights (`PointLight`, `SpotLight`, lightning, fog) + grounded contact shadow + breathing (`scale.y`), RMS speech cadence bob, `headTwitch`, `steppedFps` (`10–12fps`), and 5 expressions (`calm`, `talk`, `fear`, `shock`, `entity_scare`).
+  - Legacy `rig3d.ts` (`characterMode: "rig3d"`) remains supported for backward compatibility.
+- **7-Tier Entity Scare Scale (Primary Entity MUST be `scareTier >= 4` — `ENTITY_SCARE_TIER_ERROR`):**
+  - Tiers 4–7 prioritize **Uncanny Valley + high-contrast chiaroscuro** (ceiling/corner lurker, stretched unnatural smile & pinpoint gleaming eyes, elongated twitching neck/joints, motionless stare snapping into distorted lens lunge) without crude gore so videos stay YouTube/TikTok safe.
+- **First-Frame-Conditioned AI Jumpscare Clips (`gen_jumpscare_clip.py`):**
+  - Captures clean 3D `jumpscare_anchor_frame.png` (`render-stills.mjs --raw-anchor --png`) right before the climax, generates a 2–4s First-Frame-locked MP4 (`assets/jumpscare_<id>.mp4`), and composites it inside `ShortPlayer.tsx` BEFORE `gradeTailPass -> psxPass` so VHS grain, quantization, and `HorrorHUD` match 100%.
+  - Story-driven `transitionStyle`: `first_frame_seamless`, `whip_pan_turn`, `diegetic_reveal`, or `silence_hard_cut` (never hardcoded flashlight across unrelated scripts!).
 
 ---
 

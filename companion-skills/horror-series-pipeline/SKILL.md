@@ -53,7 +53,8 @@ shorts-project/src/<episode>/
 1. Author `story.json` via `horror-story` and export `bible/OUTLINE.json` (`horror_story.py export-outline`).
 2. Lock `aspect` (`"9:16"` or `"16:9"`), global `audio_drone_hz`, `renderStyle` (`"psxHorror"` default or `"semiReal"` / `"painterly"` / `"comic"`), and per-Part `transition_out` (`"cut"`, `"blackout:0.25"`, `"fade:0.25"`).
 3. Write `out/<episode>/p01/SCRIPT.md` .. `pNN/SCRIPT.md` (`2.55–3.05 words/s` effective / `3.15–3.45 words/s` spoken, `platform_safe_raw` 3-region colloquial prose): Part 1 opens straight at `0.05–0.20s` with a `<= 24 words` Cold Hook (ZERO opening `[VISUAL 2.6s]` dead air!), keeping mid-part `[BEAT 0.18–0.35s]` / `[SILENCE_DROP]` / `[VISUAL 0.8–1.4s]` strictly at suspense pivots and cliffhangers.
-4. Generate studio-clean 48 kHz `voice.wav` + Whisper forced-aligned `words.json` (`<35ms`) per Part via `scripts/gen_horror_voice.py --tts-engine vieneu --speaker-lock --word-aligner auto --strict-hook --no-vc` (optional GPU acting pack / VC-Pack supported).
+4. Generate studio-clean `1.0x` 48 kHz `voice.wav` + Whisper forced-aligned `words.json` (`<35ms` + `rms_envelope_30fps`) per Part via `scripts/gen_horror_voice.py --tts-engine auto --word-aligner auto --strict-hook --no-vc` (or `--import-voice` for real human/RVC recordings).
+5. Auto-generate shared series 2.5D normal-mapped cast PNGs in `src/<episode>/shared/assets/cast/` via `gen_cast_assets.py` (primary entity `scareTier >= 4`; later chapters declare `sameCharacterOf` for returning characters so cross-series `ANTI_REPEAT_ENTITY_ERROR` stays strict).
 
 ### Phase 2: Build & Lock `shared/` (One-Time World & Cast Approval)
 1. Author `shared/locations.ts`, `shared/castBlueprints.ts`, `shared/build.ts`, `shared/worldBase.ts` following `horror-world-lookdev` v5.0 (story-driven `LocationBlueprint`s with BumpMap surfaces, `CharacterBlueprint`s via `createCharacterFromBlueprint`, real `setLocalLights` / `setSpotLight`).
@@ -64,9 +65,9 @@ For each Part `N`:
 1. Run `python3 scripts/validate_continuity.py src/<episode> --part N`.
 2. Draft `parts/pNN/manifest.json` (`beats[]` + `shots[]`, with `cold_hook` -> `master` on Part 1), lock frames & captions automatically via `align_manifest.py`, and pass `validate_manifest.py --script ... --words ... --cues ... --strict-cinema --strict-retention --registry LOCATION_REGISTRY.json --update-registry --still-out ...`.
 3. Author `parts/pNN/{story.ts, world.ts, index.tsx}` using `SHOTS = shotsFromManifest(MANIFEST)`, `camMasterEstablish` + `camPovChain` (`Anchored POV-First 2A`), `dialogueMode` (`voiceOver` vs `directSpeech`), and 2-joint `worldTarget` POV hands (`4B`), then register `<Ep_PNN />` in `src/Root.tsx`.
-4. Run the **5-Layer Semantic Pre-Final Still Gate** on `<Ep_PNN />` (`render-stills.mjs --manifest ... --strict-audit` -> `storyboard_proof.html` verifying `mustShow` 3D Raycast sightlines & pixel luma + 100% viewed via `read_file`).
-5. Mix `out/<episode>/pNN/audio/mix.wav` via `scripts/mix_cues.py --cues ... --out ... --strict` locked to `CONTINUITY.json` `audio_bridge` with Openverse CC0 Foley and TRUE `-48 dB` Dead Silence!
-6. Render `<Ep_PNN />` via `render-video.mjs` (`--scale 1`, `1.25`, or `1.5`; NEVER `1.3333`), mux audio (`-map 0:v:0 -map 1:a:0`), and run `extract_shots.py` + `short_qa.py` confirming `DIRECTING_WARNS none`, `DEAD_CAMERA_WARNS none`, and `DARK_VOID_WARNS none` → `out/<episode>/pNN/final.mp4`.
+4. Run `gen_jumpscare_clip.py` for the chapter's mandatory Jumpscare (`>= 1` per chapter), then run the **5-Layer Semantic Pre-Final Still Gate** on `<Ep_PNN />` (`render-stills.mjs --manifest ... --strict-audit` -> `storyboard_proof.html` verifying `mustShow` 3D Raycast sightlines & pixel luma + 100% viewed via `read_file`).
+5. Auto-fetch missing CC0 SFX (`sfx_manager.py auto-fetch-for-script`) and mix `out/<episode>/pNN/audio/mix.wav` via `scripts/mix_cues.py --cues ... --out ... --strict` (`min_jumpscares >= 1`, `-1.0 dBTP`, Real-SFX-first) locked to `CONTINUITY.json` `audio_bridge`!
+6. Render `<Ep_PNN />` via `render-video.mjs` (GTX 960 `--concurrency 1` default, `--scale 1`, `1.25`, or `1.5`), mux audio (`-map 0:v:0 -map 1:a:0`), and run `extract_shots.py` + `short_qa.py` → `out/<episode>/pNN/final.mp4`.
 7. Update `bible/CONTINUITY.json` (`completed_part: N`, final character anchors/props, plot reveals, end camera/transition, audio bridge).
 8. Clean stale bundles in `REMOTION_TMP`.
 

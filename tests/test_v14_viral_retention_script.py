@@ -203,6 +203,8 @@ def _make_valid_v32_short(title: str = "Máy Nội Bộ 204"):
             "actionSummary": "Soi sợi dây điện thoại cắt cụt bám bụi",
             "subtext": "Chết lặng khi nhận ra không hề có nguồn điện",
             "sensoryDetails": {"sight": "Đầu dây đồng đứt lìa đóng bụi", "sound": "Tiếng thở sát gáy"},
+            "jumpscareStyle": "cinema_stab",
+            "jumpscareReason": "Cú lật cận mặt thực thể sau gáy đúng lúc nhìn thấy đầu dây đồng bị cắt đứt",
             "spokenBeat": {
                 "speaker": "NARRATOR",
                 "intent": "Chốt cú twist bằng khẩu ngữ đời thật",
@@ -218,12 +220,14 @@ def _make_valid_v32_short(title: str = "Máy Nội Bộ 204"):
 class TestV14ViralRetentionAndVoiceTempo(unittest.TestCase):
     def test_constitution_v14_fields_and_camera_mode(self):
         const = constitution.load_constitution()
-        self.assertEqual(const["version"], "14.0.0")
+        self.assertEqual(const["version"], "15.0.0")
         self.assertIn("cold_hook", const["cameraGrammar"]["validCameraModes"])
         sp = const["speech"]
         self.assertGreaterEqual(sp["wordsPerSecondTarget"], 2.50)
         self.assertGreaterEqual(sp["spokenWordsPerSecondTarget"], 3.10)
         self.assertGreaterEqual(sp["spokenWordsPerSecondMax"], 3.55)
+        self.assertEqual(sp["cleanTempoDefault"], 1.0)
+        self.assertTrue(sp["defaultDisableTempoPitchDsp"])
 
         rv = const["retentionAndVoiceStyle"]
         self.assertLessEqual(rv["maxFirstWordStartSec"], 0.45)
@@ -233,10 +237,11 @@ class TestV14ViralRetentionAndVoiceTempo(unittest.TestCase):
         self.assertIn("south", rv["dialectRegions"])
 
     def test_gen_horror_voice_v14_faster_tempo_and_strict_hook(self):
-        # Verify v14.0 mood clean_tempo & tail_pad sit in calibrated snappier band (0.76-0.89, tail_pad <= 0.20s)
-        self.assertGreaterEqual(gen_horror_voice.MOOD_PROFILES["calm_omen"]["clean_tempo"], 0.82)
+        # Verify v15.0 clean 1.0x default (zero tempo/pitch DSP distortion) & tail_pad <= 0.20s
+        self.assertEqual(gen_horror_voice.MOOD_PROFILES["calm_omen"]["clean_tempo"], 1.0)
+        self.assertEqual(gen_horror_voice.MOOD_PROFILES["calm_omen"]["pitch_semi"], 0.0)
         self.assertLessEqual(gen_horror_voice.MOOD_PROFILES["calm_omen"]["tail_pad"], 0.20)
-        self.assertGreaterEqual(gen_horror_voice.MOOD_PROFILES["tense"]["clean_tempo"], 0.82)
+        self.assertEqual(gen_horror_voice.MOOD_PROFILES["tense"]["clean_tempo"], 1.0)
 
         with tempfile.TemporaryDirectory() as td:
             sp = os.path.join(td, "SCRIPT.md")
@@ -263,7 +268,8 @@ class TestV14ViralRetentionAndVoiceTempo(unittest.TestCase):
             with redirect_stdout(buf):
                 _, _, payload = gen_horror_voice.assemble_voice(items, args, td, synth_fn=fake_synth)
             out_log = buf.getvalue()
-            self.assertEqual(payload["version"], "14.0.0")
+            self.assertEqual(payload["version"], "15.0.0")
+            self.assertIn("rms_envelope_30fps", payload)
             self.assertIn("[HOOK WARN]", out_log, f"Expected [HOOK WARN] for 1.2s opening dead air, got:\n{out_log}")
 
     def test_validate_manifest_cold_hook_and_strict_retention(self):

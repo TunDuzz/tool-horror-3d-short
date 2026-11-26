@@ -823,12 +823,14 @@ class TestPhase2Pipeline(unittest.TestCase):
             self.assertIn("SFX_CROWDING_WARN", codes)
             self.assertIn("WHISPER_INTRUSION_WARN", codes)
 
-            # B. Clean sparse horror cues.json MUST PASS --strict with 0 warnings, TRUE Dead Silence, credits.txt & mix_report.md
+            # B. Clean sparse horror cues.json (opt-in min_jumpscares=0 + allow_synth for legacy v7 vacuum test) MUST PASS --strict
             good_cues = {
                 "voice": voice_p,
                 "words": words_p,
                 "library_dir": lib,
                 "skip_history": True,
+                "min_jumpscares": 0,
+                "allow_synth": True,
                 "beds": [{"sound": "rain_bed", "target_rms_dbfs": -33.0, "hp_hz": 120, "lp_hz": 2400, "voice_notch_db": -4.0, "whisper_duck_db": -10.0}],
                 "events": [
                     {"synth": "reverse_suck", "bus": "score", "at_dead_silence": 0, "edge": "start", "align": "end", "dur_s": 0.60, "target_peak_dbfs": -6.0, "allow_in_whisper": True, "label": "pull into void"},
@@ -865,9 +867,9 @@ class TestPhase2Pipeline(unittest.TestCase):
                 "skip_history": True,
                 "beds": [{"sound": "rain_bed", "target_rms_dbfs": -33.0, "hp_hz": 120, "lp_hz": 2400}],
                 "events": [
-                    {"synth": "reverse_suck", "bus": "score", "at_dead_silence": 0, "edge": "start", "align": "end", "dur_s": 0.60, "target_peak_dbfs": -6.0, "allow_in_whisper": True, "label": "pull into void"},
-                    {"jumpscare": "cinema_stab", "at_dead_silence": 0, "edge": "end", "target_peak_dbfs": -1.5, "tinnitus": True, "label": "climax stab"},
-                    {"jumpscare": "vhs_psx_glitch", "at_act": 3, "edge": "end", "offset_s": 0.30, "micro_silence_s": 0.22, "target_peak_dbfs": -1.5, "label": "final VHS lunge"},
+                    {"synth": "reverse_suck", "allow_synth": True, "bus": "score", "at_dead_silence": 0, "edge": "start", "align": "end", "dur_s": 0.60, "target_peak_dbfs": -6.0, "allow_in_whisper": True, "label": "pull into void"},
+                    {"jumpscare": "cinema_stab", "at_dead_silence": 0, "edge": "end", "target_peak_dbfs": -1.0, "tinnitus": True, "label": "climax stab"},
+                    {"jumpscare": "vhs_psx_glitch", "at_act": 3, "edge": "end", "offset_s": 0.30, "micro_silence_s": 0.22, "target_peak_dbfs": -1.0, "label": "final VHS lunge"},
                 ],
             }
             js_cues_p = os.path.join(td, "js_cues.json")

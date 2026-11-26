@@ -47,11 +47,14 @@ def collect_sync_pairs(templates_root: str, target_dir: str, include_demo: bool,
     add_dir("audio", "audio", (".py",))
     add_dir("scripts", "scripts", (".py", ".mjs"))
 
-    # Core project manifests (always safe to keep in sync)
+    # Core project manifests & asset ambient declarations (always safe to keep in sync)
     for fname in ("package.json", "tsconfig.json", "requirements.txt"):
         sp = os.path.join(templates_root, "project", fname)
         if os.path.isfile(sp):
             pairs.append((sp, os.path.join(target_dir, fname)))
+    assets_dts = os.path.join(templates_root, "project", "assets.d.ts")
+    if os.path.isfile(assets_dts):
+        pairs.append((assets_dts, os.path.join(target_dir, "src", "assets.d.ts")))
 
     # v11.0 Single-Source-of-Truth Pipeline Constitution
     const_sp = os.path.join(templates_root, "pipeline_constitution.json")

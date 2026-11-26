@@ -381,7 +381,9 @@ def align_manifest_data(manifest: dict, words: list, fps: float = 30.0, target_t
     last_word_end = max((w[2] for w in norm_words), default=0.0)
     last_vis_end = max((float(v.get("e", 0.0)) for v in (visual_beats or [])), default=0.0)
     max_end_s = max(last_word_end, last_vis_end)
-    total_f = int(target_total_frames) if target_total_frames else int(math.ceil((max_end_s + 0.35) * fps))
+    base_total_f = int(target_total_frames) if target_total_frames else int(math.ceil((max_end_s + 0.35) * fps))
+    max_js_b = max((int(jc.get("b", 0)) for jc in (manifest.get("jumpscareClips") or []) if isinstance(jc, dict)), default=0)
+    total_f = max(base_total_f, max_js_b + 6 if max_js_b > 0 else 0)
 
     starts = [0] * len(beats)
     for i, sp in enumerate(matched_spans):
@@ -437,11 +439,67 @@ def align_manifest_data(manifest: dict, words: list, fps: float = 30.0, target_t
                     pst["triggerFrame"] = max(new_a, min(new_b - 1, int(round(ws * fps))))
                     break
 
+        # v15.0: Lock `castStates[cid].actionTriggerPhrase` -> `actionTriggerFrame` for decisive climax snaps!
+        # v15.2: Lock `castStates[cid].actingCues[].onPhrase` -> `atFrame` within the beat's exact word window!
+        beat_word_cursor = 0
+        beat_win_s = max(0.0, (new_a / fps) - 0.35)
+        while beat_word_cursor < len(norm_words) and norm_words[beat_word_cursor][2] < beat_win_s:
+            beat_word_cursor += 1
+
+        for cst in (b.get("castStates") or {}).values():
+            if not isinstance(cst, dict):
+                continue
+            if cst.get("actionTriggerPhrase"):
+                thit = _find_phrase_span(norm_words, str(cst["actionTriggerPhrase"]), cursor=beat_word_cursor)
+                if thit is None:
+                    thit = _find_phrase_span(norm_words, str(cst["actionTriggerPhrase"]), cursor=0)
+                if thit is not None:
+                    _, _, ts0, _ = thit
+                    cst["actionTriggerFrame"] = max(new_a, min(new_b - 1, int(round(ts0 * fps))))
+
+            acting_cues = cst.get("actingCues")
+            if isinstance(acting_cues, list) and acting_cues:
+                cue_cursor = beat_word_cursor
+                for idx_c, cue in enumerate(acting_cues):
+                    if not isinstance(cue, dict):
+                        continue
+                    off_f = int(cue.get("offsetFrames", 0) or 0)
+                    if cue.get("onPhrase"):
+                        chit = _find_phrase_span(norm_words, str(cue["onPhrase"]), cursor=cue_cursor)
+                        if chit is None:
+                            chit = _find_phrase_span(norm_words, str(cue["onPhrase"]), cursor=beat_word_cursor)
+                        if chit is None:
+                            chit = _find_phrase_span(norm_words, str(cue["onPhrase"]), cursor=0)
+                        if chit is not None:
+                            c_idx, c_end, cs0, _ = chit
+                            cue["atFrame"] = max(new_a, min(new_b - 1, int(round(cs0 * fps)) + off_f))
+                            if c_idx >= cue_cursor:
+                                cue_cursor = c_end
+                    elif cue.get("atFrame") is None:
+                        rel_f = new_a + int(round(((new_b - new_a) * idx_c) / float(max(1, len(acting_cues)))))
+                        cue["atFrame"] = max(new_a, min(new_b - 1, rel_f + off_f))
+
         changes.append({
             "beatId": b.get("beatId"),
             "old": [old_a, old_b, old_pk],
             "new": [new_a, new_b, new_pk],
         })
+
+    # v15.0: Lock `jumpscareClips[]` triggerPhrase -> exact a, b, anchorFrame
+    for jc in updated.get("jumpscareClips") or []:
+        if not isinstance(jc, dict):
+            continue
+        if jc.get("triggerPhrase"):
+            jhit = _find_phrase_span(norm_words, str(jc["triggerPhrase"]), cursor=0)
+            if jhit is not None:
+                _, _, js0, _ = jhit
+                old_dur = max(54, int(jc.get("b", 90)) - int(jc.get("a", 0)))
+                na_j = max(0, min(total_f - 18, int(round(js0 * fps))))
+                jc["a"] = na_j
+                jc["b"] = min(total_f, na_j + old_dur)
+                jc["anchorFrame"] = max(0, na_j - 1)
+        elif jc.get("anchorFrame") is None and isinstance(jc.get("a"), int):
+            jc["anchorFrame"] = max(0, int(jc["a"]) - 1)
 
     _align_shots_in_place(updated, norm_words, visual_beats or [], fps=fps, old_total=old_total)
     updated["captionChunks"] = build_word_caption_chunks(updated, words, fps=fps)

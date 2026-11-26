@@ -26,7 +26,7 @@ from PIL import Image  # noqa: E402
 class TestV11CrossSkillConsistency(unittest.TestCase):
     def test_constitution_matches_code_and_skills(self):
         const = constitution.load_constitution()
-        self.assertEqual(const["version"], "14.0.0")
+        self.assertEqual(const["version"], "15.0.0")
         self.assertEqual(const["fps"], 30)
         self.assertIn("stillAccuracyGate", const)
         self.assertIn("soundscape", const)

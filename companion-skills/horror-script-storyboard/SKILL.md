@@ -45,37 +45,42 @@ description: Use when writing high-retention oral-folklore Vietnamese horror scr
 
 ---
 
-## 2. Tổng Hợp Giọng Đọc Đa Nhân Vật `48 kHz` (`gen_horror_voice.py` v14.0)
+## 2. Tổng Hợp Giọng Đọc Sạch 1.0x `48 kHz` + RMS Envelope (`gen_horror_voice.py` v15.0)
 
 ```bash
+# Đọc liền mạch cả đoạn bằng Gemini TTS (tự nhận GEMINI_API_KEY, 0% méo tốc độ/cao độ) + Whisper + rms_envelope_30fps
 python3 scripts/gen_horror_voice.py --script out/<project>/SCRIPT.md \
-  --tts-engine vieneu --speaker-lock --word-aligner auto --strict-hook \
+  --tts-engine auto --word-aligner auto --strict-hook \
   --out-dir out/<project>/voice --no-vc
+
+# Hoặc nhập thẳng 1 file ghi âm thật / RVC sạch:
+python3 scripts/gen_horror_voice.py --script out/<project>/SCRIPT.md \
+  --import-voice clean_take.wav --word-aligner auto --out-dir out/<project>/voice
 ```
-- Tự động phân vai riêng biệt cho mọi `[SPEAKER: ...]` trên 25 giọng Bắc – Trung – Nam của `VieNeu-TTS`, giữ nguyên độ động thật giữa giọng quát căng (`tense` `-17 dBFS`) và giọng thì thầm sát tai (`whisper` `-24 dBFS`), đồng thời cảnh báo `[HOOK WARN]` nếu từ đầu tiên trễ quá `0.45s`.
+- Tắt mặc định kéo chậm `clean_tempo` / bóp `pitch_semi`, không cắt nhỏ câu theo thẻ `[PACE]`/`[PITCH]`, xuất `rms_envelope_30fps` trong `words.json` để `stage.ts` lái khẩu hình `talk`/`closed` theo sóng âm thực và kích hoạt biểu cảm dứt khoát tại `actionTriggerFrame`.
 
 ---
 
-## 3. Ngữ Pháp Điện Ảnh `cold_hook → master → Anchored POV` & Khóa Khung Hình 5 Lớp
+## 3. Ngữ Pháp Điện Ảnh `cold_hook → master → Anchored POV`, Bắt Buộc Jumpscare & Khóa Khung Hình 5 Lớp
 
 1. **Mở Cảnh Giữ Chân 5 Giây Đầu (`cameraMode: "cold_hook"` → `"master"`):**
    - **`Shot 1` (`cameraMode: "cold_hook"`, `1.0–5.5s`, `POV_CU` / `POV_PROP` / `POV`):** Đập thẳng vật chứng hoặc hành động gây tò mò vào khung hình ngay giây `0.0` khớp với câu Hook!
    - **`Shot 2` (`cameraMode: "master"`, `>= 60 frames`, `camMasterEstablish`):** Mở rộng ra toàn cảnh căn phòng với tường/đèn rõ nét (`Zero Black Void`) để khán giả nắm bố cục không gian ngay trong câu Snap Context.
-   - **`Shot 3..N` (`80–90%` `camPovChain` + tối đa `1–2` `ots_same_side` `<= 22%` thời lượng):** Giữ liền mạch trong đôi mắt nhân vật chính với bàn tay 2 khớp `PovRig3D` (`worldTarget`), tuân thủ nghiêm trục 180° và `dialogueMode: "voiceOver"` cho lời kể nội tâm.
+   - **`Shot 3..N` (`80–90%` `camPovChain` + tối đa `1–2` `ots_same_side` `<= 22%` thời lượng):** Dùng `characterMode: "sprite2d"` (nhân vật 2.5D nổi khối ánh sáng), thực thể chính **Thang kinh dị bậc 4–7**, và bắt buộc khai báo **`>= 1` `jumpscareClips[]`** (`first_frame_seamless` | `whip_pan_turn` | `diegetic_reveal` | `silence_hard_cut`) đồng bộ `<= 0.15s` với `cues.json`!
 2. **Khóa Tự Động & Kiểm Định Cổng 5 Lớp (`storyboard_proof.html`):**
    ```bash
    python3 scripts/align_manifest.py src/<project>/manifest.json --words out/<project>/voice/words.json --in-place
+   python3 scripts/gen_cast_assets.py src/<project>/manifest.json --update-manifest # (or --import-raw-dir <dir> on Free Tier)
    python3 scripts/validate_manifest.py src/<project>/manifest.json \
-     --script out/<project>/SCRIPT.md \
-     --words out/<project>/voice/words.json \
-     --cues out/<project>/cues.json \
-     --strict-cinema --strict-retention \
+     --script out/<project>/SCRIPT.md --words out/<project>/voice/words.json \
+     --cues out/<project>/cues.json --strict-cinema --strict-retention \
      --registry LOCATION_REGISTRY.json --update-registry \
      --still-out out/<project>/still_manifest.json
+   python3 scripts/gen_jumpscare_clip.py src/<project>/manifest.json --comp <CompId> --workspace . --overwrite
    REMOTION_TMP=/tmp/remotion-tmp node scripts/render-stills.mjs <CompId> out/<project>/stills/s_ \
      --manifest out/<project>/still_manifest.json --scale 0.75 --strict-audit
    ```
-   Tạo `storyboard_proof.html` và bắt buộc `100%` keyframe vượt qua kiểm định 5 lớp trước khi xuất MP4.
+   Tạo `storyboard_proof.html` và bắt buộc `100%` keyframe + khung nối Jumpscare vượt qua kiểm định trước khi xuất MP4.
 
 ## Công Thức Theo Thể Loại & Đa Tập
 

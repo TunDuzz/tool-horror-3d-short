@@ -52,13 +52,17 @@ Never hardcode conflicting captions, light toggles, prop states, or timestamps a
 **Hard Policy:** Unrelated horror videos — and unrelated Parts of a series — MUST NEVER repeat the same environment layout OR clone the same monster/entity visual template.
 
 - **Location Gate (`ANTI_REPEAT_ERROR`):** Colliding `(archetype, ceilingType, wall+floor materials, similar dimensions)` exits non-zero unless an explicit narrative revisit declares `"sameLocationOf": "<previousProjectId>:<previousLocationId>"`.
-- **Entity Gate (`ANTI_REPEAT_ENTITY_ERROR`):** Every non-human `CharacterBlueprint` (`entity`, `silhouette`, `lurker`) is fingerprinted by its visual appearance (`garment`, `hairStyle`, `bodyHorror` flags, `eyeHorror`, `silhouetteMode`, `heightScale`) and stored in `LOCATION_REGISTRY.json` (`"entryType": "entity"`). Colliding with an unrelated video's monster exits non-zero unless an explicit recurring villain declares `"sameCharacterOf": "<previousProjectId>:<previousCharId>"`.
+- **Entity Gate (`ANTI_REPEAT_ENTITY_ERROR` & `ENTITY_SCARE_TIER_ERROR` — v15.0):**
+  - Every `castBlueprints[]` actor in `sprite2d` mode MUST store its generated PNGs + Normal Maps strictly inside `src/<project>/assets/cast/`. Reusing another project's sprite path or cloning an unrelated entity's `promptSignature`/description/tier+traits fails with **`ANTI_REPEAT_ENTITY_ERROR`** unless `"sameCharacterOf": "<previousProjectId>:<previousCharId>"` is declared for a recurring series character.
+  - Primary horror entities MUST declare `scareTier >= 4` (Uncanny Valley tiers 4–7); mild Tier 1–3 entities fail with **`ENTITY_SCARE_TIER_ERROR`**.
+- **Mandatory Jumpscare Visual+Audio Sync Gate (`MISSING_JUMPSCARE_ERROR` & `JUMPSCARE_AV_SYNC_ERROR`):**
+  - `validate_manifest.py --cues cues.json` (or `--strict-jumpscare`) requires `>= 1` synchronized Jumpscare clip (`jumpscareClips[]`) paired within `<= 0.15s` with a `jumpscare` event in `cues.json` (`min_jumpscares >= 1`).
 
 ---
 
 ## 3. Layer 3: Mandatory 5-Layer Semantic Still Gate (`render-stills.mjs --strict-audit` → `storyboard_proof.html`)
 
-Before rendering ANY final MP4, generate phrase-anchored `still_manifest.json` (`stillKeyframes[]` + `mustShow[]`) and run the automated **5-Layer 3D Frustum + Raycast + Pixel Auditor**:
+Before rendering ANY final MP4, generate phrase-anchored `still_manifest.json` (`stillKeyframes[]` + `mustShow[]`) and run the automated **5-Layer 3D Frustum + Raycast + Pixel Auditor** (plus inspect Jumpscare seam stills `anchorFrame`, `clip.a`, `clip.a + 8`!):
 
 ```bash
 REMOTION_TMP=/tmp/remotion-tmp node scripts/render-stills.mjs <CompId> out/<project>/stills/s_ \
