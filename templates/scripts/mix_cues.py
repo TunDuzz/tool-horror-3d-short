@@ -95,9 +95,37 @@ ROLE_DEFAULT_PEAK_DBFS = {
 
 VALID_SPACES = {"close_ear", "room", "adjacent_muffled", "exterior_occluded", "otherworld"}
 VALID_MOTIF_MODES = {"steady_then_stop", "accelerate", "decelerate", "approach", "stutter_break"}
+VALID_AUDIO_DIRECTIONS = {"raw_diegetic", "folklore_atmospheric", "cinematic_score"}
 
-# Optional multi-style Jumpscare presets (strictly opt-in; 0 by default on v13 soundscapes)
+# Multi-style story-driven Jumpscare audio presets (practical diegetic, EMF/mic glitch, entity breath/shriek, or cinematic stingers)
 JUMPSCARE_STYLES = {
+    "practical_impact": {
+        "sub_candidates": ["heavy_door_slam", "door_bang_impact", "cinematic_boom"],
+        "bite_candidates": ["door_bang_impact", "glass_break", "heavy_door_slam"],
+        "synth_bite": "braam",
+        "bite_hp_hz": 180.0,
+        "sub_lp_hz": 190.0,
+        "synth_edge_db": -6.0,
+        "default_dur": 1.8,
+    },
+    "mic_emf_glitch": {
+        "sub_candidates": ["emf_glitch_buzz", "cinematic_boom"],
+        "bite_candidates": ["vhs_static", "emf_glitch_buzz", "jumpscare_scream_ov"],
+        "synth_bite": "vhs_shriek",
+        "bite_hp_hz": 360.0,
+        "sub_lp_hz": 220.0,
+        "synth_edge_db": -4.0,
+        "default_dur": 1.7,
+    },
+    "entity_breath_shriek": {
+        "sub_candidates": ["jumpscare_classic_sfx_ov", "cinematic_boom"],
+        "bite_candidates": ["breathing_heavy", "jumpscare_entity_shriek_ov", "jumpscare_scream_ov"],
+        "synth_bite": "entity_shriek",
+        "bite_hp_hz": 300.0,
+        "sub_lp_hz": 195.0,
+        "synth_edge_db": -6.0,
+        "default_dur": 2.1,
+    },
     "cinema_stab": {
         "sub_candidates": ["jumpscare_classic_sfx_ov", "cinematic_boom"],
         "bite_candidates": ["jumpscare_string_stab_ov", "jumpscare_shock_stab_ov"],
@@ -255,8 +283,22 @@ def _resolve_whisper_spans(wdata: dict) -> list[tuple[float, float]]:
 
 
 def audit_cues(cfg: dict, resolved_events: list[dict], wdata: dict, dur: float) -> list[dict]:
-    """Run Horror Anti-Clutter & Psychological Discipline QA Gates."""
+    """Run Horror Anti-Clutter, Story-Driven `audioDirection` & Psychological Discipline QA Gates."""
     warnings = []
+    audio_dir = str(cfg.get("audioDirection") or cfg.get("audio_direction") or "").strip().lower()
+    if audio_dir and audio_dir not in VALID_AUDIO_DIRECTIONS:
+        warnings.append({
+            "code": "INVALID_AUDIO_DIRECTION",
+            "severity": "ERROR",
+            "detail": f"audioDirection={audio_dir!r} is invalid; valid={sorted(VALID_AUDIO_DIRECTIONS)}",
+        })
+    has_score = bool(cfg.get("scoreBeds") or cfg.get("score_beds") or (isinstance(cfg.get("music_arc"), dict) and any(cfg["music_arc"].get(k) for k in ("act1", "act2", "aftermath"))))
+    if audio_dir == "raw_diegetic" and has_score:
+        warnings.append({
+            "code": "RAW_DIEGETIC_SCORE_FORBIDDEN",
+            "severity": "ERROR",
+            "detail": "audioDirection='raw_diegetic' forbids non-diegetic scoreBeds/music_arc (0% score — use real room-tone, setting beds & practical Foley only)!",
+        })
     beds = cfg.get("beds") or []
     roles = [str(b.get("role") or "").strip().lower() for b in beds if isinstance(b, dict)]
     has_distinct_near_far = len(beds) == 2 and set(roles) == {"near", "far"}
@@ -332,7 +374,7 @@ def audit_cues(cfg: dict, resolved_events: list[dict], wdata: dict, dur: float) 
             "detail": f"Found {len(rev_sucks)} `reverse_suck` trailer risers — prefer `[SILENCE_DROP Xs]` natural uncanny hush!",
         })
 
-    # v15.0 Real-SFX-First policy: forbid procedural `synth:` beds/events unless explicitly opted in (`allow_synth: true`)
+    # v15.0 Real-SFX-First policy: forbid procedural `synth:` beds, scoreBeds/music_arc, and events unless explicitly opted in (`allow_synth: true`)
     global_allow_synth = bool(cfg.get("allow_synth", False))
     for b in beds:
         if isinstance(b, dict) and b.get("synth") and not (global_allow_synth or b.get("allow_synth")):
@@ -344,6 +386,26 @@ def audit_cues(cfg: dict, resolved_events: list[dict], wdata: dict, dur: float) 
                     "v15.0 prefers 100% real recorded CC0 WAVs (fetch via `sfx_manager.py auto-fetch-for-script`)."
                 ),
             })
+    for sb in (cfg.get("scoreBeds") or cfg.get("score_beds") or []):
+        if isinstance(sb, dict) and sb.get("synth") and not (global_allow_synth or sb.get("allow_synth")):
+            warnings.append({
+                "code": "SYNTH_SFX_FORBIDDEN",
+                "severity": "ERROR",
+                "detail": (
+                    f"Score bed uses procedural synth='{sb.get('synth')}' without `allow_synth: true`. "
+                    "Use real recorded dark ambient / sad piano / sub-bass drone WAVs in audio/sfx_curated/ or audio/sfx_library/!"
+                ),
+            })
+    ma_chk = cfg.get("music_arc")
+    if isinstance(ma_chk, dict):
+        for act_k in ("act1", "act2", "aftermath"):
+            ent = ma_chk.get(act_k)
+            if isinstance(ent, dict) and ent.get("synth") and not (global_allow_synth or ent.get("allow_synth")):
+                warnings.append({
+                    "code": "SYNTH_SFX_FORBIDDEN",
+                    "severity": "ERROR",
+                    "detail": f"music_arc.{act_k} uses procedural synth='{ent.get('synth')}' without `allow_synth: true`.",
+                })
     for ev in resolved_events:
         if ev.get("synth") and not ev.get("jumpscare") and not (global_allow_synth or ev.get("allow_synth")):
             warnings.append({
@@ -471,7 +533,106 @@ def _build_jumpscare_composite(ev: dict, lib_dir: str, mf_assets: dict, r, recor
     return fades(out, 0.002, 0.08), tinn
 
 
-def _apply_micro_vacuums(buffers: list[np.ndarray], vacuums: list[tuple[float, float]], floor_db: float = -36.0):
+def _normalize_score_beds(
+    cfg: dict,
+    dur: float,
+    wdata: dict,
+    silence_drops: list[dict],
+    resolved_events: list[dict],
+) -> list[dict]:
+    """v15.3: Normalize declarative `scoreBeds` / `score_beds` and shorthand 3-act `music_arc` into timed score segments.
+
+    3-Act Psychological Arc:
+      - Act 1 (Setup & Human Emotion): minimal warm pad / sad piano (`0.0s .. ~34%` before Act 2 crossfade)
+      - Act 2 (Doubt -> Intrusion): smooth cosine crossfade into dark drone / rising pressure up to pre-jumpscare `[SILENCE_DROP]`
+      - Aftermath (Lingering Dread): cold low drone tail gently emerging after the climax jumpscare until end
+    """
+    raw_list: list[dict] = []
+    for sb in (cfg.get("scoreBeds") or cfg.get("score_beds") or []):
+        if isinstance(sb, dict) and sb.get("sound"):
+            raw_list.append(dict(sb))
+
+    ma = cfg.get("music_arc")
+    if isinstance(ma, dict):
+        base_xf = float(ma.get("crossfade_s", 1.6))
+        act_defaults = {
+            "act1": {"target_rms_dbfs": -27.5, "hp_hz": 55.0, "lp_hz": 4200.0, "label": "Hồi 1: Thiết lập & cảm xúc"},
+            "act2": {"target_rms_dbfs": -24.5, "hp_hz": 32.0, "lp_hz": 2400.0, "label": "Hồi 2: Nghi ngờ -> Xâm lấn (Dark Drone)"},
+            "aftermath": {"target_rms_dbfs": -28.0, "hp_hz": 30.0, "lp_hz": 1800.0, "label": "Hồi kết: Dư âm lạnh sau câu chốt"},
+        }
+        for act_k in ("act1", "act2", "aftermath"):
+            ent = ma.get(act_k)
+            if isinstance(ent, str) and ent.strip():
+                raw_list.append({"act": act_k, "sound": ent.strip(), "crossfade_s": base_xf, **act_defaults[act_k]})
+            elif isinstance(ent, dict) and ent.get("sound"):
+                merged = {"act": act_k, "crossfade_s": base_xf, **act_defaults[act_k], **ent}
+                raw_list.append(merged)
+
+    if not raw_list:
+        return []
+
+    js_times = sorted(float(e["target_t"]) for e in resolved_events if e.get("jumpscare") or e.get("is_jumpscare"))
+    first_js = js_times[0] if js_times else (dur * 0.80)
+    pre_hush = first_js
+    for sd in silence_drops:
+        sd_e = float(sd["e"])
+        if first_js - 1.6 <= sd_e <= first_js + 0.35:
+            pre_hush = min(pre_hush, float(sd["s"]))
+            break
+    act1_split = min(max(1.2, pre_hush * 0.45), max(1.2, dur * 0.36))
+
+    normalized: list[dict] = []
+    for idx, sb in enumerate(raw_list):
+        act = str(sb.get("act") or "").strip().lower()
+        xf = max(0.2, min(4.0, float(sb.get("crossfade_s", 1.6))))
+        if sb.get("start") is not None:
+            s_val = sb["start"]
+            t_start = _resolve_event_anchor_time(s_val, wdata, dur) if isinstance(s_val, dict) else float(s_val)
+        elif act == "act1":
+            t_start = 0.0
+        elif act == "act2":
+            t_start = max(0.0, act1_split - xf * 0.5)
+        elif act == "aftermath":
+            t_start = min(max(0.0, dur - 0.6), first_js + float(sb.get("after_jumpscare_delay_s", 1.8)))
+        else:
+            t_start = 0.0
+
+        if sb.get("end") is not None:
+            e_val = sb["end"]
+            t_end = _resolve_event_anchor_time(e_val, wdata, dur) if isinstance(e_val, dict) else float(e_val)
+        elif act == "act1":
+            t_end = min(dur, act1_split + xf * 0.5)
+        elif act == "act2":
+            t_end = min(dur, max(t_start + 0.5, first_js))
+        elif act == "aftermath":
+            t_end = dur
+        else:
+            t_end = dur
+
+        t_start = max(0.0, min(dur, t_start))
+        t_end = max(t_start, min(dur, t_end))
+        if t_end - t_start < 0.25:
+            continue
+
+        fade_in = float(sb.get("fade_in", xf if act in ("act2", "aftermath") else 0.45))
+        fade_out = float(sb.get("fade_out", xf if act == "act1" else (0.25 if act == "act2" else 0.85)))
+        default_rms = -27.5 if act == "act1" else (-24.5 if act == "act2" else -28.0)
+        normalized.append({
+            **sb,
+            "idx": idx + 1,
+            "act": act or f"score_{idx + 1}",
+            "start_s": round(t_start, 3),
+            "end_s": round(t_end, 3),
+            "fade_in": min(fade_in, (t_end - t_start) * 0.45),
+            "fade_out": min(fade_out, (t_end - t_start) * 0.45),
+            "target_rms_dbfs": float(sb.get("target_rms_dbfs", default_rms)),
+            "voice_notch_db": float(sb.get("voice_notch_db", -2.5)),
+            "label": str(sb.get("label") or f"Score {act or idx + 1} ({sb['sound']})"),
+        })
+    return normalized
+
+
+def _apply_micro_vacuums(buffers: list[np.ndarray], vacuums: list[tuple[float, float]], floor_db: float = -48.0):
     if not vacuums:
         return
     n = buffers[0].shape[1]
@@ -751,7 +912,11 @@ def render_cues_mix(cues_path: str, out_wav: str, library_dir: str | None = None
         info = mf_assets.get(slug)
         if info:
             used_credit_entries.append({"slug": slug, **info})
-            used_history_ids.append(info.get("openverse_id") or slug)
+            src_str = str(info.get("source") or "")
+            hist_id = info.get("openverse_id") or (src_str if src_str.startswith("curated:") else slug)
+            used_history_ids.append(hist_id)
+
+    curated_dir = cfg.get("curated_dir") or sm.resolve_curated_dir(lib_dir)
 
     # 1. Story-driven Dual-Layer Living Beds (`near` + `far`) with Occlusion Automation!
     spans = speech_spans(words, merge=0.28)
@@ -765,6 +930,7 @@ def render_cues_mix(cues_path: str, out_wav: str, library_dir: str | None = None
             arr = load_sfx_asset(
                 b["sound"],
                 library_dir=lib_dir,
+                curated_dir=curated_dir,
                 dur_sec=dur,
                 gain_db=float(b.get("gain_db", -26.0)),
                 loop=bool(b.get("loop", True)),
@@ -773,7 +939,7 @@ def render_cues_mix(cues_path: str, out_wav: str, library_dir: str | None = None
                 organic_drift=True,
             )
             if arr is None:
-                raise FileNotFoundError(f"Bed SFX asset not found in {lib_dir}: {b['sound']}")
+                raise FileNotFoundError(f"Bed SFX asset not found in {curated_dir} or {lib_dir}: {b['sound']}")
             _record_usage(b["sound"])
 
         base_lp = float(b.get("lp_hz") or 3600.0)
@@ -824,7 +990,48 @@ def render_cues_mix(cues_path: str, out_wav: str, library_dir: str | None = None
             arr *= dbg(duck_db(whisper_spans, dur, depth=wh_duck, pre=0.15, post=0.18, att=0.12, rel=0.45))[None, :]
         place(sfx_bed, arr, 0.0)
 
-    # 2. Narrative Recurring Motifs (`motifs[]`)
+    # 1b. v15.3 3-Act Psychological Score Layer (`scoreBeds` / `music_arc` — real dark ambient, sad piano, sub-bass drone)
+    score_specs = _normalize_score_beds(cfg, dur, wdata, silence_drops, resolved_events)
+    score_reports = []
+    for sb in score_specs:
+        seg_dur = sb["end_s"] - sb["start_s"]
+        s_arr = load_sfx_asset(
+            sb["sound"],
+            library_dir=lib_dir,
+            curated_dir=curated_dir,
+            dur_sec=seg_dur,
+            gain_db=0.0,
+            loop=bool(sb.get("loop", True)),
+            fade_in=sb["fade_in"],
+            fade_out=sb["fade_out"],
+            organic_drift=True,
+        )
+        if s_arr is None:
+            raise FileNotFoundError(f"Score bed WAV not found in {curated_dir} or {lib_dir}: {sb['sound']}")
+        _record_usage(sb["sound"])
+        s_arr = _apply_dialog_safe_eq(
+            s_arr,
+            hp_hz=sb.get("hp_hz", 35.0),
+            lp_hz=sb.get("lp_hz", 3800.0),
+            voice_notch_db=float(sb.get("voice_notch_db", -2.5)),
+        )
+        cur_rms = float(np.sqrt(np.mean(np.square(s_arr)) + 1e-18))
+        if cur_rms > 1e-7:
+            s_arr = s_arr * (dbg(float(sb["target_rms_dbfs"])) / cur_rms)
+            pk_s = float(np.max(np.abs(s_arr)))
+            if pk_s > dbg(-6.0):
+                s_arr *= dbg(-6.0) / pk_s
+        place(music, s_arr, sb["start_s"])
+        score_reports.append({
+            "act": sb["act"],
+            "sound": sb["sound"],
+            "start_s": sb["start_s"],
+            "end_s": sb["end_s"],
+            "target_rms_dbfs": sb["target_rms_dbfs"],
+            "label": sb["label"],
+        })
+
+    # 2. Narrative Recurring Motifs (`motifs[]`, optional when `requireAcousticMotif: false`)
     motif_reports = []
     for mf_spec in cfg.get("motifs") or []:
         m_arr, m_rep = _render_motif_track(mf_spec, dur, wdata, lib_dir, mf_assets, space_irs, r, _record_usage)
@@ -835,7 +1042,7 @@ def render_cues_mix(cues_path: str, out_wav: str, library_dir: str | None = None
         place(motif_bus, m_arr, 0.0)
         motif_reports.append(m_rep)
 
-    # 3. Surgical story-driven spot cues + Multi-Zone Space + Optional Jumpscares
+    # 3. Surgical story-driven spot cues + Multi-Zone Space + 3-Beat Cinematic Jumpscares
     micro_vacuums = []
     jumpscare_items = []
     for ev in resolved_events:
@@ -844,9 +1051,43 @@ def render_cues_mix(cues_path: str, out_wav: str, library_dir: str | None = None
             arr, tinn_arr = _build_jumpscare_composite(ev, lib_dir, mf_assets, r, _record_usage)
             ev.setdefault("target_peak_dbfs", -1.0)
             ev.setdefault("reverb", 0.22)
-            ms_s = float(ev.get("micro_silence_s", 0.0))
-            if ms_s > 0.02:
-                micro_vacuums.append((max(0.0, ev["target_t"] - ms_s), ev["target_t"]))
+            # v15.3 3-Beat Cinematic Jumpscare: (1) real low swell -> (2) silence/false release -> (3) stinger+sub hit at -1.0 dBTP
+            false_rel_s = float(ev.get("false_release_s", ev.get("micro_silence_s", 0.0)))
+            if ev.get("pre_swell_sound"):
+                sw_dur = max(0.4, float(ev.get("pre_swell_s", 1.35)))
+                gap_before_hit = max(0.25, false_rel_s)
+                # Respect any explicit [SILENCE_DROP] right before the jumpscare so the swell ends cleanly BEFORE the hush!
+                for sd in silence_drops:
+                    if ev["target_t"] - 1.6 <= float(sd["e"]) <= ev["target_t"] + 0.25:
+                        gap_before_hit = max(gap_before_hit, ev["target_t"] - float(sd["s"]))
+                        break
+                sw_end = max(0.0, ev["target_t"] - gap_before_hit)
+                sw_start = max(0.0, sw_end - sw_dur)
+                if sw_end - sw_start >= 0.30:
+                    sw_arr = load_sfx_asset(
+                        ev["pre_swell_sound"],
+                        library_dir=lib_dir,
+                        curated_dir=curated_dir,
+                        dur_sec=sw_end - sw_start,
+                        gain_db=0.0,
+                        loop=True,
+                        fade_in=min(0.85, (sw_end - sw_start) * 0.65),
+                        fade_out=0.08,
+                    )
+                    if sw_arr is not None:
+                        _record_usage(ev["pre_swell_sound"])
+                        sw_arr = _apply_dialog_safe_eq(sw_arr, hp_hz=28.0, lp_hz=float(ev.get("pre_swell_lp_hz", 360.0)))
+                        ramp = np.linspace(0.25, 1.0, sw_arr.shape[1]) ** 1.6
+                        sw_arr = sw_arr * ramp[None, :]
+                        sw_pk = float(np.max(np.abs(sw_arr)))
+                        if sw_pk > 1e-7:
+                            sw_arr = sw_arr * (dbg(float(ev.get("pre_swell_peak_dbfs", -14.0))) / sw_pk)
+                        place(music, sw_arr, sw_start)
+                        ev["has_3beat_swell"] = True
+                if false_rel_s <= 0.02 and not any(ev["target_t"] - 1.6 <= float(sd["e"]) <= ev["target_t"] + 0.25 for sd in silence_drops):
+                    false_rel_s = 0.35
+            if false_rel_s > 0.02:
+                micro_vacuums.append((max(0.0, ev["target_t"] - false_rel_s), ev["target_t"]))
             jumpscare_items.append(ev)
             arr = _apply_space_and_pan(arr, ev, space_irs)
         elif ev.get("synth"):
@@ -859,6 +1100,7 @@ def render_cues_mix(cues_path: str, out_wav: str, library_dir: str | None = None
             arr = load_sfx_asset(
                 ev["sound"],
                 library_dir=lib_dir,
+                curated_dir=curated_dir,
                 dur_sec=ev.get("dur_s"),
                 gain_db=raw_gain,
                 pan_pos=None,
@@ -867,7 +1109,7 @@ def render_cues_mix(cues_path: str, out_wav: str, library_dir: str | None = None
                 fade_out=float(ev.get("fade_out", 0.06)),
             )
             if arr is None:
-                raise FileNotFoundError(f"Event SFX asset not found in {lib_dir}: {ev['sound']}")
+                raise FileNotFoundError(f"Event SFX asset not found in {curated_dir} or {lib_dir}: {ev['sound']}")
             _record_usage(ev["sound"])
             arr = _apply_dialog_safe_eq(arr, hp_hz=ev.get("hp_hz"), lp_hz=ev.get("lp_hz"), voice_notch_db=float(ev.get("voice_notch_db", 0.0)))
             arr = _apply_space_and_pan(arr, ev, space_irs)
@@ -896,19 +1138,26 @@ def render_cues_mix(cues_path: str, out_wav: str, library_dir: str | None = None
         if tinn_arr is not None:
             place(music, tinn_arr, min(dur - 0.1, ev["target_t"] + 0.12))
 
-    # Measure pre-hush ambient reference before carving silence_drops
-    pre_hush_bed_ref = (sfx_bed + motif_bus).copy()
+    # Measure pre-hush ambient + score reference before carving silence_drops
+    pre_hush_bed_ref = (sfx_bed + motif_bus + music).copy()
+    ma_cfg = cfg.get("music_arc") if isinstance(cfg.get("music_arc"), dict) else {}
+    eff_sd_floor_db = float(cfg.get("silence_drop_floor_db", ma_cfg.get("silence_drop_floor_db", -48.0)))
     if silence_drops:
         apply_uncanny_hush(
             [sfx_bed, motif_bus, music, sfx_spot],
             silence_drops,
-            floor_db=float(cfg.get("silence_drop_floor_db", -42.0)),
+            floor_db=eff_sd_floor_db,
         )
 
     if micro_vacuums:
-        _apply_micro_vacuums([sfx_bed, motif_bus, music], micro_vacuums, floor_db=-36.0)
+        _apply_micro_vacuums([sfx_bed, motif_bus, music], micro_vacuums, floor_db=eff_sd_floor_db)
 
-    music *= dbg(duck_db(spans, dur, depth=float(cfg.get("music_duck_db", -4.5)), pre=0.08, post=0.14, att=0.06, rel=0.45))[None, :]
+    # Smooth vocal ducking (-7 to -10 dB, default -8.5 dB) keeps VieNeu-TTS 1.0x narration intimate & crystal clear
+    eff_music_duck_db = float(cfg.get("music_duck_db", ma_cfg.get("duck_db", -8.5)))
+    if eff_music_duck_db < -0.1:
+        music *= dbg(duck_db(spans, dur, depth=eff_music_duck_db, pre=0.08, post=0.16, att=0.07, rel=0.48))[None, :]
+    if whisper_spans:
+        music *= dbg(duck_db(whisper_spans, dur, depth=float(cfg.get("music_whisper_duck_db", -4.0)), pre=0.12, post=0.18, att=0.10, rel=0.45))[None, :]
 
     default_lufs = -16.0 if v13_mode else -15.0
     target_lufs = float(cfg.get("target_lufs", default_lufs))
@@ -943,7 +1192,7 @@ def render_cues_mix(cues_path: str, out_wav: str, library_dir: str | None = None
             qa_warnings.append({"code": "DEAD_SILENCE_VACUUM_FAIL", "severity": "ERROR", "detail": f"Dead silence [{ds['s']:.2f}..{ds['e']:.2f}s] drop was only {drop:.1f} dB (< 38 dB)"})
 
     sd_reports = []
-    post_hush_env = sfx_bed + motif_bus
+    post_hush_env = sfx_bed + motif_bus + music
     for sd in silence_drops:
         s_in = ns(sd["s"] + min(0.32, (sd["e"] - sd["s"]) * 0.35))
         e_in = ns(sd["e"] - min(0.25, (sd["e"] - sd["s"]) * 0.25))
@@ -991,7 +1240,7 @@ def render_cues_mix(cues_path: str, out_wav: str, library_dir: str | None = None
         f"- **Kịch bản cue:** [{os.path.basename(cues_abs)}](file://{cues_abs})",
         f"- **Bản quyền nguồn:** [credits.txt](file://{credits_path})",
         f"- **Loudness & Độ động thực đo:** `I = {stats['I']:.2f} LUFS` · `TP = {stats['TP']:.2f} dBTP` · `LRA = {stats['LRA']:.2f} LU` · `clips = {clips}`",
-        f"- **Lớp nền (Beds):** `{len(cfg.get('beds') or [])}` · **Motif lặp:** `{len(motif_reports)}` · **SFX điểm:** `{len(resolved_events)}` · **Jumpscare:** `{len(jumpscare_items)}`",
+        f"- **Phong cách âm thanh (`audioDirection`):** `{cfg.get('audioDirection') or cfg.get('audio_direction') or 'auto'}` · **Lớp nền (Beds):** `{len(cfg.get('beds') or [])}` · **Nhạc nền tùy chọn (`scoreBeds`):** `{len(score_reports)}` (duck `{eff_music_duck_db:+.1f} dB`, hush `{eff_sd_floor_db:+.1f} dB`) · **Motif lặp:** `{len(motif_reports)}` · **SFX điểm:** `{len(resolved_events)}` · **Jumpscare:** `{len(jumpscare_items)}`",
         "",
         "## Cổng Kiểm Định Không Gian Âm Thanh & Kỷ Luật Chống Rối",
     ]
@@ -1000,6 +1249,15 @@ def render_cues_mix(cues_path: str, out_wav: str, library_dir: str | None = None
     else:
         for w in qa_warnings:
             report_lines.append(f"- **[{w['severity']}] `{w['code']}`:** {w['detail']}")
+
+    if score_reports:
+        report_lines.append("")
+        report_lines.append("## Lớp Nhạc Nền Tâm Lý 3 Hồi (`scoreBeds` / `music_arc`)")
+        for srp in score_reports:
+            report_lines.append(
+                f"- **`{srp['act']}` (`{srp['sound']}`)**: `{srp['start_s']:.2f}s .. {srp['end_s']:.2f}s` "
+                f"(target `{srp['target_rms_dbfs']:.1f} dBFS`, duck thoại `{eff_music_duck_db:+.1f} dB`) — {srp['label']}"
+            )
 
     if motif_reports:
         report_lines.append("")
@@ -1089,6 +1347,10 @@ def render_cues_mix(cues_path: str, out_wav: str, library_dir: str | None = None
         "warnings": qa_warnings,
         "stats": stats,
         "clips": clips,
+        "audio_direction": str(cfg.get("audioDirection") or cfg.get("audio_direction") or "auto"),
+        "score_beds": score_reports,
+        "music_duck_db": eff_music_duck_db,
+        "silence_drop_floor_db": eff_sd_floor_db,
         "motifs": motif_reports,
         "silence_drops": sd_reports,
         "dead_silences": ds_reports,

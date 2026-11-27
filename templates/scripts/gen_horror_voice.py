@@ -1424,12 +1424,16 @@ def _discover_emotion_refs_dir(args) -> str | None:
 
 
 def resolve_emotion_ref(item: dict, args) -> str | None:
-    """Resolve optional 3-8s reference audio clip for zero-shot voice/emotion cloning (`VieNeu-TTS`).
-    v13.0: Non-narrator NPCs keep their distinct cast `vieneu_voice` unless an explicit `ref_audio` was set on that speaker!"""
+    """Resolve optional 5-8s clean reference audio clip for zero-shot voice cloning (`VieNeu-TTS`, 1.0x clean).
+    v15.3: Explicit `--ref-audio` (clean storyteller clip, zero distorting DSP) takes priority over auto-discovered `audio/emotion_refs/`.
+    Non-narrator NPCs keep their distinct cast `vieneu_voice` unless an explicit `ref_audio` was set on that speaker."""
     if item.get("ref_audio") and os.path.isfile(item["ref_audio"]):
         return item["ref_audio"]
     if not item.get("is_narrator", True):
         return None
+    global_ref = getattr(args, "ref_audio", None)
+    if global_ref and os.path.isfile(global_ref):
+        return global_ref
     emo_dir = _discover_emotion_refs_dir(args)
     if emo_dir:
         mood = item["mood"]
@@ -1439,9 +1443,6 @@ def resolve_emotion_ref(item: dict, args) -> str | None:
                 cand = os.path.join(emo_dir, stem + ext)
                 if os.path.isfile(cand):
                     return cand
-    global_ref = getattr(args, "ref_audio", None)
-    if global_ref and os.path.isfile(global_ref):
-        return global_ref
     return None
 
 
@@ -1504,7 +1505,20 @@ def synth_vieneu_chunk(item: dict, sr: int, args, cache_dir: str | None = None, 
     temp = float(prof.get("vn_temp", 0.76))
     text = item.get("vieneu_text") or normalize_vi_for_tts(item["text"], keep_vieneu_tags=True)
 
-    use_speaker_lock = bool(getattr(args, "speaker_lock", True)) and is_nar and bool(ref_audio) and (not use_multi)
+    explicit_ref = bool(
+        (item.get("ref_audio") and os.path.isfile(str(item.get("ref_audio"))))
+        or (getattr(args, "ref_audio", None) and os.path.isfile(str(getattr(args, "ref_audio"))))
+    )
+    has_explicit_anchor = bool(getattr(args, "narrator_anchor", None) and os.path.isfile(str(getattr(args, "narrator_anchor"))))
+    # When user passes a clean 5-8s `--ref-audio` storyteller clip directly (without explicit `--narrator-anchor`),
+    # pass it straight to VieNeu-TTS at 1.0x with zero F0/speaker-lock DSP override so the natural storytelling timbre stays intact.
+    use_speaker_lock = (
+        bool(getattr(args, "speaker_lock", True))
+        and is_nar
+        and bool(ref_audio)
+        and (not use_multi)
+        and (not explicit_ref or has_explicit_anchor)
+    )
     base_max_frames = int(getattr(args, "ref_codes_max_frames", 84))
     eff_max_frames = max(base_max_frames, 48) if (mood == "whisper" and base_max_frames > 0) else base_max_frames
     lock_src = getattr(args, "speaker_lock_source", "auto") or "auto"
@@ -1797,33 +1811,33 @@ def synth_gemini_chunk(
 
 
 def synth_line_auto(item: dict, sr: int, tmp_dir: str, idx: int, args, cache_dir: str | None = None, synth_fn=None):
-    """v15.0 whole-act dispatcher: `synth_fn` -> `gemini` (when GEMINI_API_KEY available!) -> `vieneu` -> `edge`."""
+    """v15.3 whole-act dispatcher: `synth_fn` -> `vieneu` (DEFAULT 1.0x clean free local) -> `edge` fallback (`gemini` ONLY when explicitly requested)."""
     if synth_fn is not None:
         return synth_fn(item, sr, idx)
 
-    engine = getattr(args, "tts_engine", "auto")
+    engine = str(getattr(args, "tts_engine", "vieneu") or "vieneu").strip().lower()
     api_key = getattr(args, "gemini_api_key", None) or _load_dotenv_key("GEMINI_API_KEY")
     aligner_mode = getattr(args, "word_aligner", "auto")
     whisper_model = getattr(args, "whisper_model", "base")
 
-    if engine == "gemini" or (engine == "auto" and api_key):
+    if engine == "gemini":
         if not api_key:
             raise RuntimeError("GEMINI_API_KEY is not set for --tts-engine gemini (set env var, .env, or --gemini-api-key)")
-        try:
-            return synth_gemini_chunk(
-                item, sr, tmp_dir, idx, api_key=api_key,
-                model=getattr(args, "gemini_model", "gemini-2.5-flash-preview-tts"),
-                voice_name=getattr(args, "gemini_voice", "Charon"),
-                cache_dir=cache_dir,
-                aligner_mode=aligner_mode,
-                whisper_model=whisper_model,
-            )
-        except Exception as exc:
-            if engine == "gemini":
-                raise
-            print(f"  [WARN] Gemini TTS fallback -> local/edge on act #{idx}: {exc}")
+        return synth_gemini_chunk(
+            item, sr, tmp_dir, idx, api_key=api_key,
+            model=getattr(args, "gemini_model", "gemini-2.5-flash-preview-tts"),
+            voice_name=getattr(args, "gemini_voice", "Charon"),
+            cache_dir=cache_dir,
+            aligner_mode=aligner_mode,
+            whisper_model=whisper_model,
+        )
 
     if engine == "vieneu" or (engine == "auto" and _has_vieneu()):
+        if engine == "vieneu" and not _has_vieneu():
+            raise RuntimeError(
+                "VieNeu-TTS is not installed for default --tts-engine vieneu. "
+                "Install `vieneu` (free 48kHz local ONNX), or run with `--tts-engine edge` or `--import-voice <clean.wav>`."
+            )
         try:
             return synth_vieneu_chunk(item, sr, args, cache_dir=cache_dir, tmp_dir=tmp_dir)
         except Exception as exc:
@@ -2511,8 +2525,7 @@ def assemble_voice(items: list, args, tmp_dir: str, synth_fn=None):
     spoken_wps = round(len(all_words) / spoken_dur_only, 2)
     visual_ratio = round((pause_total_s + ds_total) / max(0.1, final_dur), 3)
 
-    eng_choice = getattr(args, "tts_engine", "auto")
-    api_key_present = bool(getattr(args, "gemini_api_key", None) or _load_dotenv_key("GEMINI_API_KEY"))
+    eng_choice = str(getattr(args, "tts_engine", "vieneu") or "vieneu").strip().lower()
     if getattr(args, "import_acts", None):
         src_label = "gpu_acts_imported"
     elif args.vc_pack and args.narrator_vc_wav:
@@ -2525,9 +2538,9 @@ def assemble_voice(items: list, args, tmp_dir: str, synth_fn=None):
         src_label = "narrator_audio"
     elif use_local_vc:
         src_label = "local_svc"
-    elif (eng_choice == "gemini" or (eng_choice == "auto" and api_key_present)) and synth_fn is None:
+    elif eng_choice == "gemini" and synth_fn is None:
         src_label = "gemini_tts"
-    elif eng_choice == "vieneu" or (eng_choice == "auto" and _has_vieneu() and synth_fn is None):
+    elif (eng_choice == "vieneu" or (eng_choice == "auto" and _has_vieneu())) and synth_fn is None:
         src_label = f"vieneu_{getattr(args, 'vieneu_mode', 'v3turbo')}_48k"
     else:
         src_label = "edge_tts_clean"
@@ -2571,10 +2584,19 @@ def assemble_voice(items: list, args, tmp_dir: str, synth_fn=None):
 
     first_word_s = float(all_words[0]["s"]) if all_words else 0.0
     print(f"VOICE OK -> {final_wav} ({final_dur:.3f}s, {total_frames}f @ {args.fps}fps, {len(all_words)} words, {wps:.2f} w/s effective [{spoken_wps:.2f} spoken], first_word={first_word_s:.2f}s, visual_ratio={visual_ratio:.2f}, src={src_label})")
-    if wps > 3.20:
-        print(f"  [PACING WARN] Effective speech density {wps:.2f} w/s > 3.20 w/s — add [VISUAL Xs] / [BEAT Xs] breathing in SCRIPT.md!")
-    if spoken_wps > 3.65:
-        print(f"  [CADENCE WARN] Spoken speed {spoken_wps:.2f} w/s > 3.65 w/s — add [PACE=slow] or punctuation pauses!")
+    eff_max_wps = 2.85
+    spoken_max_wps = 3.25
+    try:
+        import constitution as _const_mod
+        _sp_cfg = (_const_mod.load_constitution().get("speech") or {})
+        eff_max_wps = float(_sp_cfg.get("wordsPerSecondMax", eff_max_wps))
+        spoken_max_wps = float(_sp_cfg.get("spokenWordsPerSecondMax", spoken_max_wps))
+    except Exception:
+        pass
+    if wps > eff_max_wps:
+        print(f"  [PACING WARN] Effective speech density {wps:.2f} w/s > {eff_max_wps:.2f} w/s — add natural punctuation pauses or [VISUAL Xs] / [BEAT Xs] breathing in SCRIPT.md!")
+    if spoken_wps > spoken_max_wps:
+        print(f"  [CADENCE WARN] Spoken speed {spoken_wps:.2f} w/s > {spoken_max_wps:.2f} w/s — split long run-on clauses or add clean [BEAT Xs] pauses (never distort with [PACE=slow])!")
     if getattr(args, "strict_hook", False) and all_words and first_word_s > 0.45:
         print(f"  [HOOK WARN] First spoken word starts at {first_word_s:.2f}s > 0.45s — cut opening dead air so the 1-5s Cold Hook hits immediately!")
     for sb in sentences:
@@ -2589,13 +2611,13 @@ def assemble_voice(items: list, args, tmp_dir: str, synth_fn=None):
 
 
 def build_parser():
-    ap = argparse.ArgumentParser(description="Horror Engine v13.0 Psychological Clause-Prosody & Multi-Cast Neural Voice Engine.")
+    ap = argparse.ArgumentParser(description="Horror Engine v15.3 Clean 1.0x VieNeu-TTS & Studio Voice Pipeline.")
     ap.add_argument("--script", required=True, help="Path to horror SCRIPT.md / .txt")
     ap.add_argument("--out-dir", default="out/voice", help="Output directory for voice.wav and words.json")
-    ap.add_argument("--tts-engine", default="auto", choices=["auto", "vieneu", "edge", "gemini"], help="Neural TTS backend (default: auto -> vieneu 48kHz if installed else edge)")
+    ap.add_argument("--tts-engine", default="vieneu", choices=["vieneu", "auto", "edge", "gemini"], help="Neural TTS backend (default: vieneu 1.0x clean free local 48kHz; auto -> vieneu else edge; gemini only when explicitly requested)")
     ap.add_argument("--vieneu-mode", default="v3turbo", choices=["v3turbo", "v3nano"], help="VieNeu-TTS ONNX CPU model (v3turbo=48kHz best, v3nano=24kHz fast)")
     ap.add_argument("--vieneu-voice", default="Thiện Minh", help="VieNeu-TTS built-in preset voice name (default: 'Thiện Minh' storytelling voice)")
-    ap.add_argument("--ref-audio", default=None, help="Optional 3-8s clean voice/emotion reference WAV for VieNeu-TTS instant cloning")
+    ap.add_argument("--ref-audio", default=None, help="Recommended 5-8s clean storytelling voice sample WAV for VieNeu-TTS 1.0x cloning (prioritized over auto emotion_refs; 0%% tempo/pitch DSP)")
     ap.add_argument("--emotion-refs", default=None, help="Optional folder of per-mood 3-8s reference clips (auto-detected at audio/emotion_refs/ if present)")
     ap.add_argument("--narrator-anchor", default=None, help="Optional 5-15s narrator voice clip (or auto audio/narrator_anchor.wav) to lock speaker identity across all emotions")
     ap.add_argument("--speaker-lock", action=argparse.BooleanOptionalAction, default=True, help="Lock narrator speaker_emb to ONE single voice across all emotion_refs acts (default: True)")

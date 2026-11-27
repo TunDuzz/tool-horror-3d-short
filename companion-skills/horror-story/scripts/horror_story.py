@@ -20,7 +20,16 @@ VALID_TIERS = {"lead", "support", "functional"}
 VALID_BEAT_TYPES = {"hook", "omen", "dread", "scare", "reveal", "twist", "escape", "climax"}
 VALID_WEIGHTS = {"major", "minor"}
 VALID_ROLE_TYPES = {"human", "entity", "silhouette", "lurker"}
-VALID_JUMPSCARE_STYLES = {"cinema_stab", "entity_shriek", "metal_dread", "vhs_psx_glitch"}
+VALID_JUMPSCARE_STYLES = {
+    "practical_impact",
+    "mic_emf_glitch",
+    "entity_breath_shriek",
+    "cinema_stab",
+    "entity_shriek",
+    "metal_dread",
+    "vhs_psx_glitch",
+}
+VALID_AUDIO_DIRECTIONS = {"raw_diegetic", "folklore_atmospheric", "cinematic_score"}
 VALID_LANDMARK_KINDS = {"stance", "prop", "portal", "window", "entity", "lurker", "camera", "zone"}
 VALID_FORMATS = {"micro", "short", "series"}
 FORMAT_DURATION_BOUNDS = {"micro": (45, 105), "short": (150, 360), "series": (480, 960)}
@@ -55,9 +64,45 @@ BANNED_PLATFORM_SLURS_RE = re.compile(
 )
 VALID_MOTIF_MODES = {"steady_then_stop", "accelerate", "decelerate", "approach", "stutter_break"}
 VALID_PACING_PROFILES = {"viral_short", "deep_story"}
-VALID_HOOK_ARCHETYPES = {"paradox_prop", "blunt_taboo_dialogue", "flash_forward_crisis", "raw_confession"}
-VALID_GRIT_LEVELS = {"platform_safe_raw", "clean_folklore"}
+VALID_HOOK_ARCHETYPES = {
+    "immediate_danger",
+    "direct_taboo_question",
+    "survivor_confession",
+    "paradox_prop",
+    "blunt_taboo_dialogue",
+    "flash_forward_crisis",
+    "raw_confession",
+}
+VALID_STORY_ARCHETYPES = {
+    "twisted_childhood_memory_or_festival",
+    "everyday_folk_taboo",
+    "abandoned_location_true_tale",
+    "familiar_doppelganger",
+    "family_secret_or_survival_rule",
+}
+VALID_GRIT_LEVELS = {"clean_folklore", "platform_safe_raw"}
 VALID_DIALECT_REGIONS = {"north", "central", "south"}
+
+
+def _load_constitution_safe() -> dict:
+    """Zero-dependency lookup for `pipeline_constitution.json` (works from both templates/scripts and companion-skills)."""
+    here = os.path.dirname(os.path.abspath(__file__))
+    candidates = [
+        os.path.abspath(os.path.join(here, "..", "pipeline_constitution.json")),
+        os.path.abspath(os.path.join(here, "..", "..", "..", "templates", "pipeline_constitution.json")),
+        os.path.abspath(os.path.join(os.getcwd(), "pipeline_constitution.json")),
+        os.path.abspath(os.path.join(os.getcwd(), "templates", "pipeline_constitution.json")),
+    ]
+    for p in candidates:
+        if os.path.isfile(p):
+            try:
+                with open(p, encoding="utf-8") as fp:
+                    data = json.load(fp)
+                if isinstance(data, dict):
+                    return data
+            except Exception:
+                pass
+    return {}
 
 
 def resolve_vieneu_cast_voice(name: str, voice_profile: str = "", role: str = "", narrator_voice: str = "Thiện Minh") -> str:
@@ -286,7 +331,7 @@ def cmd_seed(args):
 
     pacing_profile = getattr(args, "pacing_profile", None) or ("viral_short" if total_sec <= 120 else "deep_story")
     dialect_region = getattr(args, "dialect", None) or "north"
-    grit_level = getattr(args, "grit_level", None) or "platform_safe_raw"
+    grit_level = getattr(args, "grit_level", None) or "clean_folklore"
 
     seed_params = {
         "format": fmt,
@@ -295,7 +340,7 @@ def cmd_seed(args):
         "parts": n_parts,
         "secondsPerPart": sec,
         "targetTotalSec": total_sec,
-        "wordsPerSecond": 2.65,
+        "wordsPerSecond": 2.35,
         "aspect": aspect,
         "seamlessStitch": n_parts > 1,
         "genre": args.genre,
@@ -312,37 +357,32 @@ def cmd_seed(args):
             "pov": pov,
             "dialectRegion": dialect_region,
             "gritLevel": grit_level,
-            "narratorVoice": "Giọng kể truyền miệng đời thật Việt Nam gọn sắc, vào thẳng biến cố ngay giây đầu, có buột miệng cảm thán đúng tâm lý (Thiện Minh)",
+            "narratorVoice": "Giọng kể truyền miệng điềm tĩnh, chân thực, giàu cảm xúc con người (VieNeu-TTS 1.0x sạch)",
             "dialogueDensity": "balanced_dialogue",
-            "toneKeywords": ["khẩu ngữ truyền miệng đời thật", "hook sốc 1-5s đầu", "văn hóa vùng miền", "âm thanh là nhân vật", "0 lạm dụng Jumpscare"],
+            "toneKeywords": ["giọng kể điềm tĩnh đời thật", "hook sạch 0-5s không lộ bài", "lõi cảm xúc con người", "leo thang 3 tầng", "kết lật dư âm ám ảnh"],
             "forbiddenCliches": [
                 "Mở bài dạo đầu thời tiết / ngày tháng / giới thiệu tên rườm rà ('Đêm cuối năm...', 'Tháng 10 năm...')",
+                "Lộ đáp án cú lật ngay ở 5 giây đầu",
+                "Chửi thề gượng gạo hoặc văn viết sáo rỗng kiểu AI ('một cảm giác lạnh lẽo bao trùm', 'bất giác tôi nhận ra')",
                 "Tỉnh dậy hóa ra chỉ là giấc mơ",
-                "Văn viết sáo rỗng kiểu AI ('một cảm giác lạnh lẽo bao trùm', 'bất giác tôi nhận ra')",
                 "Giải thích hộ cảm xúc ('tôi vô cùng kinh hãi', 'không khí thật rùng rợn')",
-                "Lạm dụng Jumpscare hoặc tiếng reverse_suck báo trước",
             ],
         },
         "soundscapeDesign": {
+            "audioDirection": (
+                "raw_diegetic"
+                if pov == "found_footage_tape"
+                else ("folklore_atmospheric" if str(args.genre or "").lower() == "folklore" else "cinematic_score")
+            ),
             "nearBed": {
                 "sound": "room_tone_dark",
-                "label": "Lớp không gian gần trong phòng (gỗ ẩm, tim đèn dầu, không khí tĩnh)",
+                "label": "Lớp không gian gần trong phòng theo đúng bối cảnh truyện",
             },
             "farBed": {
                 "sound": "night_rain_indoor",
-                "label": "Lớp không gian xa ngoài trời (mưa/gió/sông tự đục đi khi đóng cửa)",
-                "occlusionTrigger": {"atWord": "chốt", "lpHz": 580, "gainDeltaDb": -6.5},
+                "label": "Lớp không gian xa ngoài trời tùy chọn (chỉ gắn occlusionTrigger nếu truyện thật sự có cảnh đóng/mở cửa)",
             },
-            "motifs": [
-                {
-                    "id": "m_primary_motif",
-                    "sound": "water_drip_echo",
-                    "intervalSec": 2.5,
-                    "mode": "steady_then_stop",
-                    "meaning": "Âm thanh lặp đời thường đếm nhịp căng thẳng rồi đột ngột tắt hẳn trước biến cố",
-                    "breakBeatId": "P1_AB2",
-                }
-            ],
+            "motifs": [],
         },
         "premise": {
             "core": "",
@@ -1300,14 +1340,19 @@ def evaluate_gates(doc, stage="full", strict_spatial=False, strict_story=False):
                         if len(reason) < 12:
                             p25_errs.append(f"{ab_id} dùng jumpscareStyle nhưng thiếu jumpscareReason (>=12 ký tự chứng minh thực sự bắt buộc)")
 
-            # 2) Narrative Soundscape & Motif check
-            if not isinstance(sc_design, dict):
-                p25_errs.append("Thiếu khối soundscapeDesign (nearBed, farBed, motifs)")
-            else:
-                motifs = sc_design.get("motifs") or []
-                if not isinstance(motifs, list) or len(motifs) < 1:
-                    p25_errs.append("soundscapeDesign.motifs cần >= 1 âm thanh lặp chủ đạo (motif) đóng vai trò dẫn truyện")
-                else:
+            # 2) Narrative Soundscape & Optional Motif check (v15.3: honors pipeline_constitution.json `requireAcousticMotif: false`;
+            # NEVER forces motifs or occlusionTrigger on stories that don't organically need them!)
+            const_cfg = _load_constitution_safe()
+            require_motif = bool((const_cfg.get("soundscape") or {}).get("requireAcousticMotif", False))
+            if isinstance(sc_design, dict):
+                motifs = sc_design.get("motifs")
+                if motifs is None:
+                    motifs = []
+                if not isinstance(motifs, list):
+                    p25_errs.append("soundscapeDesign.motifs phải là mảng JSON (hoặc để trống [])")
+                elif require_motif and len(motifs) < 1:
+                    p25_errs.append("soundscapeDesign.motifs cần >= 1 âm thanh lặp chủ đạo (motif) theo requireAcousticMotif=true")
+                elif motifs:
                     all_ab_ids = {
                         str(ab.get("beatId"))
                         for p in parts
@@ -1326,12 +1371,14 @@ def evaluate_gates(doc, stage="full", strict_spatial=False, strict_story=False):
                             p25_errs.append(f"Motif '{mid}' thiếu breakBeatId (điểm âm lặp thay đổi quy luật / tắt bặt)")
                         elif all_ab_ids and brk not in all_ab_ids:
                             p25_errs.append(f"Motif '{mid}' breakBeatId='{brk}' không khớp actionBeat nào")
+            elif require_motif:
+                p25_errs.append("Thiếu khối soundscapeDesign (nearBed, farBed, motifs)")
 
             add_gate(
                 "psychological-soundscape-and-subtext",
-                "25. Thoại Gợi Mở (Anti-Exposition), Âm Lặp (`motifs`) & Kỷ Luật Jumpscare Có Mục Đích",
+                "25. Thoại Gợi Mở (Anti-Exposition), Không Gian Âm Thanh Tự Nhiên & Jumpscare Có Lý Do",
                 not p25_errs,
-                "Thoại giàu ẩn ý không kể hộ cảm xúc, có Motif âm thanh biến đổi quy luật & Jumpscare có lý do rõ ràng"
+                "Thoại giàu ẩn ý không kể hộ cảm xúc, âm thanh phục vụ đúng cốt truyện (motif/occlusion tùy chọn) & Jumpscare rõ mục đích"
                 if not p25_errs
                 else "; ".join(p25_errs[:4]),
             )
@@ -1652,7 +1699,7 @@ def render_markdown(doc):
     beats = doc.get("beats") or []
     props = doc.get("props") or []
     parts = doc.get("parts") or []
-    wps = float(params.get("wordsPerSecond") or 2.9)
+    wps = float(params.get("wordsPerSecond") or 2.35)
     total_sec = sum(float(p.get("target_sec") or 0) for p in parts)
 
     lines = [
@@ -1792,7 +1839,7 @@ def render_html(doc):
     props = doc.get("props") or []
     parts = doc.get("parts") or []
     gates, failed = evaluate_gates(doc, stage="full")
-    wps = float(params.get("wordsPerSecond") or 2.9)
+    wps = float(params.get("wordsPerSecond") or 2.35)
     total_sec = sum(float(p.get("target_sec") or 0) for p in parts)
     total_words = round(total_sec * wps)
 
@@ -2345,18 +2392,11 @@ def _export_single_part_blueprint(doc, part, out_dir, base_project_id, aspect, b
                 meta_bits.append(f"~{int(sb['wordBudget'])} từ")
             script_lines.append(f"<!-- {' | '.join(meta_bits)} -->")
             beat_pre = f"[BEAT {float(deliv['beatBeforeSec']):.2f}s] " if deliv.get("beatBeforeSec") else ""
-            pace_tag = ""
-            if deliv.get("pace") or deliv.get("pitchSt"):
-                kv_p = []
-                if deliv.get("pace"):
-                    kv_p.append(f"PACE={deliv['pace']}")
-                if deliv.get("pitchSt") is not None:
-                    kv_p.append(f"PITCH={deliv['pitchSt']}")
-                pace_tag = f"[{' | '.join(kv_p)}] "
+            # v15.3: NEVER emit `[PACE=... | PITCH=...]` into SCRIPT.skeleton.md — keep clean continuous paragraphs for 1.0x VieNeu-TTS!
             open_line = str(ch_meta.get("openingLine") or "").strip() if idx_ab_s == 0 else ""
             hint = open_line or sb.get("keyPhrase") or ab.get("spokenHint") or sb.get("intent") or ab.get("actionSummary", "")
             body_line = hint if (open_line or ab.get("spokenHint")) else f"[VIẾT LỜI THOẠI {ab.get('beatId')}: {hint}]"
-            script_lines.append(f"{beat_pre}{pace_tag}{body_line}")
+            script_lines.append(f"{beat_pre}{body_line}")
     else:
         script_lines += ["[NARRATOR | mood=calm_omen]", part.get("synopsis", "")]
 
@@ -2769,16 +2809,41 @@ def _export_single_part_blueprint(doc, part, out_dir, base_project_id, aspect, b
             "label": mf.get("meaning") or "Âm thanh lặp dẫn dắt tâm lý rồi phá vỡ quy luật",
         })
 
+    audio_dir_cfg = str(sc_design.get("audioDirection") or "").strip().lower()
+    if audio_dir_cfg not in VALID_AUDIO_DIRECTIONS:
+        audio_dir_cfg = (
+            "raw_diegetic"
+            if pov_mode == "found_footage_tape"
+            else ("folklore_atmospheric" if str((doc.get("params") or {}).get("genre") or "").lower() == "folklore" else "cinematic_score")
+        )
+    score_arc_cfg = sc_design.get("scoreArc") if isinstance(sc_design.get("scoreArc"), dict) else None
+    draft_music_arc = None
+    if score_arc_cfg and audio_dir_cfg != "raw_diegetic":
+        arc_out = {}
+        if score_arc_cfg.get("act1"):
+            arc_out["act1"] = {"sound": str(score_arc_cfg["act1"]), "target_rms_dbfs": -27.5}
+        if score_arc_cfg.get("act2"):
+            arc_out["act2"] = {"sound": str(score_arc_cfg["act2"]), "target_rms_dbfs": -24.5}
+        if score_arc_cfg.get("aftermath"):
+            arc_out["aftermath"] = {"sound": str(score_arc_cfg["aftermath"]), "target_rms_dbfs": -28.0}
+        if arc_out:
+            arc_out.update({"duck_db": -8.5, "crossfade_s": 1.6, "silence_drop_floor_db": -48.0})
+            draft_music_arc = arc_out
+
     explicit_js = max(1, len(js_clips_draft))
     cues_draft = {
+        "audioDirection": audio_dir_cfg,
         "voice": "voice/voice.wav",
         "words": "voice/words.json",
         "target_lufs": -16.0,
         "ceil_db": -1.0,
+        "silence_drop_floor_db": -48.0,
         "dead_silence_floor_db": -48.0,
+        "music_duck_db": -8.5,
         "min_jumpscares": 1,
         "max_jumpscares": max(2, explicit_js),
         "beds": draft_beds,
+        **({"music_arc": draft_music_arc} if draft_music_arc else {}),
         **({"motifs": draft_motifs} if draft_motifs else {}),
         "events": cues_events,
     }

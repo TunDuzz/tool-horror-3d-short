@@ -443,3 +443,49 @@ test("v15.2 actingCues[] supports all 20 composable gestures, freeform customDef
   shockPair.albedo.dispose();
   shockPair.normal.dispose();
 });
+
+test("v15.4 sprite2d keeps wJaw deformation ultra-subtle (no rubbery chin) and smoothly blends calm<->talk via RMS", () => {
+  const calmPair = createPlaceholderSpritePair("C01_calm_v154", "human", 1);
+  const talkPair = createPlaceholderSpritePair("C01_talk_v154", "human", 1);
+  const actor = createCharacter25D(
+    {
+      id: "C01_v154",
+      role: "human",
+      height: 1.72,
+      rigMeta: { neckV: 0.80, shoulderV: 0.72, waistV: 0.48, mouthV: 0.845, shoulderSpan: 0.44, headCenterX: 0.0 },
+    },
+    { calm: calmPair.albedo, talk: talkPair.albedo },
+    { calm: calmPair.normal, talk: talkPair.normal },
+  );
+
+  // 1. Direct jawTalk=1.0 must stay ultra-subtle (<= 6mm / 0.006m downward pull, preventing rubbery chin distortion!)
+  const posAttr = actor.plane.geometry.attributes.position as THREE.BufferAttribute;
+  actor.applyPuppet({ jawTalk: 0 });
+  const restY = Float32Array.from({ length: posAttr.count }, (_, i) => posAttr.getY(i));
+  actor.applyPuppet({ jawTalk: 1.0 });
+  let maxJawDrop = 0;
+  for (let i = 0; i < posAttr.count; i++) {
+    maxJawDrop = Math.max(maxJawDrop, restY[i] - posAttr.getY(i));
+  }
+  assert.ok(maxJawDrop > 0.0005 && maxJawDrop <= 0.006, `Expected subtle non-rubbery jaw drop in (0.0005..0.006m], got ${maxJawDrop}`);
+
+  // 2. RMS talkEnergy smoothly crossfades `calm` -> `talk` textures on single draw call instead of snapping!
+  actor.setPose("standIdle", 10, { talkEnergy: 0.20, isTalking: true });
+  assert.equal(actor.material.map, calmPair.albedo);
+  assert.equal(actor.blendUniforms.uMapB.value, talkPair.albedo);
+  assert.ok(
+    actor.blendUniforms.uExprMix.value >= 0.5 && actor.blendUniforms.uExprMix.value < 0.99,
+    `Expected intermediate calm<->talk blend at moderate RMS=0.20, got ${actor.blendUniforms.uExprMix.value}`,
+  );
+  assert.ok(actor.lastDeform.jawTalk <= 0.10, `Human speaking jawTalk must remain gentle, got ${actor.lastDeform.jawTalk}`);
+
+  actor.setPose("standIdle", 12, { talkEnergy: 0.85, isTalking: true });
+  assert.equal(actor.currentExpr, "talk");
+  assert.equal(actor.material.map, talkPair.albedo);
+
+  actor.dispose();
+  calmPair.albedo.dispose();
+  calmPair.normal.dispose();
+  talkPair.albedo.dispose();
+  talkPair.normal.dispose();
+});

@@ -11,6 +11,42 @@ from dsp import (
 )
 
 
+CURATED_SFX_CATEGORIES = ("dark_drone", "sad_piano", "stinger", "ambience")
+
+
+def resolve_sfx_path(name_or_path, library_dir=None, curated_dir=None):
+    """Resolve a real recorded SFX WAV, prioritizing local curated `audio/sfx_curated/` BEFORE `audio/sfx_library/`."""
+    if not name_or_path:
+        return None
+    if os.path.isfile(name_or_path):
+        return name_or_path
+    base = name_or_path if str(name_or_path).lower().endswith(".wav") else f"{name_or_path}.wav"
+
+    curated_roots = []
+    if curated_dir:
+        curated_roots.append(curated_dir)
+    if library_dir:
+        curated_roots.append(os.path.join(os.path.dirname(os.path.abspath(library_dir)), "sfx_curated"))
+    default_audio = os.path.dirname(os.path.abspath(__file__))
+    curated_roots.append(os.path.join(default_audio, "sfx_curated"))
+
+    candidates = []
+    seen_roots = set()
+    for root in curated_roots:
+        aroot = os.path.abspath(root)
+        if aroot in seen_roots:
+            continue
+        seen_roots.add(aroot)
+        candidates.append(os.path.join(aroot, base))
+        for cat in CURATED_SFX_CATEGORIES:
+            candidates.append(os.path.join(aroot, cat, base))
+
+    if library_dir:
+        candidates.append(os.path.join(library_dir, base))
+    candidates.append(os.path.join(default_audio, "sfx_library", base))
+    return next((p for p in candidates if os.path.isfile(p)), None)
+
+
 def load_sfx_asset(
     name_or_path,
     library_dir=None,
@@ -21,23 +57,16 @@ def load_sfx_asset(
     fade_in=0.015,
     fade_out=0.04,
     organic_drift=False,
+    curated_dir=None,
 ):
-    """Horror Engine v6.0: Load a real recorded CC0 / Neural SFX WAV asset as 48 kHz stereo float64.
+    """Horror Engine v15.3: Load a real recorded Curated / CC0 SFX WAV asset as 48 kHz stereo float64.
 
-    Searches direct path first, then `library_dir/<name>.wav` (defaulting to `<audio_dir>/sfx_library/`).
+    Searches direct path first, then `audio/sfx_curated/` (root + `dark_drone/`, `sad_piano/`, `stinger/`, `ambience/`),
+    then `library_dir/<name>.wav` (defaulting to `<audio_dir>/sfx_library/`).
     Supports clean looping with cosine crossfade, trimming to `dur_sec`, gain scaling, and optional stereo pan.
     Returns `None` if not found so callers can choose an explicit fallback.
     """
-    candidates = []
-    if os.path.isfile(name_or_path):
-        candidates.append(name_or_path)
-    base = name_or_path if name_or_path.lower().endswith(".wav") else f"{name_or_path}.wav"
-    if library_dir:
-        candidates.append(os.path.join(library_dir, base))
-    default_lib = os.path.join(os.path.dirname(os.path.abspath(__file__)), "sfx_library")
-    candidates.append(os.path.join(default_lib, base))
-
-    resolved = next((p for p in candidates if os.path.isfile(p)), None)
+    resolved = resolve_sfx_path(name_or_path, library_dir=library_dir, curated_dir=curated_dir)
     if resolved is None:
         return None
 

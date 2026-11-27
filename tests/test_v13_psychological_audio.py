@@ -156,18 +156,29 @@ class TestV13PsychologicalVoiceAndSoundscape(unittest.TestCase):
                     },
                 ]
 
-            doc["soundscapeDesign"]["motifs"] = []  # Missing motif -> Gate 25 must fail!
+            # Anti-Exposition violation + missing jumpscareReason + malformed motif MUST still fail Gate 25
+            doc["soundscapeDesign"]["motifs"] = [{"id": "m_bad", "sound": "water_drip_echo", "mode": "invalid_mode"}]
             gates_bad, failed_bad = horror_story.evaluate_gates(doc, stage="full", strict_story=True)
             g25_bad = next((g for g in gates_bad if "25." in g["title"]), None)
             self.assertIsNotNone(g25_bad)
             self.assertFalse(g25_bad["ok"])
 
-            # Fix synopsis to sensory prose, provide justified jumpscareReason on each chapter (v15.0 >= 1/chapter), add motif with breakBeatId
+            # Fix synopsis to sensory prose & provide justified jumpscareReason; v15.3 (`requireAcousticMotif: false`)
+            # MUST PASS Gate 25 even with `motifs: []` and NO `occlusionTrigger`!
             for p in doc["parts"]:
                 p["synopsis"] = "Ngoài hiên mưa tạt lạnh qua khe ván, cuốn sổ trực nằm mở sẵn ở trang cuối nhòe bùn."
                 ab_last = p["actionBeats"][-1]
                 ab_last["jumpscareStyle"] = "cinema_stab"
                 ab_last["jumpscareReason"] = "Bóng áo mưa đột ngột áp sát khe cửa đúng lúc giọt nước dột ngừng rơi"
+            doc["soundscapeDesign"] = {
+                "nearBed": {"sound": "room_tone_dark", "label": "Không gian gỗ ẩm trong quầy"},
+                "farBed": {"sound": "night_rain_indoor", "label": "Mưa sông Hậu ngoài mái tôn"},
+                "motifs": [],
+            }
+            _, failed_nomotif = horror_story.evaluate_gates(doc, stage="full", strict_story=True)
+            self.assertEqual(failed_nomotif, [], f"Gate 25 should PASS with optional motifs=[] and no occlusionTrigger: {failed_nomotif}")
+
+            # Optional motif + occlusionTrigger remain fully supported when explicitly declared
             doc["soundscapeDesign"] = {
                 "nearBed": {"sound": "room_tone_dark", "label": "Không gian gỗ ẩm trong quầy"},
                 "farBed": {
@@ -189,7 +200,7 @@ class TestV13PsychologicalVoiceAndSoundscape(unittest.TestCase):
             gates_ok, failed_ok = horror_story.evaluate_gates(doc, stage="full", strict_story=True)
             self.assertEqual(failed_ok, [], f"Unexpected gate failures: {failed_ok}")
 
-            # Export blueprint and inspect v13 SCRIPT.skeleton.md & cues.draft.json
+            # Export blueprint and inspect v15 SCRIPT.skeleton.md (ZERO [PACE|PITCH] tags!) & cues.draft.json
             horror_story.write_text(story_p, json.dumps(doc, ensure_ascii=False, indent=2))
             bp_dir = os.path.join(td, "bp")
             ns_bp = horror_story.argparse.Namespace(
@@ -201,10 +212,14 @@ class TestV13PsychologicalVoiceAndSoundscape(unittest.TestCase):
             with open(os.path.join(bp_dir, "p01", "cues.draft.json"), encoding="utf-8") as fp_cd:
                 cues_d = json.load(fp_cd)
             self.assertIn("[BEAT 0.45s]", sk_txt)
+            self.assertNotIn("[PACE=", sk_txt)
+            self.assertNotIn("PITCH=", sk_txt)
             self.assertIn("voice=Thái Sơn", sk_txt)  # Elderly Southern male auto-cast distinct from narrator!
             self.assertEqual(cues_d["min_jumpscares"], 1)
             self.assertGreaterEqual(cues_d["max_jumpscares"], 2)
             self.assertEqual(len(cues_d["beds"]), 2)
+            self.assertEqual(cues_d["audioDirection"], "folklore_atmospheric")
+            self.assertNotIn("music_arc", cues_d)
             self.assertTrue(len(cues_d.get("motifs") or []) >= 1)
             self.assertFalse(any(ev.get("synth") == "reverse_suck" for ev in cues_d.get("events", [])))
 

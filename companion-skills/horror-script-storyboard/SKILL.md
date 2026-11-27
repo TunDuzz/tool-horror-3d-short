@@ -1,76 +1,60 @@
 ---
 name: horror-script-storyboard
-description: Use when writing high-retention oral-folklore Vietnamese horror scripts (v14.0: 0.1s immediate Cold Hook, colloquial regional speech + platform-safe strong exclamations, crisp 2.55-3.05 w/s effective / 3.15-3.45 w/s spoken cadence, [BEAT Xs], [SILENCE_DROP Xs]), generating 48kHz multi-cast neural voice via VieNeu-TTS --speaker-lock, or directing cold_hook -> master -> Anchored POV storyboards verified via storyboard_proof.html.
+description: Use when writing million-view Vietnamese horror scripts (v15: Two-Step Clean Writing -> Directing, 0-5s Clean Non-Spoiler Hook, Human Emotional Core, 3-Tier Escalation, calm 2.35 w/s effective / 2.25-3.25 w/s spoken cadence, ZERO [PACE|PITCH] tags, [SILENCE_DROP 0.5-1.2s]), generating free clean 1.0x 48kHz voice via VieNeu-TTS (--tts-engine vieneu + --ref-audio or --import-voice), or directing cold_hook -> master -> Anchored POV storyboards verified via storyboard_proof.html.
 ---
 
-# Horror Scriptwriting & High-Retention Storyboarding v14.0 (`SCRIPT.md` → `manifest.json` → `story.ts`)
+# Horror Scriptwriting & Storyboarding v15 (`SCRIPT.md` → `VieNeu-TTS 1.0x` → `manifest.json`)
 
-## 1. Luật Viết `SCRIPT.md` Thực Chiến v14.0 (`1–5s Cold Hook + Khẩu Ngữ Truyền Miệng Việt Nam`)
+## 1. Quy Trình Viết `SCRIPT.md` Tách Biệt 2 Bước (v15)
 
-1. **Nổ Thoại Ngay Ở `0.05s – 0.25s` (CẤM Khoảng Lặng Đầu Video!):**
-   - **TUYỆT ĐỐI KHÔNG** đặt `[VISUAL 2.6s]` ở dòng đầu `SCRIPT.md` và **TUYỆT ĐỐI KHÔNG** mở màn bằng thời tiết, ngày tháng hay giới thiệu bản thân (*"Đêm cuối năm 2003, gió bấc rít..."*).
-   - Dòng đầu tiên phải là **Đòn Cold Hook `1–5s` (`<= 24 từ`)**: một nghịch lý vật chứng đang diễn ra trước mắt, một câu quát cấm kỵ gắt của nhân vật phụ, một khoảnh khắc sinh tử tua ngược, hoặc lời thú nhận rợn gáy kiểu truyền miệng.
-2. **Khẩu Ngữ Đời Thật, Phương Ngữ 3 Miền & Ngôn Từ Mạnh Hợp Lý (`platform_safe_raw`):**
-   - Viết như **người thật ngồi kể chuyện ma đêm khuya**: câu ngắn, gãy gọn, sát hành động vật lý; dùng đúng xưng hô và từ vựng vùng miền (`Bắc`: *tôi/ông/bà/cơ mà/im thít/lạnh sun người*; `Trung`: *tau/mi/răng/rứa/khỉ gió*; `Nam`: *tui/mày/tụi bây/ổng/bả/thiệt tình/im re*).
-   - Cho phép nhân vật buột miệng tự nhiên các thán từ cảm thán mạnh đúng tâm lý hoảng sợ/bức bối (`1–3` lần/phút): **`"Mẹ kiếp"`**, **`"Chết tiệt"`**, **`"Chó chết"`**, **`"Bỏ mẹ rồi"`**, **`"Tổ cha nó"`**, **`"Khỉ gió"`**, **`"Má ơi"`**, **`"Mặc xác nó"`** — tuyệt đối tránh văn viết sáo rỗng kiểu AI (*"một cảm giác lạnh lẽo bao trùm"*, *"bất giác tôi nhận ra"*) và tránh từ tục nhạy cảm vi phạm chính sách nền tảng.
-3. **Nhịp Giọng Nhanh Gọn, Không Rề Rà (`pipeline_constitution.json` v14.0):**
-   - Tốc độ mục tiêu: **`2.55–3.05 words/s` tổng (`3.15–3.45 words/s` khi nói, trần `3.65 words/s`)** — nhanh và cuốn hơn bản cũ ~`0.5–1.0s` mỗi câu!
-   - Chỉ đặt `[BEAT 0.18–0.28s]` ngay trước từ khóa đắt giá nhất; đặt `[VISUAL 0.9–1.5s]` ở nhịp chuyển hành động **sau** giây thứ 5; và đặt `[SILENCE_DROP 1.1–1.4s]` ngay trước cú lật tâm lý cuối.
-4. **Mẫu `SCRIPT.md` Chuẩn v14.0 (`~60s` Viral Short — Vào Thẳng Biến Cố Ngay Giây `0.05`):**
-   ```markdown
-   [NARRATOR | mood=tense]
-   Mẹ kiếp... [BEAT 0.22s] cái điện thoại bàn trước mặt tôi vừa đổ chuông, dù sợi dây đồng dưới gầm bàn đã bị cắt đứt từ ba tháng trước.
+### Bước 1 — Sáng Tác Sạch (0 Thẻ Kỹ Thuật)
+- Viết trọn câu chuyện đời thật giàu cảm xúc, chọn 1 trong **5 mô-típ luân phiên** trong [HORROR_FORMULAS.md](./references/HORROR_FORMULAS.md) — **0 thẻ `[BEAT]`, `[PROX]`, `[VISUAL]`, `[PACE]`, `[PITCH]`**.
+- Khóa đủ **4 nguyên tắc triệu view**:
+  1. **Hook `0–5s` sạch & CẤM lộ bài sớm (`<= 24 từ`, nổ ở `0.05–0.25s`):** Chọn 1 trong 3 kiểu *(Vào thẳng tình huống nguy hiểm / Câu hỏi kiêng kỵ trực diện / Lời thú nhận của người sống sót)* — cấm mở bài thời tiết/ngày tháng và cấm kể trước đáp án cú lật cuối.
+  2. **Lõi cảm xúc con người (`5–18s`):** Cài kín 1 chi tiết/lời hứa/vật quen gắn tình cảm thật (gia đình, bạn bè, mưu sinh).
+  3. **Leo thang 3 tầng, cấm tả cảnh thừa:** Tầng 1 *(dấu hiệu mơ hồ bị cười gạt)* → Tầng 2 *(xâm lấn vùng an toàn: giả giọng người thân, tiếng động vô lý)* → Tầng 3 *(đối mặt trực diện thực thể bậc 4–7 + điểm nổ Jumpscare)*.
+  4. **Cái kết dư âm ám ảnh:** Lật ngược chi tiết cài ở đầu bằng 1 câu chốt lạnh người.
+- **Giọng kể điềm tĩnh, tự nhiên:** Bỏ hoàn toàn quota ép chửi thề `1–3 lần/phút`; giữ khẩu ngữ 3 miền đời thường chân thực, không văn mẫu AI.
 
-   [NARRATOR | mood=calm_omen]
-   Tối nay tôi nhận trực thế ở khu nội trú B2 sắp đập bỏ để lấy ba trăm nghìn tiền ca đêm. Lúc bàn giao chìa khóa ở cửa hành lang, bà Hạnh quản lý đã chỉ thẳng tay vào cái máy bàn cảnh báo:
-
-   [SPEAKER: BÀ HẠNH | profile=elder_female_north | mood=tense | fx=room]
-   Này, khóa chết cái chốt sắt vào! Máy bàn cắt dây từ hôm niêm phong phòng hai lẻ bốn rồi... [BEAT 0.24s] đêm nó có chập mạch kêu cạch cái nào thì mặc xác nó, cấm được nhấc!
-
-   [VISUAL 1.10s]
-
-   [NARRATOR | mood=uneasy]
-   Bà Hạnh vừa khuất cuối hành lang là tôi sập chốt đồng lại ngay. Cơ mà đúng 02:15... tiếng quả lắc đồng hồ trên tường tự dưng khựng chết đứng. Cái máy bàn đen xì trước mặt nảy lên đúng một hồi chuông cụt lủn.
-
-   [SILENCE_DROP 1.20s]
-
-   [SPEAKER: TIẾNG TRONG MÁY | profile=young_female_north | mood=whisper | fx=phone | prox=close]
-   Phòng hai lẻ bốn... đứa nào khóa ngoài rồi anh ơi...
-
-   [NARRATOR | mood=cold_twist | prox=close]
-   Bỏ mẹ rồi... [BEAT 0.25s] tay tôi run bần bật áp ống nghe, mắt nhìn xuống chân tường mới điếng người: đầu dây đồng đứt lìa đóng trắng xóa bụi mốc... [BEAT 0.25s] [PACE=slow | PITCH=-0.9] còn trên bảng gỗ trước mặt, riêng chiếc thẻ khóa phòng hai lẻ bốn... vẫn đang tự đung đưa.
-
-   [VISUAL 2.00s]
-   ```
+### Bước 2 — Đạo Diễn & Đánh Dấu Cho `VieNeu-TTS 1.0x`
+Chỉ sau khi chốt xong câu chuyện ở Bước 1 mới gắn thẻ đạo diễn tối giản:
+1. **Nhịp kể điềm tĩnh, có độ thở tự nhiên (`pipeline_constitution.json` v15):**
+   - Mục tiêu tổng: **`2.35 words/s`** (`~155–175 từ` cho video `65–75s`).
+   - Tốc độ lúc đang nói: **`2.25–3.25 words/s`** (mục tiêu **`2.75 words/s`**).
+2. **BỎ HOÀN TOÀN `[PACE=... | PITCH=...]`:**
+   - Giữ đoạn văn tiếng Việt liền mạch để `VieNeu-TTS` đọc trôi chảy ở tốc độ gốc `1.0x` sạch (0% kéo tempo / bóp pitch / dịch F0).
+   - Chỉ tận dụng **thẻ bản địa tự nhiên** khi thật sự đắt (như `[thở dài]`), dấu câu tự nhiên, khoảng nghỉ sạch (`[BEAT 0.25–0.45s]`, `[VISUAL 0.9–1.5s]` sau giây thứ 5) và **`[SILENCE_DROP 0.5–1.2s]`** ngay trước điểm nổ Jumpscare.
+3. **Mẫu `SCRIPT.md` Chuẩn v15:** Xem trọn bộ bản Bước 1 (sáng tác sạch) + Bước 2 (đạo diễn) tại `examples/script_v15_sample.md` (*Đôi Dép Úp Trước Bậu Cửa*, ~70s).
 
 ---
 
-## 2. Tổng Hợp Giọng Đọc Sạch 1.0x `48 kHz` + RMS Envelope (`gen_horror_voice.py` v15.0)
+## 2. Tổng Hợp Giọng Đọc Miễn Phí `VieNeu-TTS 1.0x` Sạch (`gen_horror_voice.py`)
 
 ```bash
-# Đọc liền mạch cả đoạn bằng Gemini TTS (tự nhận GEMINI_API_KEY, 0% méo tốc độ/cao độ) + Whisper + rms_envelope_30fps
+# 1A. Mặc định: VieNeu-TTS 48kHz miễn phí ở tốc độ gốc 1.0x sạch (0% kéo tempo / bóp pitch / dịch F0)
+# Khuyên dùng kèm --ref-audio (đoạn mẫu 5-8s giọng trầm kể chuyện ma sạch, không qua DSP bóp méo):
 python3 scripts/gen_horror_voice.py --script out/<project>/SCRIPT.md \
-  --tts-engine auto --word-aligner auto --strict-hook \
-  --out-dir out/<project>/voice --no-vc
+  --tts-engine vieneu --ref-audio audio/my_storyteller_6s.wav \
+  --word-aligner auto --strict-hook --out-dir out/<project>/voice --no-vc
 
-# Hoặc nhập thẳng 1 file ghi âm thật / RVC sạch:
+# 1B. Hoặc nhập thẳng 1 file giọng thu thật / RVC sạch (0% DSP bóp tiếng):
 python3 scripts/gen_horror_voice.py --script out/<project>/SCRIPT.md \
   --import-voice clean_take.wav --word-aligner auto --out-dir out/<project>/voice
 ```
-- Tắt mặc định kéo chậm `clean_tempo` / bóp `pitch_semi`, không cắt nhỏ câu theo thẻ `[PACE]`/`[PITCH]`, xuất `rms_envelope_30fps` trong `words.json` để `stage.ts` lái khẩu hình `talk`/`closed` theo sóng âm thực và kích hoạt biểu cảm dứt khoát tại `actionTriggerFrame`.
+- `--tts-engine vieneu` là mặc định (không tự động gọi Gemini TTS để tránh hết quota Free Tier); xuất `rms_envelope_30fps` trong `words.json` để `stage.ts` lái miệng nói (`talk`/`closed`) theo sóng âm thực và chốt `actionTriggerFrame` + `actingCues[]`.
 
 ---
 
-## 3. Ngữ Pháp Điện Ảnh `cold_hook → master → Anchored POV`, Bắt Buộc Jumpscare & Khóa Khung Hình 5 Lớp
+## 3. Ngữ Pháp Điện Ảnh `cold_hook → master → Anchored POV`, Bắt Buộc Jumpscare & Khóa `storyboard_proof.html`
 
 1. **Mở Cảnh Giữ Chân 5 Giây Đầu (`cameraMode: "cold_hook"` → `"master"`):**
-   - **`Shot 1` (`cameraMode: "cold_hook"`, `1.0–5.5s`, `POV_CU` / `POV_PROP` / `POV`):** Đập thẳng vật chứng hoặc hành động gây tò mò vào khung hình ngay giây `0.0` khớp với câu Hook!
-   - **`Shot 2` (`cameraMode: "master"`, `>= 60 frames`, `camMasterEstablish`):** Mở rộng ra toàn cảnh căn phòng với tường/đèn rõ nét (`Zero Black Void`) để khán giả nắm bố cục không gian ngay trong câu Snap Context.
-   - **`Shot 3..N` (`80–90%` `camPovChain` + tối đa `1–2` `ots_same_side` `<= 22%` thời lượng):** Dùng `characterMode: "sprite2d"` (nhân vật 2.5D nổi khối ánh sáng), thực thể chính **Thang kinh dị bậc 4–7**, và bắt buộc khai báo **`>= 1` `jumpscareClips[]`** (`first_frame_seamless` | `whip_pan_turn` | `diegetic_reveal` | `silence_hard_cut`) đồng bộ `<= 0.15s` với `cues.json`!
-2. **Khóa Tự Động & Kiểm Định Cổng 5 Lớp (`storyboard_proof.html`):**
+   - **`Shot 1` (`cameraMode: "cold_hook"`, `1.0–5.5s`, `first_word <= 0.45s`):** Đập thẳng hình ảnh/vật chứng gợi tò mò khớp câu Hook sạch.
+   - **`Shot 2` (`cameraMode: "master"`, `>= 60 frames`, `camMasterEstablish`):** Mở toàn cảnh không gian 3D rõ ánh sáng vật lý (`Zero Black Void`) ngay trong đoạn lõi cảm xúc con người (`5–18s`).
+   - **`Shot 3..N` (`80–90%` `camPovChain` + tối đa `1–2` `ots_same_side` `<= 22%`):** Dùng `characterMode: "sprite2d"` (nhân vật 2.5D nổi khối + 20 cử chỉ `actingCues[]`), thực thể chính **Bậc 4–7**, và bắt buộc **`1–2` `jumpscareClips[]`** đồng bộ `<= 0.15s` với `cues.json`.
+2. **Khóa Tự Động & Cổng Kiểm Duyệt 5 Lớp (`storyboard_proof.html`):**
    ```bash
    python3 scripts/align_manifest.py src/<project>/manifest.json --words out/<project>/voice/words.json --in-place
-   python3 scripts/gen_cast_assets.py src/<project>/manifest.json --update-manifest # (or --import-raw-dir <dir> on Free Tier)
+   python3 scripts/gen_cast_assets.py src/<project>/manifest.json --update-manifest # (hoặc --import-raw-dir <dir> trên Free Tier)
    python3 scripts/validate_manifest.py src/<project>/manifest.json \
      --script out/<project>/SCRIPT.md --words out/<project>/voice/words.json \
      --cues out/<project>/cues.json --strict-cinema --strict-retention \
@@ -80,8 +64,8 @@ python3 scripts/gen_horror_voice.py --script out/<project>/SCRIPT.md \
    REMOTION_TMP=/tmp/remotion-tmp node scripts/render-stills.mjs <CompId> out/<project>/stills/s_ \
      --manifest out/<project>/still_manifest.json --scale 0.75 --strict-audit
    ```
-   Tạo `storyboard_proof.html` và bắt buộc `100%` keyframe + khung nối Jumpscare vượt qua kiểm định trước khi xuất MP4.
+   Tạo `storyboard_proof.html` và bắt buộc `100%` keyframe + khung nối Jumpscare vượt qua kiểm định trước khi render MP4.
 
-## Công Thức Theo Thể Loại & Đa Tập
+## 5 Mô-Típ Kịch Bản Luân Phiên & Đa Chương
 
-Xem [HORROR_FORMULAS.md](./references/HORROR_FORMULAS.md) cho bộ khung kịch bản thực chiến của cả 3 dòng truyện chủ lực và cấu trúc nối tập Series.
+Xem [HORROR_FORMULAS.md](./references/HORROR_FORMULAS.md) cho đầy đủ 5 mô-típ kịch bản triệu view và cấu trúc nối tập Series.

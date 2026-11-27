@@ -223,16 +223,22 @@ class TestV14ViralRetentionAndVoiceTempo(unittest.TestCase):
         self.assertEqual(const["version"], "15.0.0")
         self.assertIn("cold_hook", const["cameraGrammar"]["validCameraModes"])
         sp = const["speech"]
-        self.assertGreaterEqual(sp["wordsPerSecondTarget"], 2.50)
-        self.assertGreaterEqual(sp["spokenWordsPerSecondTarget"], 3.10)
-        self.assertGreaterEqual(sp["spokenWordsPerSecondMax"], 3.55)
+        self.assertEqual(sp["defaultTtsEngine"], "vieneu")
+        self.assertAlmostEqual(sp["wordsPerSecondTarget"], 2.35, places=2)
+        self.assertAlmostEqual(sp["spokenWordsPerSecondMin"], 2.25, places=2)
+        self.assertAlmostEqual(sp["spokenWordsPerSecondTarget"], 2.75, places=2)
+        self.assertAlmostEqual(sp["spokenWordsPerSecondMax"], 3.25, places=2)
         self.assertEqual(sp["cleanTempoDefault"], 1.0)
         self.assertTrue(sp["defaultDisableTempoPitchDsp"])
 
         rv = const["retentionAndVoiceStyle"]
         self.assertLessEqual(rv["maxFirstWordStartSec"], 0.45)
         self.assertIn("viral_short", rv["pacingProfiles"])
+        self.assertIn("direct_taboo_question", rv["hookArchetypes"])
         self.assertIn("paradox_prop", rv["hookArchetypes"])
+        self.assertEqual(rv["defaultGritLevel"], "clean_folklore")
+        self.assertGreaterEqual(len(rv["storyArchetypes"]), 5)
+        self.assertIn("clean_folklore", rv["gritLevels"])
         self.assertIn("platform_safe_raw", rv["gritLevels"])
         self.assertIn("south", rv["dialectRegions"])
 

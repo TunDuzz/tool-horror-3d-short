@@ -1,6 +1,6 @@
 ---
 name: horror-3d-short
-description: Use when creating a horror story video — standalone 55-90s viral short or 150-360s multi-chapter story (9:16 default), or 8-16 min multi-part series (16:9 default) — in Horror Engine v15.0 Option A (GTX 960 low-VRAM 3D World + 2.5D Photorealistic Normal-Mapped Characters via gen_cast_assets.py & sprite2d.ts + 7-Tier Uncanny Ghost >= Tier 4 + Mandatory 1-2 First-Frame-Conditioned AI Jumpscare Video Clips via gen_jumpscare_clip.py + Crisp actionTriggerFrame & 30fps RMS Lip-Sync + 1.0x Clean Gemini TTS / --import-voice + Auto-Fetched Openverse CC0 SFX at -1.0 dBTP + Single-Source pipeline_constitution.json).
+description: Use when creating a horror story video — standalone 55-90s viral short or 150-360s multi-chapter story (9:16 default), or 8-16 min multi-part series (16:9 default) — in Horror Engine v15.0 Option A (GTX 960/960M 4-6GB low-VRAM 3D World + 2.5D Photorealistic Normal-Mapped Characters via gen_cast_assets.py & sprite2d.ts + 7-Tier Uncanny Ghost >= Tier 4 + Mandatory 1-2 Jumpscare Clips via local KlingAIResearch/LivePortrait or Analog Horror Hard-Cut + Crisp actionTriggerFrame & 30fps RMS Lip-Sync + Free 1.0x Clean VieNeu-TTS + Flexible Story-Driven audioDirection [raw_diegetic / folklore_atmospheric / cinematic_score] & 7 Jumpscare Audio Styles + Curated Local SFX with history.jsonl rotation & Quality-Filtered Openverse CC0 at -1.0 dBTP + Single-Source pipeline_constitution.json).
 ---
 
 # Horror 3D Story Video v15.0 (`Option A: Light 3D World · 2.5D Normal-Mapped Cast · AI Video Jumpscare`, Three.js + Remotion)
@@ -9,19 +9,19 @@ description: Use when creating a horror story video — standalone 55-90s viral 
 - **Workspace:** `shorts-project/` (30 fps; `9:16` `1080×1920` or `16:9` `1920×1080`; integer-dimension multipliers `--scale 1`, `1.25`, or `1.5`).
 - **Neutral Horror Engine v15.0:** `shorts-project/src/engine/` (**22 modules** including `sprite2d.ts` and `sceneAudit.ts` imported via `../engine`).
 - **GTX 960 Low-VRAM Render Mode (Default on `psxHorror`):** `ShortPlayer.tsx` disables `OpaqueNormalPass`, `SSAOEffect`, and `LensBlur`, caps `BloomEffect` to `<= 3` mip levels, renders internal WebGL at `dpr 0.45` (`0.35` draft), mounts strictly ONE `<ThreeCanvas>` context, and `render-video.mjs` defaults to `--concurrency 1` while logging hardware GL (`angle-egl` vs `swangle`) + live FPS.
-- **2.5D Photorealistic Cast + Automated AI Jumpscare + Clean Studio Audio (`GEMINI_API_KEY`):**
+- **2.5D Photorealistic Cast + Automated LivePortrait Jumpscare + Free Clean `VieNeu-TTS 1.0x` & Story-Driven `audioDirection`:**
   - `scripts/gen_cast_assets.py`: Reads `castBlueprints[]` -> generates story-driven photorealistic dark-horror/found-footage character & ghost sprites (or imports free-tier/Antigravity green-screen renders via `--import-raw-dir`) -> removes background + aligns secondary expression canvases -> synthesizes Tangent-Space Normal Maps + auto-detects anatomical `rigMeta` (`neckV`, `shoulderV`, `waistV`, `mouthV`, `shoulderSpan`, `headCenterX`) -> saves into `src/<project>/assets/cast/`.
-  - `scripts/gen_jumpscare_clip.py`: Captures clean 3D `jumpscare_anchor_frame.png` (`render-stills.mjs --raw-anchor --png`) right before the climax -> generates a 2–4s First-Frame-conditioned Jumpscare `.mp4` (`src/<project>/assets/jumpscare_<id>.mp4`) routed inside `ShortPlayer.tsx` through the exact same Grade + Grain + RetroPsx VHS pipeline beneath `HorrorHUD`.
-  - `scripts/gen_horror_voice.py` + `scripts/sfx_manager.py` + `scripts/mix_cues.py`: Exact `1.0x` natural voice (zero tempo/pitch/F0 DSP by default, prefers whole-act Gemini TTS or clean `--import-voice`), exports `rms_envelope_30fps` for frame-accurate lip-sync, auto-fetches missing CC0 SFX via `sfx_manager.py auto-fetch-for-script`, forbids procedural `synth:` unless opted in, enforces **mandatory `min_jumpscares >= 1`** (1–2 per short, >= 1/chapter for series), and masters to `-16.0 LUFS` / `-1.0 dBTP`.
+  - `scripts/gen_jumpscare_clip.py`: Captures clean 3D `jumpscare_anchor_frame.png` (`render-stills.mjs --raw-anchor --png`) right before the climax -> generates a punchy Jumpscare `.mp4` (`src/<project>/assets/jumpscare_<id>.mp4`) via `--backend auto|liveportrait|gemini|local` (in `auto`: prioritizes local **`KlingAIResearch/LivePortrait`** when `LIVEPORTRAIT_DIR`/`--liveportrait-dir` is set — auto-sizing source frames to **`512×640`** for GTX 960 / 960M `4–6GB VRAM`, using `.pkl` motions in `assets/liveportrait_motions/`, filtering out `*_concat.mp4`, testing FP16 first and supporting `--lp-fp32` if black/noisy frames occur without `--flag_do_torch_compile`, and tight `1.2–2.2s` FFmpeg horror punch post-FX; then Gemini Video; then crisp `0.7–1.1s` **Analog Horror Hard-Cut** local fallback with zero `Image.blend` ghosting; plus `--import-jumpscare <file.mp4>`). Routed inside `ShortPlayer.tsx` through the exact same Grade + Grain + RetroPsx VHS pipeline beneath `HorrorHUD`.
+  - `scripts/gen_horror_voice.py` + `scripts/sfx_manager.py` + `scripts/mix_cues.py`: Defaults to **free local `VieNeu-TTS` (`--tts-engine vieneu`) at clean `1.0x` speed** (zero `clean_tempo`/`pitch_semi`/`_align_ref_f0_to_anchor` DSP by default; prioritizes clean 5–8s `--ref-audio` storyteller samples and keeps `--import-voice`), exports `rms_envelope_30fps` for frame-accurate lip-sync, designs **story-driven audio per `audioDirection`** (`raw_diegetic` 0% score, `folklore_atmospheric`, or `cinematic_score` with optional `scoreBeds`/`music_arc` ducked `-7..-10 dB`) and **`-48 dB` `[SILENCE_DROP 0.5–1.2s]`**, prioritizes local curated **`audio/sfx_curated/`** + Openverse CC0 with **`history.jsonl` anti-repeat rotation across BOTH**, forbids procedural `synth:` unless opted in, enforces **mandatory `min_jumpscares >= 1`** across **7 story-driven Jumpscare audio styles** (`practical_impact`, `mic_emf_glitch`, `entity_breath_shriek`, `cinema_stab`, `entity_shriek`, `metal_dread`, `vhs_psx_glitch`), and masters to `-16.0 LUFS` / `-1.0 dBTP`.
 - **Automation & QA Scripts:** `shorts-project/scripts/` (`sync_workspace.py`, `constitution.py`, `horror_story.py`, `gen_cast_assets.py`, `gen_jumpscare_clip.py`, `gen_horror_voice.py`, `sfx_manager.py`, `mix_cues.py`, `align_manifest.py`, `validate_manifest.py`, `render-stills.mjs`, `audit_storyboard.py`, `render-video.mjs`, `extract_shots.py`, `short_qa.py`, `stitch_parts.py`, `validate_continuity.py`).
 
 ## Companion Skills (Activate as Needed)
 
-- **Story planning v3.2 (Viral `55–90s` Shorts & `2.5–16 min` Deep Stories — 1–5s Cold Hook, Khẩu ngữ truyền miệng 3 miền + `platform_safe_raw`, 7-tier ghost design, mandatory climax Jumpscare, 2D Floorplans & 26 quality gates):** Activate `horror-story`.
+- **Story planning v15 (Million-View Two-Step Clean Writing → Directing, 5 Rotating Story Archetypes, Clean 0–5s Non-Spoiler Hook, Human Emotional Core, 3-Tier Escalation, Optional Motifs/Occlusion, 7-tier ghost design, mandatory climax Jumpscare, 2D Floorplans & 26 gates):** Activate `horror-story`.
 - **Seamless multi-chapter production (`150–360s` Shorts via 3–5 Chapters & `8–16 min` Series via 8–15 Chapters with constant context budget):** Activate `horror-series-pipeline`.
-- **Expressive colloquial `SCRIPT.md` (0.05s Cold Hook, `align_manifest.py`, `actionTriggerFrame`, shot-scale & `story.ts` timing):** Activate `horror-script-storyboard`.
+- **Two-step clean `SCRIPT.md` (calm `2.35 w/s` effective / `2.25–3.25 w/s` spoken, ZERO `[PACE|PITCH]` tags, `examples/script_v15_sample.md`, `align_manifest.py`, `actionTriggerFrame`, shot-scale & `story.ts` timing):** Activate `horror-script-storyboard`.
 - **Non-repeating 3D worlds (`LocationBlueprint`), 2.5D Photorealistic Normal-Mapped `sprite2d.ts` cast, 7-tier horror entities, First-Frame AI Jumpscare transitions (`transitionStyle`), GTX 960 low-VRAM lookdev & practical lights:** Activate `horror-world-lookdev`.
-- **Clean 1.0x Gemini TTS / `--import-voice`, `sfx_manager.py auto-fetch-for-script`, Uncanny Hush `[SILENCE_DROP]` & Real-SFX-first Jumpscare mix (`-1.0 dBTP`):** Activate `horror-audio-sfx`.
+- **Free Clean `1.0x` `VieNeu-TTS` (`--ref-audio` / `--import-voice`), Flexible Story-Driven `audioDirection` (`raw_diegetic` / `folklore_atmospheric` / `cinematic_score`), 7 Jumpscare Audio Styles, `audio/sfx_curated/` + Openverse CC0 with `history.jsonl` Rotation & `-48 dB` `[SILENCE_DROP]` (`-1.0 dBTP`):** Activate `horror-audio-sfx`.
 
 ## Hard Workspace, Anti-Repetition & Directing Rules (`GEMINI.md`)
 
@@ -42,14 +42,14 @@ description: Use when creating a horror story video — standalone 55-90s viral 
    - **Story-Driven Transition Style (`transitionStyle` — NEVER force flashlight on unrelated stories!):** Choose per script: `first_frame_seamless` (default, locked to `jumpscare_anchor_frame.png`), `whip_pan_turn`, `diegetic_reveal` (door opening, curtain pull, fluorescent flicker, thunder flash, breaker trip — only if in script), or `silence_hard_cut` (after `[SILENCE_DROP 0.5–1.2s]`).
 4. **Anchored POV-First Cinema Grammar (`2A`), Cold Hook, `actionTriggerFrame` & RMS Lip-Sync:**
    - Shot #1 enters immediately on `cameraMode: "cold_hook"` (`<= 180 frames`, first word `<= 0.45s`) → Shot #2 `cameraMode: "master"` (`>= 60 frames`, `camMasterEstablish`), then `80–90%` continuous `camPovChain()`. Export `SHOTS = shotsFromManifest(MANIFEST)`.
-   - Use `characterMode: "sprite2d"` by default (`rig3d` remains supported as legacy fallback). `sprite2d.ts` uses a lightweight 24×36 anatomical puppet mesh with **20 composable story-driven gestures** (`shrug`, `sighDrop`, `heavyPant`, `breathHold`, `shiver`, `nodSlow`, `nodDouble`, `headShake`, `tiltListen`, `glanceAside`, `chinTuck`, `flinch`, `leanIn`, `leanBack`, `cower`, `stepSway`, `neckCrack`, `neckTwitch`, `jawStretch`, `loomSwell`, plus freeform `custom` + `customDeform`) choreographed via phrase-locked **`actingCues[]`** (`onPhrase` → `atFrame` by `align_manifest.py`, auto-seeded by `horror_story.py`) + single-draw-call multi-step expression crossfade (`exprTo`, `exprBlendFrames`). Drive actors via **`stage.ts`** (`applyManifestActors`) with **`actionTriggerFrame`** and **30fps vocal `rmsEnvelope`**.
+   - Use `characterMode: "sprite2d"` by default (`rig3d` remains supported as legacy fallback). `sprite2d.ts` uses a lightweight 24×36 anatomical puppet mesh with **20 composable story-driven gestures** (`shrug`, `sighDrop`, `heavyPant`, `breathHold`, `shiver`, `nodSlow`, `nodDouble`, `headShake`, `tiltListen`, `glanceAside`, `chinTuck`, `flinch`, `leanIn`, `leanBack`, `cower`, `stepSway`, `neckCrack`, `neckTwitch`, `jawStretch`, `loomSwell`, plus freeform `custom` + `customDeform`) choreographed via phrase-locked **`actingCues[]`** (`onPhrase` → `atFrame` by `align_manifest.py`, auto-seeded by `horror_story.py`) + single-draw-call multi-step expression crossfade (`exprTo`, `exprBlendFrames`), prioritizing smooth RMS-driven **`calm ↔ talk`** texture crossfade with ultra-subtle `wJaw` motion (zero rubbery chin warp on real photos). Drive actors via **`stage.ts`** (`applyManifestActors`) with **`actionTriggerFrame`** and **30fps vocal `rmsEnvelope`**.
    - `align_manifest.py` emits `4–8 word` `captionChunks[]` (`enabledByDefault: true`, `headerStyle: "minimal"`).
 5. **Physical Lighting (5 Presets), Practical Lights & GTX 960 Performance Discipline:**
    - Use strictly the 5 physical presets (`warmLamp`, `coldMoon`, `fluorescent`, `duskFog`, `flashlight`), up to **6 real `PointLight`s** + **1 `SpotLight`**, so 2.5D normal-mapped characters in `sprite2d.ts` receive real directional rim/key/fog shading and grounded shadows.
    - Keep `lowVram: true` (default on `psxHorror`) and single `<ThreeCanvas>` context so GTX 960 4–6GB renders smoothly on GPU (`angle-egl`) at `--concurrency 1`.
-6. **Clean 1.0x Studio Voice, Real-SFX-First & `-1.0 dBTP` Mastering:**
-   - **Zero Tempo/Pitch/F0 DSP by Default:** `gen_horror_voice.py` keeps exact `1.0x` tempo and `0.0` pitch shift (45 Hz HPF + light RMS balance only), never chops sentences on `[PACE]`/`[PITCH]`, defaults to whole-act **Gemini TTS** (`GEMINI_API_KEY`) or clean single-file `--import-voice` + Whisper forced alignment, and outputs `rms_envelope_30fps`.
-   - **Automated Real SFX:** Run `sfx_manager.py auto-fetch-for-script --cues out/<project>/cues.json --library shorts-project/audio/sfx_library` before `mix_cues.py --strict` (`min_jumpscares >= 1`, real recorded WAVs for beds/foley/jumpscare, `-16.0 LUFS`, `-1.0 dBTP`).
+6. **Free Clean `1.0x` `VieNeu-TTS`, Flexible Story-Driven `audioDirection`, Curated SFX Rotation & `-1.0 dBTP` Mastering:**
+   - **Zero Tempo/Pitch/F0 DSP by Default:** `gen_horror_voice.py` defaults to free local **`VieNeu-TTS` (`--tts-engine vieneu`)** at exact `1.0x` tempo and `0.0` pitch shift (45 Hz HPF + light RMS balance only), never chops sentences on `[PACE]`/`[PITCH]`, prioritizes clean 5–8s **`--ref-audio`** storyteller samples (zero distorting DSP) or single-file **`--import-voice`** + Whisper forced alignment, and outputs `rms_envelope_30fps`.
+   - **Flexible `audioDirection` (`requireScoreBeds: false`) & `history.jsonl` Anti-Repeat Rotation:** Run `sfx_manager.py auto-fetch-for-script --cues out/<project>/cues.json --library shorts-project/audio/sfx_library` — resolves local curated **`audio/sfx_curated/`** FIRST before quality-filtered Openverse CC0 downloads while rotating away from recently used IDs in `history.jsonl` across BOTH sources. `mix_cues.py --strict` enforces `audioDirection` (`raw_diegetic` blocks score with `RAW_DIEGETIC_SCORE_FORBIDDEN`; `folklore_atmospheric` and `cinematic_score` allow optional `scoreBeds`/`music_arc` ducked `-7..-10 dB`), drops score + ambience to **`-48 dB`** during `[SILENCE_DROP 0.5–1.2s]`, forbids `synth:` unless opted in, enforces `min_jumpscares >= 1` across **7 story-driven Jumpscare styles**, and masters to `-16.0 LUFS` / `-1.0 dBTP`.
 
 ## End-to-End 12-Step Pipeline (Engine v15.0 Option A)
 
@@ -57,13 +57,14 @@ description: Use when creating a horror story video — standalone 55-90s viral 
    ```bash
    python3 templates/scripts/sync_workspace.py --target shorts-project --include-demo
    ```
-2. **Viral Script With 0.05s Cold Hook (`55–90s` viral short or `45–105s`/chapter):**
-   - Author `SCRIPT.md` opening straight at `0.05–0.20s` with `[NARRATOR]` or `[SPEAKER]` Cold Hook (`<= 24 words`), placing `[SILENCE_DROP 0.6–1.2s]` right before the climax Jumpscare.
-3. **Clean 1.0x Neural Voice (Gemini TTS / `--import-voice`) + Whisper Forced Alignment + 30fps RMS Envelope:**
+2. **Two-Step Million-View Script (`55–90s` viral short or `45–105s`/chapter):**
+   - Step 1: Write the complete emotional, human-grounded story cleanly (0 technical tags, 1 of 5 rotating archetypes, clean 0–5s non-spoiler Hook, human emotional core, 3-tier escalation, haunting 1-line twist).
+   - Step 2: Direct into `SCRIPT.md` opening straight at `0.05–0.25s` (calm `2.35 w/s` effective / `2.25–3.25 w/s` spoken, **ZERO `[PACE|PITCH]` tags**), placing `[SILENCE_DROP 0.5–1.2s]` right before the climax Jumpscare. (See `examples/script_v15_sample.md`.)
+3. **Free Clean `1.0x` `VieNeu-TTS` (`--ref-audio` / `--import-voice`) + Whisper Forced Alignment + 30fps RMS Envelope:**
    ```bash
    python3 scripts/gen_horror_voice.py --script out/<project>/SCRIPT.md \
-     --tts-engine auto --word-aligner auto --strict-hook \
-     --out-dir out/<project>/voice --no-vc
+     --tts-engine vieneu --ref-audio audio/my_storyteller_6s.wav \
+     --word-aligner auto --strict-hook --out-dir out/<project>/voice --no-vc
    ```
    *(Or pass `--import-voice recording.wav` to ingest a clean human/RVC recording with 0% tempo/pitch DSP.)*
 4. **Author `manifest.json` (`characterMode: "sprite2d"`, Tier 4–7 entity, `jumpscareClips[]`, `shots[]`) & Lock Timeline:**
@@ -76,9 +77,9 @@ description: Use when creating a horror story video — standalone 55-90s viral 
    # Free-Tier / Antigravity image-generator import (0 API cost):
    python3 scripts/gen_cast_assets.py src/<project>/manifest.json --import-raw-dir <raw_dir> --update-manifest
    ```
-6. **Auto-Fetch Missing Real CC0 SFX & Master Mix (`mix_cues.py --strict`, `min_jumpscares >= 1`, `-1.0 dBTP`):**
+6. **Resolve Curated SFX + Quality-Filtered CC0 Fetch & Master 3-Act Score Mix (`mix_cues.py --strict`, `-1.0 dBTP`):**
    ```bash
-   python3 scripts/sfx_manager.py auto-fetch-for-script --cues out/<project>/cues.json --library audio/sfx_library
+   python3 scripts/sfx_manager.py auto-fetch-for-script --cues out/<project>/cues.json --library audio/sfx_library --curated-dir audio/sfx_curated
    python3 scripts/mix_cues.py --cues out/<project>/cues.json --out out/<project>/audio/mix.wav --strict
    ```
 7. **Pre-Render Validation (`validate_manifest.py` — Anti-Repeat Location + 2D Cast + Tier >= 4 + Jumpscare AV Sync):**
@@ -89,10 +90,15 @@ description: Use when creating a horror story video — standalone 55-90s viral 
      --registry LOCATION_REGISTRY.json --update-registry --still-out out/<project>/still_manifest.json
    ```
 8. **Scaffold `story.ts`, `build.ts`, `world.ts`, `index.tsx` & Typecheck (`npx tsc --noEmit` -> Exit 0).**
-9. **Generate First-Frame-Conditioned Jumpscare AI Video Clip (`src/<project>/assets/jumpscare_<id>.mp4`):**
+9. **Generate Jumpscare Video Clip (`KlingAIResearch/LivePortrait` GTX 960/960M 4–6GB / Gemini / Analog Horror Local / `--import-jumpscare`):**
    ```bash
-   python3 scripts/gen_jumpscare_clip.py src/<project>/manifest.json --comp <CompId> --workspace . --overwrite
+   # Auto: prioritizes local KlingAIResearch/LivePortrait (LIVEPORTRAIT_DIR, 512x640 source; test FP16 first, add --lp-fp32 if black/noisy frames) -> Gemini -> 0.7-1.1s Analog Horror Hard-Cut
+   python3 scripts/gen_jumpscare_clip.py src/<project>/manifest.json \
+     --comp <CompId> --all --workspace . --backend auto --overwrite
+   # Or import an external Jumpscare clip directly:
+   python3 scripts/gen_jumpscare_clip.py src/<project>/manifest.json --import-jumpscare custom_scare.mp4 --overwrite
    ```
+   *(See `INSTALL_GUIDE.md` §2B for GTX 960 / 960M `4–6GB VRAM` Python 3.10 + `torch==2.3.0+cu118` setup and `.pkl` horror motions.)*
 10. **Mandatory 5-Layer Semantic Still Gate (`--strict-audit` -> `storyboard_proof.html`) + Jumpscare Seam Visual Check:**
     ```bash
     REMOTION_TMP=/tmp/remotion-tmp node scripts/render-stills.mjs <CompId> out/<project>/stills/s_ \

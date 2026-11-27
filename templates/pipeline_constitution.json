@@ -11,12 +11,13 @@
     "singleWebglContext": true
   },
   "speech": {
-    "wordsPerSecondMin": 2.05,
-    "wordsPerSecondTarget": 2.65,
-    "wordsPerSecondMax": 3.20,
-    "spokenWordsPerSecondMin": 2.55,
-    "spokenWordsPerSecondTarget": 3.25,
-    "spokenWordsPerSecondMax": 3.65,
+    "defaultTtsEngine": "vieneu",
+    "wordsPerSecondMin": 1.95,
+    "wordsPerSecondTarget": 2.35,
+    "wordsPerSecondMax": 2.85,
+    "spokenWordsPerSecondMin": 2.25,
+    "spokenWordsPerSecondTarget": 2.75,
+    "spokenWordsPerSecondMax": 3.25,
     "minVisualBreathingRatio": 0.14,
     "cleanTempoDefault": 1.0,
     "defaultDisableTempoPitchDsp": true,
@@ -28,8 +29,6 @@
       "[DEAD SILENCE Xs]"
     ],
     "inlineClauseTags": [
-      "PACE",
-      "PITCH",
       "PROX"
     ]
   },
@@ -38,19 +37,31 @@
     "maxOpeningHookSec": 5.0,
     "maxOpeningHookWords": 24,
     "viralShortMaxBeatSec": 15.0,
+    "defaultGritLevel": "clean_folklore",
+    "requireProfanityQuota": false,
     "pacingProfiles": [
       "viral_short",
       "deep_story"
     ],
     "hookArchetypes": [
+      "immediate_danger",
+      "direct_taboo_question",
+      "survivor_confession",
       "paradox_prop",
       "blunt_taboo_dialogue",
       "flash_forward_crisis",
       "raw_confession"
     ],
+    "storyArchetypes": [
+      "twisted_childhood_memory_or_festival",
+      "everyday_folk_taboo",
+      "abandoned_location_true_tale",
+      "familiar_doppelganger",
+      "family_secret_or_survival_rule"
+    ],
     "gritLevels": [
-      "platform_safe_raw",
-      "clean_folklore"
+      "clean_folklore",
+      "platform_safe_raw"
     ],
     "dialectRegions": [
       "north",
@@ -65,10 +76,36 @@
     "hardMaxJumpscaresSeriesPerPart": 2,
     "maxBeds": 2,
     "preferRealSfxOnly": true,
-    "requireAcousticMotif": true,
+    "requireAcousticMotif": false,
+    "requireOcclusionTrigger": false,
+    "requireScoreBeds": false,
+    "validAudioDirections": [
+      "raw_diegetic",
+      "folklore_atmospheric",
+      "cinematic_score"
+    ],
+    "validJumpscareAudioStyles": [
+      "practical_impact",
+      "mic_emf_glitch",
+      "entity_breath_shriek",
+      "cinema_stab",
+      "entity_shriek",
+      "metal_dread",
+      "vhs_psx_glitch"
+    ],
     "forbidAutoReverseSuckBeforeSilence": true,
     "targetLufs": -16.0,
     "jumpscareTruePeakDb": -1.0,
+    "silenceDropFloorDb": -48.0,
+    "scoreDuckDbDefault": -8.5,
+    "scoreDuckDbRange": [-10.0, -7.0],
+    "curatedSfxDir": "audio/sfx_curated",
+    "curatedSfxCategories": [
+      "dark_drone",
+      "sad_piano",
+      "stinger",
+      "ambience"
+    ],
     "targetLraMin": 6.5,
     "validSpaceZones": [
       "close_ear",

@@ -1,6 +1,6 @@
-# Hướng Dẫn Cài Đặt & Sử Dụng Chi Tiết — Horror 3D Short & Series (`v14.0`)
+# Hướng Dẫn Cài Đặt & Sử Dụng Chi Tiết — Horror 3D Short & Series (`v15.5`)
 
-Tài liệu này hướng dẫn cài đặt trọn gói bộ kỹ năng **Horror Engine v14.0** (bao gồm `horror-3d-short` + 5 companion skills + 21 module Engine 3D + Pipeline Voice/Soundscape) và quy trình tạo một video kinh dị mới từ đầu đến file MP4 hoàn chỉnh.
+Tài liệu này hướng dẫn cài đặt trọn gói bộ kỹ năng **Horror Engine v15.5** (bao gồm `horror-3d-short` + 5 companion skills + 22 module Engine 3D/2.5D + `KlingAIResearch/LivePortrait` cục bộ tối ưu cho **GTX 960 / 960M `4–6GB VRAM`** + Pipeline `VieNeu-TTS 1.0x` & âm thanh linh hoạt theo kịch bản `audioDirection`) và quy trình tạo một video kinh dị mới từ đầu đến file MP4 hoàn chỉnh.
 
 ---
 
@@ -93,29 +93,122 @@ python3 scripts/sfx_manager.py verify --library audio/sfx_library
 
 ---
 
-## 3. Quy Trình Sản Xuất 1 Video Kinh Dị Mới Chuẩn `v14.0`
+## 2B. Cài Đặt `KlingAIResearch/LivePortrait` Cho GPU GTX 960 / 960M (`4–6GB VRAM`, Windows & Linux)
 
-Bạn có thể gõ yêu cầu trực tiếp cho AI Agent (ví dụ: *"Làm video kinh dị ngắn 60s giọng Bắc về chiếc máy bàn cắt dây vẫn đổ chuông"*), hoặc tự chạy từng bước theo pipeline chuẩn sau:
+Engine v15.5 tích hợp hoàn toàn tự động bản gốc chính chủ **[KlingAIResearch/LivePortrait](https://github.com/KlingAIResearch/LivePortrait)** *(tuyệt đối KHÔNG dùng nhánh `Hekenye/LivePortrait-AudioDriven`)* để biến ảnh cận mặt thực thể ma thành clip Jumpscare chuyển động tự nhiên **0đ chi phí API** ngay trên card **Maxwell GTX 960 / GTX 960M (`4–6GB VRAM`)**.
 
-### Bước 1 — Lên Kịch Bản & Kiểm Định 26 Cổng (`horror_story.py` v3.2)
+> **Tối ưu thực chiến cho card `4GB VRAM` (như GTX 960M):**
+> - `gen_jumpscare_clip.py` tự động thu ảnh nguồn đầu vào về **`512×640`** (nhẹ hơn ~40% VRAM so với `720×960` mà vẫn giữ sắc nét vùng mắt/miệng).
+> - Nên **thử chạy mặc định FP16 trước** để tiết kiệm VRAM tối đa; **chỉ bật thêm `--lp-fp32`** nếu card Maxwell gặp hiện tượng khung hình đen hoặc nhiễu màu.
+> - **Đóng bớt trình duyệt nặng / Remotion Studio** trước khi chạy LivePortrait trên card 4GB VRAM để tránh đầy bộ nhớ GPU.
 
-- Chọn chế độ **`viral_short`** (`55–90s`, nhịp dồn dập, mở nút thắt mỗi `8–14s`) hoặc **`deep_story`** (`2.5–10 phút`, đa hồi/tập).
-- Chọn giọng vùng miền (`north` | `central` | `south`) và độ thật ngôn ngữ (`platform_safe_raw` cho phép *"Mẹ kiếp"*, *"Chó chết"*, *"Bỏ mẹ rồi"*... đúng chuẩn kiểm duyệt nền tảng).
+### 1. Tạo Môi Trường Python 3.10 Riêng & Cài `torch==2.3.0` CUDA 11.8 (`cu118`)
+Kiến trúc Maxwell (GTX 960 / 960M) hoạt động ổn định nhất với **PyTorch `2.3.0` bản CUDA 11.8 (`cu118`)**:
+
+- **Linux / WSL2 (Bash — dùng `venv` chuẩn hoặc Conda đều được):**
+  ```bash
+  git clone https://github.com/KlingAIResearch/LivePortrait.git ~/LivePortrait
+  cd ~/LivePortrait
+
+  # Cách 1 (không cần Conda — khuyên dùng trên Ubuntu Python 3.10):
+  python3 -m venv .venv && source .venv/bin/activate
+  # Hoặc Cách 2 (nếu dùng Conda):
+  # conda create -n liveportrait python=3.10 -y && conda activate liveportrait
+
+  # BẮT BUỘC cài đúng torch 2.3.0 + cu118 tương thích GTX 960 / 960M Maxwell
+  pip install --no-cache-dir torch==2.3.0 torchvision==0.18.0 torchaudio==2.3.0 --index-url https://download.pytorch.org/whl/cu118
+  pip install --no-cache-dir -r requirements.txt "huggingface_hub[cli]"
+
+  # Lưu ý riêng cho card Maxwell Compute 5.0 (GTX 960M) trên Linux venv:
+  # 1) onnxruntime-gpu 1.18 đã bỏ nhân sm_50 -> đổi riêng sang onnxruntime CPU (chỉ chạy bước tách mặt 0.1s; 100% mạng LivePortrait vẫn chạy GPU!)
+  pip uninstall -y onnxruntime-gpu && pip install --no-cache-dir onnxruntime==1.18.0
+  # 2) Tạo liên kết libnvrtc.so nếu máy chưa cài system CUDA 11.8 toolkit (gen_jumpscare_clip.py tự nạp LD_LIBRARY_PATH)
+  ln -sf libnvrtc.so.11.2 .venv/lib/python3.10/site-packages/nvidia/cuda_nvrtc/lib/libnvrtc.so
+  ```
+
+- **Windows 10/11 (PowerShell):**
+  ```powershell
+  git clone https://github.com/KlingAIResearch/LivePortrait.git C:\AI\LivePortrait
+  cd C:\AI\LivePortrait
+
+  conda create -n liveportrait python=3.10 -y
+  conda activate liveportrait
+
+  pip install torch==2.3.0 torchvision==0.18.0 torchaudio==2.3.0 --index-url https://download.pytorch.org/whl/cu118
+  pip install -r requirements.txt
+  pip install "huggingface_hub[cli]"
+  ```
+
+### 2. Tải Trọng Số `pretrained_weights` Từ HuggingFace
+```bash
+# Đứng tại thư mục gốc LivePortrait
+huggingface-cli download KwaiVGI/LivePortrait --local-dir pretrained_weights --exclude "*.git*" "README.md" "docs"
+```
+Kiểm tra tồn tại các tệp trọng số trong `pretrained_weights/liveportrait/` và `pretrained_weights/insightface/`.
+
+### 3. Khai Báo Biến Môi Trường `LIVEPORTRAIT_DIR` & Chạy An Toàn Trên GTX 960 / 960M
+- **Linux / macOS:**
+  ```bash
+  export LIVEPORTRAIT_DIR="$HOME/LivePortrait"
+  # Trỏ vào Python trong .venv (hoặc môi trường conda) của LivePortrait:
+  export LIVEPORTRAIT_PYTHON="$HOME/LivePortrait/.venv/bin/python"
+  ```
+- **Windows PowerShell:**
+  ```powershell
+  $env:LIVEPORTRAIT_DIR = "C:\AI\LivePortrait"
+  $env:LIVEPORTRAIT_PYTHON = "$env:USERPROFILE\miniconda3\envs\liveportrait\python.exe"
+  ```
+- Chạy tạo Jumpscare hoàn toàn tự động (thử mặc định FP16 nhẹ VRAM trước; chỉ thêm `--lp-fp32` nếu thấy khung hình đen/nhiễu; hệ thống luôn tắt `--flag_do_torch_compile`, thu ảnh nguồn `512×640` và tự lọc bỏ `*_concat.mp4`):
+  ```bash
+  python3 scripts/gen_jumpscare_clip.py src/<project>/manifest.json \
+    --comp <CompId> --all --workspace shorts-project \
+    --backend auto --overwrite
+  # Nếu gặp khung hình đen/nhiễu trên Maxwell, chạy lại kèm cờ FP32:
+  python3 scripts/gen_jumpscare_clip.py src/<project>/manifest.json \
+    --comp <CompId> --all --workspace shorts-project \
+    --backend auto --lp-fp32 --overwrite
+  ```
+  *(Bạn cũng có thể nạp thẳng clip ngoài bằng `--import-jumpscare my_scare.mp4`, hoặc ép chạy Analog Horror Hard-Cut `0.7–1.1s` bằng `--backend local`.)*
+
+### 4. Tạo & Lưu 3–4 File Mẫu Cử Động Kinh Dị `.pkl` Vào `assets/liveportrait_motions/`
+Dùng file `.pkl` giúp bỏ qua bước trích xuất chuyển động từ video mỗi lần chạy (**nhanh hơn 2–3 lần trên GTX 960**):
+1. Tự quay bằng điện thoại **3–4 đoạn video ngắn 2–3 giây** (mặt nhìn thẳng ống kính, đủ sáng):
+   - `creepy_smile.mp4`: mặt vô cảm rồi nhếch nụ cười kéo dài trợn mắt *(dùng cho `scareTier 5`)*.
+   - `neck_snap_stare.mp4`: mặt đứng im rồi giật nghiêng cổ gắt sang một bên *(dùng cho `scareTier 6` / `whip_pan_turn`)*.
+   - `wide_eye_lunge.mp4`: mở to mắt, há hàm và lao mạnh sát ống kính *(dùng cho `scareTier 7` / `silence_hard_cut`)*.
+   - `head_tilt_stare.mp4`: nghiêng đầu chậm rồi bất ngờ trừng mắt *(dùng cho `scareTier 4` / `diegetic_reveal`)*.
+2. Chạy `inference.py` **1 lần duy nhất** trên từng đoạn `.mp4` — `LivePortrait` sẽ tự xuất kèm file **`.pkl`** ngay cạnh video nguồn:
+   ```bash
+   cd "$LIVEPORTRAIT_DIR"
+   python inference.py -s assets/examples/source/s0.jpg -d /path/to/creepy_smile.mp4 --no_flag_use_half_precision
+   ```
+3. Copy toàn bộ file `.pkl` vừa tạo (`creepy_smile.pkl`, `neck_snap_stare.pkl`, `wide_eye_lunge.pkl`, `head_tilt_stare.pkl`) vào `shorts-project/assets/liveportrait_motions/`. Từ các video sau, `gen_jumpscare_clip.py` sẽ tự động chọn đúng file `.pkl` khớp với `scareTier` & `transitionStyle` của từng kịch bản!
+
+---
+
+## 3. Quy Trình Sản Xuất 1 Video Kinh Dị Mới Chuẩn `v15.5`
+
+Bạn có thể gõ yêu cầu trực tiếp cho AI Agent hoặc tự chạy tuần tự từng bước theo pipeline chuẩn sau (không nhảy cóc):
+
+### Bước 1 — Lên Kịch Bản & Kiểm Định Tuần Tự (`horror_story.py` v3.2)
+
+- Chọn chế độ **`viral_short`** (`55–90s`, nhịp kể điềm tĩnh `2.35 w/s`, mở nút thắt tự nhiên) hoặc **`deep_story`** (`2.5–10 phút`, đa hồi/tập).
+- Chọn giọng vùng miền (`north` | `central` | `south`) và phong cách ngôn ngữ tự nhiên (`clean_folklore` mặc định — không ép quota chửi thề, không ép motif đồng hồ/chốt cửa).
 
 ```bash
 cd ./shorts-project
 mkdir -p out/du-an-moi src/du-an-moi
 
-# Tạo khung story.json v3.2
+# Tạo khung story.json v3.2 (tự gợi ý audioDirection theo thể loại)
 python3 scripts/horror_story.py seed \
   --title "Tên Truyện" \
-  --format micro --total-sec 65 \
+  --format micro --total-sec 68 \
   --pacing-profile viral_short \
   --dialect north \
-  --grit-level platform_safe_raw \
+  --grit-level clean_folklore \
   --out out/du-an-moi/story.json
 
-# Sau khi hoàn thiện nội dung story.json: kiểm tra 26/26 cổng (bao gồm Gate 26 Hook 1-5s & Khẩu ngữ)
+# Sau khi hoàn thiện nội dung story.json: kiểm tra tuần tự toàn bộ cổng kiểm định
 python3 scripts/horror_story.py validate out/du-an-moi/story.json --stage full --strict-story
 
 # Xuất HTML Bible (Tension Curve SVG + 2D Floorplan) & khung blueprint
@@ -124,42 +217,42 @@ python3 scripts/horror_story.py export-blueprint out/du-an-moi/story.json \
   --project-id du-an-moi --out out/du-an-moi/blueprint
 ```
 
-### Bước 2 — Hoàn Thiện `SCRIPT.md` Chuẩn Cold Hook `0.05s`
+### Bước 2 — Hoàn Thiện `SCRIPT.md` Hai Bước Sạch (0 Thẻ `[PACE|PITCH]`)
 
-Tham khảo mẫu chuẩn tại [examples/may-noi-bo-204-v14/SCRIPT_v14.md](./examples/may-noi-bo-204-v14/SCRIPT_v14.md):
-- **Không** đặt `[VISUAL 2.60s]` hay kể năm tháng/thời tiết ở đầu file.
-- Đánh thẳng vào biến cố bằng câu đầu `<= 24 từ` ngay `0.05–0.25s`.
-- Dùng `[BEAT 0.20s..0.35s]` để ngắt nhịp đắt giá và `[SILENCE_DROP 1.10s..1.40s]` trước thoại thì thầm sát tai `[PROX=close]`.
-- Nhân vật phụ dùng `[SPEAKER: TÊN | profile=elder_female_north | mood=tense | fx=room|phone|adjacent_muffled]`.
+Tham khảo mẫu chuẩn v15 tại [examples/script_v15_sample.md](./examples/script_v15_sample.md):
+- **Bước 1 (Sáng tác sạch):** Viết trọn câu chuyện đời thật, Hook `0–5s` không lộ bài, lõi cảm xúc con người, leo thang 3 tầng, câu chốt dư âm — **0 thẻ kỹ thuật**.
+- **Bước 2 (Đạo diễn):** Không đặt `[VISUAL Xs]` ở đầu file; đánh thẳng câu đầu ngay `0.05–0.25s`, dùng khoảng nghỉ sạch `[BEAT 0.35s]` và `[SILENCE_DROP 0.6s..1.1s]` trước cú Jumpscare, chỉ dùng thẻ bản địa như `[thở dài]` (tuyệt đối không gắn `[PACE=... | PITCH=...]`).
 
-### Bước 3 — Tổng Hợp Giọng Đọc & Căn Khớp Từng Từ (`< 35ms`)
+### Bước 3 — Tổng Hợp Giọng Đọc `VieNeu-TTS 1.0x` Sạch & Căn Khớp Từng Từ (`< 35ms`)
 
 ```bash
 python3 scripts/gen_horror_voice.py \
   --script out/du-an-moi/SCRIPT.md \
   --tts-engine vieneu \
-  --speaker-lock \
+  --ref-audio audio/my_storyteller_6s.wav \
   --word-aligner auto \
   --strict-hook \
   --out-dir out/du-an-moi/voice \
   --no-vc
 ```
-*Kiểm tra log: `first_word <= 0.45s` (không có `[HOOK WARN]`), tốc độ nói `3.10–3.55 w/s` (`<= 3.65 w/s`), tốc độ hiệu dụng `2.55–3.05 w/s`.*
+*Kiểm tra log: `first_word <= 0.45s` (không có `[HOOK WARN]`), tốc độ gốc `1.0x` sạch (0% DSP bóp tempo/pitch), xuất `rms_envelope_30fps` trong `words.json`.*
 
-### Bước 4 — Tìm Thêm Foley CC0 (Nếu Cần) & Mix Âm Thanh `-16.0 LUFS` (`mix_cues.py --strict`)
+### Bước 4 — Tự Lấy SFX Theo Kịch Bản (Ưu Tiên `sfx_curated/` + Xoay Vòng `history.jsonl`) & Mix Linh Hoạt (`mix_cues.py --strict`)
 
 ```bash
-# Tìm & tải thêm SFX thực tế từ Openverse CC0
-python3 scripts/sfx_manager.py search-openverse --query "old telephone ring" --fresh --library audio/sfx_library
-python3 scripts/sfx_manager.py fetch-openverse --id <UUID> --name old_phone_ring --category tension --library audio/sfx_library
+# Tự tìm SFX theo từ khóa kịch bản: ưu tiên audio/sfx_curated/ + xoay vòng history.jsonl -> Openverse CC0 có lọc chất lượng
+python3 scripts/sfx_manager.py auto-fetch-for-script \
+  --cues out/du-an-moi/cues.json \
+  --library audio/sfx_library \
+  --curated-dir audio/sfx_curated
 
-# Mix giọng + 2 lớp nền (near/far có automation lọc trầm) + motif lặp + [SILENCE_DROP] (0 Jumpscare mặc định)
+# Mix theo audioDirection khai báo trong cues.json (raw_diegetic / folklore_atmospheric / cinematic_score), min_jumpscares >= 1, -1.0 dBTP
 python3 scripts/mix_cues.py \
   --cues out/du-an-moi/cues.json \
   --out out/du-an-moi/audio/mix.wav \
   --strict
 ```
-Kiểm tra `out/du-an-moi/audio/mix_report.md`: `I = -16.0 LUFS`, `LRA >= 6.5 LU`, `TP <= -1.2 dBTP`, `0` clips, `0` warnings.
+Kiểm tra `out/du-an-moi/audio/mix_report.md`: đúng `audioDirection`, `I = -16.0 LUFS`, `TP <= -1.0 dBTP`, `0` clips, `0` lỗi.
 
 ### Bước 5 — Khóa Khung Hình `SceneManifest`, Dựng Cảnh 3D & Kiểm Duyệt 5 Tầng
 

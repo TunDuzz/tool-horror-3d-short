@@ -1,88 +1,69 @@
-# Cẩm Nang Biên Kịch Kinh Dị Thực Chiến v14.0 (`STORYTELLING_CRAFT.md` · 1–5s Viral Hook & Khẩu Ngữ Truyền Miệng Việt Nam)
+# Cẩm Nang Biên Kịch Kinh Dị Triệu View v15 (`STORYTELLING_CRAFT.md` · Nhân Bản, 5 Mô-Típ & `VieNeu-TTS 1.0x`)
 
-> **Nguyên lý Sống còn trên Thị trường Hiện tại:** Khán giả quyết định lướt bỏ hay ở lại chỉ trong **`1.5 – 4.5 giây đầu tiên`**. Nỗi sợ thật không đến từ câu văn mẫu sướt mướt tả thời tiết hay những màn hù Jumpscare rẻ tiền — nó đến từ **cách kể chuyện truyền miệng đời thật sát sạt như người trong cuộc vừa thoát chết kể lại**, **ngôn từ khẩu ngữ vùng miền gắt gọn**, **một chi tiết vô lý đập thẳng vào mắt ngay giây `0.1`**, và **âm thanh đời thường bỗng dưng đổi quy luật**.
-
----
-
-## 1. Luật Sinh Tử `0.1s – 4.5s`: 4 Đòn Cold Hook Cấm Lướt Qua (`Gate 26`)
-
-**TUYỆT ĐỐI CẤM** đặt `[VISUAL 2.6s]` không lời ở đầu video và **TUYỆT ĐỐI CẤM** mở bài bằng ngày tháng / thời tiết / tên tuổi (*"Đêm cuối năm 2003, gió bấc rít..."*, *"Tháng 10 năm 1999, tôi tên Nam..."*). Giọng đọc + 1 tiếng động thực địa phải nổ ngay ở **`0.05s – 0.25s`** trên `Shot 1` (`cameraMode: "cold_hook"`, cận cảnh vật chứng hoặc hành động) theo 1 trong **4 đòn chủ lực**:
-
-| Mã `hookArchetype` | Công thức 1–5s đầu (`<= 24 từ`) | Ví dụ Thực Chiến (Đúng chất Truyền miệng Việt Nam) |
-|---|---|---|
-| **`paradox_prop`** *(Nghịch lý vật chứng tại chỗ)* | Đưa thẳng đồ vật đang làm điều bất khả thi ra trước mặt + 1 câu chửi thảng thốt | *(0.1s tiếng chuông bàn nảy cạch)* ***"Mẹ kiếp... cái điện thoại bàn trước mặt tôi vừa đổ chuông, dù dây đồng dưới gầm bàn đã bị cắt đứt từ ba tháng trước."*** |
-| **`blunt_taboo_dialogue`** *(Lời cấm kỵ gắt trực diện)* | Nhân vật phụ quát/dặn thẳng quy tắc ngược đời ngay giây `0.1` (không giới thiệu người nói trước!) | ***"Mày muốn sống tới sáng thì câm cái miệng lại! Sau một giờ đêm nghe ai réo tên ngoài bến phà, có là giọng má mày cũng đừng có thưa!"*** |
-| **`flash_forward_crisis`** *(Đỉnh sinh tử tua ngược)* | Đặt thẳng vào giây ngạt thở nhất rồi gãy gọn lùi lại 15 phút trước | ***"Tay tôi giữ chặt cái chốt sắt đang tự trượt mở từ bên ngoài... Giá mà nửa tiếng trước tôi đừng dại mở cuốn sổ giao ca đấy ra."*** |
-| **`raw_confession`** *(Lời thú nhận hậu quả ám ảnh)* | Giọng người thật kể chuyện trà đá vỉa hè / ca đêm vừa bỏ nghề | ***"Thề với chúng mày, từ sau cái đêm trực ở khu nội trú B2 đấy, có cho vàng tôi cũng chả dám ngủ phòng khóa chốt trong nữa."*** |
-
-Ngay sau câu Hook (`4.5s – 12s`), chuyển sang `Shot 2` (`cameraMode: "master"`) để lộ toàn cảnh phòng 3D và **chỉ dùng tối đa `1–2` câu ngắn** chốt lý do mắc kẹt (`trappedReason`: vì sao không bỏ về ngay được).
+> **Nguyên Lý Cốt Lõi v15:** Người xem không ở lại vì những câu chửi thề gượng gạo hay mô-típ trực đêm lặp đi lặp lại. Họ xem đến giây cuối — và để lại bình luận — khi câu chuyện **mở thẳng bằng một điểm neo tò mò không lộ bài**, **khiến họ thật sự thương/lo cho nhân vật trong 15 giây đầu**, **leo thang mạch lạc qua 3 tầng từ đời thường đến xâm lấn vùng an toàn**, **bùng nổ đúng 1 cú Jumpscare sắc nét**, và **khép lại bằng 1 câu chốt lật ngược chi tiết ban đầu**.
 
 ---
 
-## 2. Khẩu Ngữ Đời Thật & Ngôn Từ Mạnh Có Kiểm Soát (`gritLevel: "platform_safe_raw"`)
+## 1. Quy Trình Viết Tách Biệt 2 Bước (Cấm Trộn Lẫn Sáng Tác Với Thẻ Kỹ Thuật)
 
-Khi con người thật ngoài đời đụng chuyện tà ma hay bị dồn vào góc chết, không ai độc thoại kiểu văn mẫu *"Một cảm giác lạnh lẽo bao trùm lấy tâm trí tôi"*. Họ phản ứng bằng **câu ngắn, đứt hơi và buột miệng cảm thán mạnh**.
+### Bước 1 — Sáng Tác Sạch (0 Thẻ Kỹ Thuật)
+- Viết toàn bộ câu chuyện như **một người từng trải đang ngồi kể lại chuyện thật** bằng văn nói tự nhiên, điềm tĩnh, giàu cảm xúc — **tuyệt đối 0 thẻ `[BEAT]`, `[PROX]`, `[VISUAL]`, `[PACE]`, `[PITCH]`**.
+- Đọc nhẩm thành tiếng từ đầu đến cuối: nếu bản chữ trơn chưa khiến chính bạn thấy thương nhân vật, thấy rợn ở câu chốt và muốn đọc lại chi tiết ở đầu, **chưa chuyển sang Bước 2**.
 
-### Quy tắc dùng ngôn từ mạnh trong ngưỡng an toàn nền tảng (`platform_safe_raw`)
-- **ĐƯỢC PHÉP & KHUYẾN KHÍCH (`1 – 3` lần/phút đúng đỉnh ức chế, giật mình hoặc cảnh báo gắt):**
-  - Nhóm bàng hoàng / buột miệng: **`"Mẹ kiếp"`**, **`"Chết tiệt"`**, **`"Bỏ mẹ rồi"`**, **`"Thôi bỏ bố rồi"`**, **`"Má ơi"`**, **`"Trời đất quỷ thần ơi"`**, **`"Điên cái đầu"`**.
-  - Nhóm ức chế / gắt gỏng đời thực: **`"Chó chết"`**, **`"Khốn nạn thật"`**, **`"Tổ cha nó"`**, **`"Khỉ gió"`**, **`"Mặc xác nó"`**, **`"Câm cái họng lại"`**, **`"Đừng có dại"`**.
-- **NGUYÊN TẮC VÀNG:** Đặt từ mạnh **đúng khoảnh khắc tâm lý bị bẻ gãy** (ví dụ: lúc phát hiện dây điện đã đứt, lúc ông bảo vệ quát lính mới, lúc kéo chốt cửa mà chốt kẹt cứng). **Không lạm dụng câu nào cũng chửi** khiến thoại bị rẻ tiền; và **TUYỆT ĐỐI CẤM** các từ tục nhạy cảm trực diện (`đ.m`, `đéo`, `v.l`...) để video không bị TikTok / YouTube Shorts bóp đề xuất hoặc tắt kiếm tiền.
-
-### Bảng Chuyển Đổi Từ "Văn Viết Mùi AI" Sang "Khẩu Ngữ Truyền Miệng Gọn Sắc"
-
-| ❌ Văn mẫu AI rườm rà (CẤM DÙNG — bị Gate 25/26 chặn) | ✅ Khẩu ngữ Truyền miệng Đời thật (Gọn, Sắc, Thật) |
-|---|---|
-| *"Một cảm giác lạnh lẽo bao trùm lấy cơ thể tôi khiến tôi vô cùng kinh hãi."* | *"Sống lưng tôi lạnh toát, gai ốc nổi rần rần dọc hai cánh tay."* |
-| *"Bất giác tôi nhận ra có điều gì đó vô cùng bất thường ở chiếc đồng hồ."* | *"Chết tiệt... lúc ngước lên nhìn cái đồng hồ treo tường, tôi mới điếng người."* |
-| *"Bà Hạnh nhẹ nhàng căn dặn tôi không nên nhấc ống nghe vào ban đêm."* | *"Bà Hạnh chỉ thẳng tay vào cái máy bàn, gằn giọng: Đêm nó có kêu cạch cái nào thì kệ xác nó, cấm được nhấc!"* |
-| *"Không gian xung quanh trở nên đặc quánh sự im lặng đáng sợ."* | *"Cả dãy hành lang tự dưng im thít... đến tiếng gió ngoài khe cửa cũng tắt phựt."* |
+### Bước 2 — Đạo Diễn & Đánh Dấu
+- Sau khi chốt câu chuyện hay ở Bước 1 mới chia nhịp cảnh/shot, gắn người nói (`[NARRATOR]`, `[SPEAKER: ...]`), khoảng nghỉ sạch (`[BEAT Xs]`, `[VISUAL Xs]`), thẻ bản địa tự nhiên nếu cần (`[thở dài]`), khoảng rút im lặng **`[SILENCE_DROP 0.5–1.2s]`** trước cao trào và điểm nổ **Jumpscare** khớp khung hình.
+- **TUYỆT ĐỐI KHÔNG chèn `[PACE=... | PITCH=...]`** vào `SCRIPT.md`: giữ đoạn văn liền mạch để **`VieNeu-TTS 1.0x`** đọc tự nhiên, tròn dấu tiếng Việt, không bị cắt vụn hay méo tiếng.
 
 ---
 
-## 3. Từ Điển Phương Ngữ & Chất Liệu Tâm Linh 3 Miền (`dialectRegion` ↔ `VieNeu-TTS`)
+## 2. Khóa 4 Nguyên Tắc Nội Dung Triệu View
 
-Mỗi kịch bản phải chọn rõ `dialectRegion` (`"north" | "central" | "south"`) để lời ăn tiếng nói của nhân vật khớp 100% với bối cảnh địa lý và giọng đọc vùng miền của `VieNeu-TTS`:
+### Nguyên tắc 1: Hook `0–5s` Sạch & CẤM Lộ Bài Sớm (`<= 24 từ`, nổ ở `0.05–0.25s`)
+**TUYỆT ĐỐI CẤM** mở đầu bằng thời tiết / ngày tháng / giới thiệu tên (*"Đêm cuối năm..."*, *"Tháng 10 năm..."*) và **TUYỆT ĐỐI CẤM kể trước đáp án cú lật cuối ngay ở câu mở đầu**. Chọn 1 trong **3 kiểu Hook sạch**:
 
-### Miền Bắc (`dialectRegion: "north"` — Giọng `Thiện Minh`, `Ngọc Linh`, `Hải Đăng`, `Thiền Tâm Đức`, `Trúc Ly`)
-- **Xưng hô & Khẩu ngữ:** *tôi/tao – ông/bà/bác/mày/chúng mày; cơ mà, thế quái nào, chả hiểu kiểu gì, dở hơi, im thít, tối om như mực, lạnh sun cả người, rợn hết cả gáy, bủn rủn chân tay.*
-- **Chất liệu tâm linh truyền miệng Bắc Bộ:** Khu tập thể cũ thời bao cấp cầu thang tối, nhà cổ ngõ sâu Hà Nội, đò ngang bãi bồi sông Hồng, tiếng chổi tre quét lá xào xạc lúc 2 giờ sáng, bát hương tự bốc chân nhang, chó tru ma đầu ngõ, kiêng gọi tên thật ban đêm, ca trực bệnh viện tuyến huyện mùa gió mùa Đông Bắc.
+| Mã `hookArchetype` | Kiểu Hook `0–5s` | Mục tiêu tâm lý | Ví dụ chuẩn (điềm tĩnh, không lộ bài) |
+|---|---|---|---|
+| **`immediate_danger`** *(Vào thẳng tình huống nguy hiểm)* | Đưa thẳng người xem vào khoảnh khắc nhân vật đang đối diện một dấu hiệu bất thường ngay trước mắt | Kéo nhịp tim lên ngay giây đầu mà vẫn giấu nguyên nhân | *"Cánh cửa buồng khép hờ, còn tiếng bà ngoại từ trong bếp vẫn đều đều gọi tôi ra ăn cơm cho nóng."* |
+| **`direct_taboo_question`** *(Câu hỏi / lời kiêng kỵ trực diện)* | Chạm ngay vào một điều kiêng kỵ dân gian hoặc thói quen quen thuộc ai cũng từng nghe | Kích hoạt trí nhớ cá nhân của người xem trong 3 giây | *"Ở quê bạn có từng nghe người lớn dặn: đêm về thấy đôi dép trong nhà tự úp ngược trước bậu cửa, tuyệt đối đừng gọi tên người ở trong chưa?"* |
+| **`survivor_confession`** *(Lời thú nhận của người sống sót)* | Giọng kể trầm tĩnh của người đã bước qua biến cố, thừa nhận một thói quen vĩnh viễn thay đổi | Tạo cảm giác chuyện có thật 100%, gợi tò mò "đã xảy ra chuyện gì?" | *"Từ sau lần về quê giỗ ông năm hai mươi tuổi, đến tận bây giờ tôi không bao giờ dám trả lời khi nghe tiếng người nhà gọi mình từ phòng tối nữa."* |
 
-### Miền Trung (`dialectRegion: "central"` — Giọng `Quang Sơn`, `Ngọc Trân`)
-- **Xưng hô & Khẩu ngữ:** *tau/tui – mi/bây/ôn/mệ; răng, rứa, mô, tê, nớ, chi lạ rứa trời, khỉ gió thiệt chớ, lạnh thấu xương, im bặt, khiếp vía.*
-- **Chất liệu tâm linh truyền miệng miền Trung:** Miếu âm hồn cua tay áo trên đèo vắng, mùa mưa bão ngập trắng đồng, ghe cá gặp tiếng người xin quá giang ngoài cửa biển, nhà rường cổ rêu phong, bình vôi đầu đa, tiếng guốc mộc gõ nhịp ngoài hiên gạch.
+### Nguyên tắc 2: Lõi Cảm Xúc Con Người (`5–18s`)
+- Trước khi hù, phải cho người xem **một lý do để lo cho nhân vật** bằng 1 chi tiết thật gắn với gia đình, bạn bè hoặc mưu sinh: *nồi canh bà ngoại giữ ấm cho cháu về khuya*, *cuốn vở cũ của đứa em gái*, *chuyến xe cuối tháng gom tiền gửi về quê*, *bức ảnh chụp chung mùa trung thu năm nhỏ*.
+- Chính chi tiết ấm áp này sẽ trở thành **mỏ neo để cú lật cuối cùng bẻ ngược** và gây ám ảnh gấp đôi.
 
-### Miền Nam / Miền Tây (`dialectRegion: "south"` — Giọng `Thái Sơn`, `Đức Trí`, `Thục Đoan`, `Mỹ Duyên`)
-- **Xưng hô & Khẩu ngữ:** *tui/tao – mày/tụi bây/ổng/bả/chú Tư/dì Bảy; thiệt tình, hồi nãy, kỳ cục vậy trời, lạnh xương sống, nổi da gà cục cục, tối thui, im re, chạy bán sống bán chết.*
-- **Chất liệu tâm linh truyền miệng Nam Bộ:** Bến phà đêm mùa nước nổi, ghe thương hồ đậu ngã ba sông, tiếng chèo xuồng khua nước không bóng người, rặng bần / bụi chuối sau hè, tiếng rao hủ tiếu gõ lúc 2 giờ khuya nhưng nồi nước lèo toàn lá đa, bàn thờ Ông Thiên ngoài sân tắt nhang đột ngột.
+### Nguyên tắc 3: Leo Thang 3 Tầng, Cấm Tả Cảnh Thừa
+Mỗi câu đều phải đẩy cốt truyện tiến thêm một bước (không dừng lại tả gió rít hay bóng đêm rườm rà):
+1. **Tầng 1 — Dấu hiệu mơ hồ bị cười gạt (`18–34s`):** Chi tiết nhỏ hơi lệch bình thường (đôi dép úp ngược, lời bài đồng dao thiếu một chữ, tiếng dép lê ngoài hiên) mà nhân vật tự giải thích hợp lý hóa như người thật.
+2. **Tầng 2 — Xâm lấn vùng an toàn (`34–50s`):** Thứ bất thường vượt qua ranh giới quen thuộc: giả giọng người thân nhưng lặp lại nguyên văn một câu vô cảm, tiếng động phát ra ở nơi không thể có người, vật chứng bắt đầu phản bác trí nhớ của nhân vật.
+3. **Tầng 3 — Đối mặt trực diện thực thể bậc 4–7 + Điểm nổ Jumpscare (`50–62s`):** Rút im lặng **`[SILENCE_DROP 0.5–1.2s]`** (kéo sạch cả nhạc nền lẫn môi trường xuống `-48 dB`) → lộ diện thực thể ma bậc 4–7 không nhạt nhòa kết hợp cú nổ Jumpscare đồng bộ hình–tiếng.
 
----
-
-## 4. Hai Kiến Trúc Nhịp Kịch Bản Tách Bạch (`pacingProfile`)
-
-### Chế độ 1: `viral_short` *(Mặc định cho Short dọc `55s – 90s`, ~`145–210 từ`)*
-Áp dụng **Luật Giữ Chân 10 Giây (`Open-Loop Micro-Escalation`)** — không một `actionBeat` nào được kéo lê quá `15 giây` mà không ném ra một tình tiết mới:
-1. **`0.0s – 4.5s` (`Cold Hook` · `Shot 1: cold_hook`):** Đập thẳng nghịch lý / câu cấm kỵ gắt / phản ứng buột miệng ngay giây `0.1` + tiếng động thực địa.
-2. **`4.5s – 14s` (`Snap Context` · `Shot 2: master`):** `1–2` câu gọn sắc giải thích vì sao nhân vật kẹt lại đây (`trappedReason`) + mở toàn cảnh phòng.
-3. **`14s – 30s` (`Cài Luật & Va Chạm Đầu Tiên` · `OTS` + `POV`):** Thoại trực tiếp gắt gọn của người giao ca / hàng xóm / tờ giấy cảnh báo + hành động vật lý (gài chốt, kiểm tra đồ).
-4. **`30s – 46s` (`Âm Lặp Đếm Nhịp & Dị Biến Leo Thang` · `camPovChain`):** Chi tiết đời thường bắt đầu sai lệch (đồng hồ đứng kim, tiếng gõ lửng ở nhịp thứ hai, bóng lướt qua kính mờ). Sử dụng câu chuyển giữ chân: *"Nhưng cái làm tôi đứng tim không phải tiếng động ngoài cửa..."*.
-5. **`46s – 56s` (`Đứt Nhịp Motif + [SILENCE_DROP 1.2s]`):** Âm lặp tắt bặt → toàn bộ nền rút êm `-38 dB` → một âm vi tế sát tai (`breath_close_ear` / thoại `whisper` `prox=close`).
-6. **`56s – 68s` (`Cú Lật Vật Chứng Sắc Lạnh — 0 Jumpscare`):** Lia máy thẳng vào bằng chứng vật lý không thể chối cãi (dây điện đã cắt đứt phủ bụi, dòng sổ thứ 13 còn ướt nước sông, đôi dép bùn nằm sẵn dưới gầm giường mình đang ngồi) → **Cắt dứt khoát ngay đỉnh lạnh gáy!**
-
-### Chế độ 2: `deep_story` *(Cho Phim Ngắn Đa Chương `2.5–6 phút` & Series `8–15 phút`)*
-- **Chương 1 (`P01`) VẪN BẮT BUỘC mở bằng Cold Hook `0.1s – 5.0s`** (kiểu `flash_forward_crisis` hoặc `raw_confession`), sau đó mới triển khai **Đường cong Răng cưa (Sawtooth Dread Curve)**:
-  - **Hồi 1 (`P01`):** Cold Hook 4s → Đời thường sống động + `trappedReason` + Gieo Manh mối `CL01` + Dị biến cấp 1. *(0 Jumpscare)*
-  - **Hồi 2 (`P02–P03`):** Nhân vật thông minh chủ động kiểm chứng (khóa chốt, thử đèn, hỏi dò) → Gieo đánh lạc hướng (`red_herring`) → Thực thể leo cấp 2.
-  - **Hồi 3 (`Midpoint`):** Khoảng thở giả an toàn (`False Relief` `tension <= 4`) → Bằng chứng lật ngược biến nơi trú ẩn thành cái bẫy khóa kín (`tension >= 8`).
-  - **Hồi 4–5 (`Cao trào & Giải mã`):** `[SILENCE_DROP]` / `[DEAD SILENCE]` → Đỉnh cao trào → Xâu chuỗi lại toàn bộ `clues[]` (`recontextualization`) khiến khán giả muốn tua lại từ đầu.
+### Nguyên tắc 4: Cái Kết Dư Âm Ám Ảnh (`62–75s`)
+- Không giảng giải dài dòng sau cao trào. Dùng đúng **1 câu chốt lạnh người** lật ngược hoàn toàn chi tiết đã cài ở `5–18s` (ví dụ: cuộc gọi/tin nhắn chứng minh người thân không hề ở nhà, tấm ảnh cũ hé lộ người đứng cạnh mình vốn không tồn tại), để lại khoảng dư âm kích thích người xem bình luận và xem lại từ giây đầu.
 
 ---
 
-## 5. Kỷ Luật Âm Thanh Sống & Nhịp Giọng Sắc Gọn (`v14.0`)
+## 3. Mở Rộng 5 Mô-Típ Cốt Truyện Luân Phiên (Không Đóng Khung 1 Khuôn)
 
-1. **Nhịp Giọng Nhanh Gọn (`2.55–3.05 từ/s` tổng · `3.10–3.50 từ/s` khi nói):**
-   - Không rề rà ru ngủ! Chỉ chèn `[BEAT 0.18–0.28s]` ngay trước từ khóa đắt nhất, và chỉ chèn `[VISUAL 0.9–1.6s]` ở nhịp chuyển hành động vật lý **sau** giây thứ 5.
-2. **Âm Thanh Là Nhân Vật Sống (`0 Jumpscare` Mặc Định):**
-   - Luôn có `2` lớp nền (`near` trong phòng + `far` ngoài trời tự đục trầm khi đóng cửa), `>= 1` âm thanh lặp (`motifs[]`) đứt nhịp ở cao trào, và ưu tiên `[SILENCE_DROP]` thay cho tiếng hú Jumpscare rẻ tiền.
-3. **Khóa Ngữ Nghĩa Hình – Lời (`mustShow` / `storyboard_proof.html`):**
-   - Mọi vật chứng được nhắc tới trong câu Hook và câu Twist (dây điện đứt, chốt sắt, thẻ phòng 204, cuốn sổ ướt) phải được khai báo trong `mustShow` và vượt qua kiểm định 5 lớp trước khi xuất video.
+Luân phiên đều giữa **5 mô-típ** sau giữa các video (tuyệt đối không quay vòng mỗi mô-típ *"ca trực đêm + người đi trước dặn"*):
+
+1. **Ký ức / Đồng dao / Lễ hội quen thuộc bị bẻ cong:** Đêm rước đèn trung thu, trò trốn tìm sân đình, câu đồng dao ru ngủ hay mâm cỗ cúng giao thừa bị thiếu đi một mảnh ghép quen thuộc.
+2. **Điều kiêng kỵ dân gian đời thường ai cũng từng nghe:** Úp ngược dép trong nhà, gõ đũa lên miệng bát, gọi tên thật ban đêm, soi gương lúc 12 giờ khuya, nhặt tiền lẻ ngã ba.
+3. **Chuyện có thật ở địa điểm bỏ hoang:** Trường cấp hai cũ giải tỏa, khu tập thể cũ mất điện, rạp chiếu bóng bỏ không, nhà kho bến tàu, trạm xá cũ cuối xã.
+4. **Người thân giả mạo (*Doppelgänger*):** Giọng mẹ/bà gọi ra ăn cơm từ bếp tối, người anh đứng quay lưng ngoài ban công không bao giờ ngoái mặt, đứa em đứng chờ đầu ngõ dù đang ngủ trên gác.
+5. **Bí mật gia đình / Luật sinh tồn:** Căn phòng luôn khóa của ông nội, cuốn sổ tay ghi quy tắc nhà mới thuê, tục lệ ăn cơm để thêm một đôi đũa mỗi dịp rằm tháng bảy.
+
+---
+
+## 4. Giọng Kể Điềm Tĩnh, Tự Nhiên & Phương Ngữ 3 Miền (`VieNeu-TTS 1.0x`)
+
+- **Bỏ hoàn toàn quota ép chửi thề `1–3 lần/phút`:** Không nhồi nhét *"Mẹ kiếp"*, *"Bỏ mẹ rồi"* vào đầu/cuối mọi video. Giữ mặc định **`gritLevel: "clean_folklore"`** — giọng kể điềm tĩnh, chân thực, đối thoại đời thường đúng tính cách từng nhân vật.
+- **Cấm văn mẫu AI:** Loại bỏ triệt để *"một cảm giác lạnh lẽo bao trùm"*, *"bất giác tôi nhận ra"*, *"không gian đặc quánh"*, *"tựa hồ như"*, *"tôi cảm thấy vô cùng kinh hãi"*. Tả nỗi sợ bằng phản ứng cơ thể thật (*cổ họng khô rát*, *tay cầm chìa khóa khựng lại*, *sống lưng lạnh dọc xuống*).
+- **Đồng bộ phương ngữ 3 miền với giọng `VieNeu-TTS 1.0x`:**
+  - **Miền Bắc (`north`):** *tôi – ông/bà/cô/chú; im thít, tối om, lạnh dọc sống lưng, khựng lại* (`Thiện Minh`, `Ngọc Linh`, `Thiền Tâm Đức`, `Trúc Ly`).
+  - **Miền Trung (`central`):** *tui/tau – mệ/ôn/chú; răng, rứa, mô, tê, im bặt, lạnh thấu xương* (`Quang Sơn`, `Ngọc Trân`).
+  - **Miền Nam / Miền Tây (`south`):** *tui – má/ngoại/chú Tư/dì Bảy; hồi nãy, thiệt tình, im re, tối thui, nổi da gà* (`Thái Sơn`, `Đức Trí`, `Thục Đoan`, `Mỹ Duyên`).
+- **Nhịp nói điềm tĩnh, có độ thở tự nhiên (`pipeline_constitution.json` v15):**
+  - Tốc độ tổng mục tiêu: **`2.35 từ/s`** (`~155–175 từ` cho video `65–75s`).
+  - Tốc độ lúc đang nói: **`2.25 – 3.25 từ/s`** (mục tiêu **`2.75 từ/s`**).
+  - Không ép mọi truyện phải có đồng hồ đứng kim, giọt nước nhỏ hay cảnh sập chốt cửa sắt (`requireAcousticMotif: false`, `requireOcclusionTrigger: false`) — chỉ dùng khi thực sự phục vụ cốt truyện.
+- **Khóa Ngữ Nghĩa Hình – Lời (`storyboard_proof.html`):** Mọi vật chứng then chốt của Hook và Cú lật cuối phải có mặt trong `mustShow` và vượt qua kiểm định 5 lớp trước khi xuất video.

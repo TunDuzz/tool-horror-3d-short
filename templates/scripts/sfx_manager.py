@@ -35,6 +35,8 @@ SR_LIB = 48000
 OPENVERSE_API = "https://api.openverse.org/v1/audio/"
 ALLOWED_COMMERCIAL_LICENSES = {"cc0", "pdm", "by", "by-sa"}
 CC0_GITHUB_RAW_BASE = "https://raw.githubusercontent.com/lavenderdotpet/CC0-Public-Domain-Sounds/main"
+CURATED_CATEGORIES = ("dark_drone", "sad_piano", "stinger", "ambience")
+CURATED_AUDIO_EXTS = (".wav", ".flac", ".mp3", ".ogg", ".m4a")
 
 # 25 verified 100% CC0 / Public Domain real-recorded horror Foley & ambience assets (zero API key required, commercial-safe!)
 # Tuple: (slug, category, repo_rel_path, vi_desc, highpass_hz, max_dur_sec)
@@ -865,6 +867,210 @@ def _query_from_slug(slug: str, label: str = "") -> str:
     return " ".join(words)
 
 
+def resolve_curated_dir(lib_dir: str, curated_dir: str | None = None) -> str:
+    """Resolve local curated SFX folder (`audio/sfx_curated/`) sibling to `audio/sfx_library/`."""
+    if curated_dir:
+        return os.path.abspath(curated_dir)
+    return os.path.join(os.path.dirname(os.path.abspath(lib_dir)), "sfx_curated")
+
+
+def infer_curated_category(slug: str, category: str = "") -> str | None:
+    """Map an asset slug/category onto one of the 4 curated folders: `dark_drone`, `sad_piano`, `stinger`, `ambience`."""
+    cat_l = str(category or "").strip().lower()
+    if cat_l in CURATED_CATEGORIES:
+        return cat_l
+    s = safe_slug(slug)
+    if any(k in s for k in ("piano", "melancholy", "lullaby", "music_box", "sad", "warm_pad", "act1")):
+        return "sad_piano"
+    if any(k in s for k in ("drone", "sub_bass", "sub_swell", "sub_boom", "dark_ambient", "pressure", "aftermath", "act2", "swell")):
+        return "dark_drone"
+    if any(k in s for k in ("stinger", "jumpscare", "screech", "violin", "stab", "shriek", "scream", "braam")):
+        return "stinger"
+    if cat_l in ("tension", "stinger"):
+        return "stinger"
+    if cat_l in ("ambience", "bed") or any(k in s for k in ("room_tone", "rain", "wind", "ambience", "night_", "alley", "hum")):
+        return "ambience"
+    return None
+
+
+def find_curated_sfx(
+    slug: str,
+    category: str = "",
+    curated_dir: str | None = None,
+    lib_dir: str | None = None,
+    exclude_ids: set[str] | None = None,
+) -> tuple[str | None, str | None]:
+    """Look up a hand-picked local WAV/audio file inside `audio/sfx_curated/` BEFORE querying Openverse.
+
+    Returns `(matched_path, matched_category_or_exact)` or `(None, None)`.
+    - Always checks exact slug match in `sfx_curated/` and its 4 category subdirs (`dark_drone`, `sad_piano`, `stinger`, `ambience`).
+    - For score/drone/piano/stinger/ambience roles, rotates away from recently used curated files in `exclude_ids` (`history.jsonl`)
+      when multiple variants exist in the category folder so 10 videos never repeat the exact same sound!
+    - For specific story Foley (`category == 'foley'`), only exact slug matches return a curated file so unique script Foley still fetches cleanly from Openverse.
+    """
+    cdir = curated_dir or (resolve_curated_dir(lib_dir) if lib_dir else None)
+    if not cdir or not os.path.isdir(cdir):
+        return None, None
+    s_clean = safe_slug(os.path.splitext(os.path.basename(str(slug)))[0])
+    if not s_clean:
+        return None, None
+    excl = exclude_ids or set()
+
+    # 1. Exact stem match at curated root or inside any curated category subfolder
+    for ext in CURATED_AUDIO_EXTS:
+        p_root = os.path.join(cdir, s_clean + ext)
+        if os.path.isfile(p_root):
+            return p_root, "exact"
+    for cat in CURATED_CATEGORIES:
+        sub_d = os.path.join(cdir, cat)
+        if not os.path.isdir(sub_d):
+            continue
+        for ext in CURATED_AUDIO_EXTS:
+            p_sub = os.path.join(sub_d, s_clean + ext)
+            if os.path.isfile(p_sub):
+                return p_sub, cat
+
+    # 2. Category-group match for score beds, drones, sad piano, stingers, and ambience (with anti-repeat history rotation!)
+    cat_l = str(category or "").strip().lower()
+    if cat_l == "foley":
+        return None, None
+    inferred = infer_curated_category(s_clean, cat_l)
+    if not inferred:
+        return None, None
+    sub_d = os.path.join(cdir, inferred)
+    if not os.path.isdir(sub_d):
+        return None, None
+    files = sorted(
+        f for f in os.listdir(sub_d)
+        if os.path.isfile(os.path.join(sub_d, f)) and f.lower().endswith(CURATED_AUDIO_EXTS)
+    )
+    if not files:
+        return None, None
+
+    # Prefer curated variants NOT used in recent videos (`history.jsonl`), falling back to all files if every variant was used
+    fresh_files = [
+        f for f in files
+        if f"curated:{inferred}:{f}" not in excl and safe_slug(os.path.splitext(f)[0]) not in excl
+    ]
+    pool = fresh_files if fresh_files else files
+
+    slug_toks = {t for t in s_clean.split("_") if len(t) >= 3}
+    best_file = None
+    best_score = 0
+    for f in pool:
+        f_toks = {t for t in safe_slug(os.path.splitext(f)[0]).split("_") if len(t) >= 3}
+        score = len(slug_toks & f_toks)
+        if score > best_score:
+            best_score = score
+            best_file = f
+    if best_file:
+        return os.path.join(sub_d, best_file), inferred
+
+    idx = sum(ord(ch) for ch in s_clean) % len(pool)
+    return os.path.join(sub_d, pool[idx]), inferred
+
+
+def _decode_raw_samples_for_qa(audio_path: str) -> tuple[np.ndarray, int]:
+    """Decode any audio file (WAV/MP3/OGG/FLAC) into float64 [-1, 1] samples WITHOUT normalizing or limiting."""
+    ext = os.path.splitext(audio_path)[1].lower()
+    wav_src = audio_path
+    tmp_wav = None
+    try:
+        if ext != ".wav":
+            fd, tmp_wav = tempfile.mkstemp(prefix="sfx_qa_", suffix=".wav")
+            os.close(fd)
+            subprocess.run(
+                ["ffmpeg", "-y", "-v", "error", "-i", audio_path, "-ac", "2", "-c:a", "pcm_s16le", tmp_wav],
+                check=True,
+            )
+            wav_src = tmp_wav
+        with wave.open(wav_src, "rb") as wf:
+            nch = wf.getnchannels()
+            sw = wf.getsampwidth()
+            sr = wf.getframerate()
+            raw = wf.readframes(wf.getnframes())
+        if sw == 2:
+            arr = np.frombuffer(raw, dtype="<i2").astype(np.float64) / 32768.0
+        elif sw == 3:
+            b = np.frombuffer(raw, dtype=np.uint8).reshape(-1, 3)
+            vals = (b[:, 0].astype(np.int32) | (b[:, 1].astype(np.int32) << 8) | (b[:, 2].astype(np.int32) << 16))
+            vals = np.where(vals >= 0x800000, vals - 0x1000000, vals)
+            arr = vals.astype(np.float64) / float(1 << 23)
+        elif sw == 4:
+            arr = np.frombuffer(raw, dtype="<i4").astype(np.float64) / float(1 << 31)
+        else:
+            from scipy.io import wavfile
+            sr, data = wavfile.read(wav_src)
+            arr = data.astype(np.float64)
+            if np.max(np.abs(arr)) > 1.5:
+                arr = arr / float(np.max(np.abs(arr)))
+        if nch > 1 and arr.ndim == 1:
+            arr = arr.reshape(-1, nch)
+        return arr, int(sr)
+    finally:
+        if tmp_wav and os.path.exists(tmp_wav):
+            os.remove(tmp_wav)
+
+
+def validate_sfx_audio_quality(
+    audio_path: str,
+    category: str = "foley",
+    min_dur_s: float | None = None,
+) -> tuple[bool, str, dict]:
+    """v15.3 Openverse Quality Filter: reject unusable downloads before adding to `sfx_library/`.
+
+    Rejects:
+      1. Clips shorter than `min_dur_s` (default `0.40s` for bed/drone/score/ambience, `0.15s` for spot foley).
+      2. Near-silent files (`rms_dbfs < -50.0` or `peak_dbfs < -32.0`).
+      3. Heavily clipped/distorted files (`clip_ratio > 0.01` at `|x| >= 0.998`, or >= 64 consecutive pinned samples).
+    """
+    cat_l = str(category or "foley").strip().lower()
+    is_bed_like = cat_l in ("ambience", "bed", "score", "dark_drone", "sad_piano", "drone")
+    eff_min_dur = float(min_dur_s) if min_dur_s is not None else (0.40 if is_bed_like else 0.15)
+    try:
+        arr, sr = _decode_raw_samples_for_qa(audio_path)
+    except Exception as exc:
+        return False, f"decode_error: {exc}", {}
+
+    n_frames = arr.shape[0] if arr.ndim >= 1 else 0
+    dur_s = round(n_frames / float(max(1, sr)), 4)
+    if n_frames == 0 or dur_s < eff_min_dur:
+        return False, f"too_short ({dur_s:.2f}s < {eff_min_dur:.2f}s for {cat_l})", {"dur_s": dur_s}
+
+    flat = arr.reshape(-1)
+    peak = float(np.max(np.abs(flat)))
+    rms = float(np.sqrt(np.mean(np.square(flat)) + 1e-18))
+    peak_dbfs = round(20.0 * math.log10(max(peak, 1e-9)), 2)
+    rms_dbfs = round(20.0 * math.log10(max(rms, 1e-9)), 2)
+    clipped_mask = np.abs(flat) >= 0.998
+    clip_count = int(np.sum(clipped_mask))
+    clip_ratio = clip_count / float(max(1, flat.size))
+
+    # Measure longest consecutive hard-clipped run (detects brickwalled distortion without falsely rejecting lively transient peaks)
+    max_consec = 0
+    if clip_count >= 32:
+        padded = np.concatenate(([False], clipped_mask, [False]))
+        diff = np.diff(padded.astype(np.int8))
+        starts = np.where(diff == 1)[0]
+        ends = np.where(diff == -1)[0]
+        if len(starts) and len(ends):
+            max_consec = int(np.max(ends - starts))
+
+    metrics = {
+        "dur_s": dur_s,
+        "peak_dbfs": peak_dbfs,
+        "rms_dbfs": rms_dbfs,
+        "clip_count": clip_count,
+        "clip_ratio": round(clip_ratio, 5),
+        "max_consec_clips": max_consec,
+    }
+    if rms_dbfs < -50.0 or peak_dbfs < -32.0:
+        return False, f"near_silent (rms={rms_dbfs:.1f} dBFS, peak={peak_dbfs:.1f} dBFS)", metrics
+    if clip_ratio > 0.05 or max_consec >= 32:
+        return False, f"heavily_clipped (ratio={clip_ratio*100:.2f}%, max_run={max_consec})", metrics
+    return True, "ok", metrics
+
+
 def auto_fetch_for_script(
     cues_path: str,
     lib_dir: str,
@@ -874,12 +1080,14 @@ def auto_fetch_for_script(
     max_dur: float = 25.0,
     http_get_fn=None,
     download_fn=None,
+    curated_dir: str | None = None,
 ) -> dict:
-    """v15.0: Inspect `cues.json` and automatically download + normalize any missing real CC0 SFX from Openverse."""
+    """v15.3: Resolve curated local SFX (`audio/sfx_curated/`) FIRST, then download + quality-filter missing CC0 SFX from Openverse."""
     with open(cues_path, encoding="utf-8") as fp:
         cfg = json.load(fp)
 
     os.makedirs(lib_dir, exist_ok=True)
+    eff_curated_dir = resolve_curated_dir(lib_dir, curated_dir or cfg.get("curated_dir"))
     mf = load_manifest(lib_dir)
     mf_assets = mf.setdefault("assets", {})
     excl = load_recent_history(lib_dir) if fresh else set()
@@ -905,7 +1113,24 @@ def auto_fetch_for_script(
 
     for b in cfg.get("beds") or []:
         if isinstance(b, dict) and b.get("sound"):
-            _add_need(b.get("sound"), "ambience", str(b.get("search_query") or b.get("query") or ""), str(b.get("label") or ""), min_s=3.0, max_s=180.0)
+            _add_need(b.get("sound"), "ambience", str(b.get("search_query") or b.get("query") or ""), str(b.get("label") or ""), min_s=0.4, max_s=180.0)
+    for sb in (cfg.get("scoreBeds") or cfg.get("score_beds") or []):
+        if isinstance(sb, dict) and sb.get("sound"):
+            s_cat = infer_curated_category(str(sb["sound"]), str(sb.get("category") or "")) or "dark_drone"
+            _add_need(sb.get("sound"), s_cat, str(sb.get("search_query") or sb.get("query") or ""), str(sb.get("label") or "Psychological score bed"), min_s=0.4, max_s=240.0)
+    music_arc = cfg.get("music_arc")
+    if isinstance(music_arc, dict):
+        arc_defaults = {
+            "act1": ("sad_piano", "sad minimal piano dark ambient horror"),
+            "act2": ("dark_drone", "dark sub bass ambient drone horror tension"),
+            "aftermath": ("dark_drone", "cold dark ambient drone lingering"),
+        }
+        for act_k, (d_cat, d_q) in arc_defaults.items():
+            entry = music_arc.get(act_k)
+            if isinstance(entry, str) and entry.strip():
+                _add_need(entry.strip(), d_cat, d_q, f"Score {act_k}", min_s=0.4, max_s=240.0)
+            elif isinstance(entry, dict) and entry.get("sound"):
+                _add_need(entry.get("sound"), d_cat, str(entry.get("search_query") or entry.get("query") or d_q), str(entry.get("label") or f"Score {act_k}"), min_s=0.4, max_s=240.0)
     for m in cfg.get("motifs") or []:
         if isinstance(m, dict) and m.get("sound"):
             _add_need(m.get("sound"), "foley", str(m.get("search_query") or m.get("query") or ""), str(m.get("label") or ""), min_s=0.15, max_s=15.0)
@@ -913,21 +1138,26 @@ def auto_fetch_for_script(
         if not isinstance(ev, dict):
             continue
         if ev.get("sound"):
-            cat = "tension" if ev.get("jumpscare") or ev.get("role") in ("impact", "tension") else "foley"
+            cat = "stinger" if ev.get("jumpscare") else ("tension" if ev.get("role") in ("impact", "tension") else "foley")
             _add_need(ev.get("sound"), cat, str(ev.get("search_query") or ev.get("query") or ""), str(ev.get("label") or ""), min_s=0.15, max_s=25.0)
+        if ev.get("pre_swell_sound"):
+            _add_need(ev.get("pre_swell_sound"), "dark_drone", str(ev.get("pre_swell_query") or "dark horror sub drone swell"), "Jumpscare pre-swell", min_s=0.4, max_s=25.0)
         if ev.get("sub_sound"):
-            _add_need(ev.get("sub_sound"), "tension", str(ev.get("sub_query") or "cinematic sub bass boom horror"), "Jumpscare sub boom", min_s=0.4, max_s=15.0)
+            _add_need(ev.get("sub_sound"), "stinger", str(ev.get("sub_query") or "cinematic sub bass boom horror"), "Jumpscare sub boom", min_s=0.4, max_s=15.0)
         if ev.get("jumpscare") and not ev.get("sound"):
-            # Ensure at least one real recorded jumpscare sting exists locally
             default_js_slugs = {
-                "cinema_stab": ("jumpscare_shock_stab_ov", "horror jumpscare sting shock"),
+                "practical_impact": ("heavy_door_slam", "heavy wooden door slam bang impact"),
+                "mic_emf_glitch": ("emf_glitch_buzz", "analog static radio interference glitch burst"),
+                "entity_breath_shriek": ("jumpscare_entity_shriek_ov", "scary sudden gasp shriek horror"),
+                "cinema_stab": ("jumpscare_shock_stab_ov", "horror jumpscare violin screech sting"),
                 "entity_shriek": ("jumpscare_entity_shriek_ov", "horror monster shriek scream"),
                 "metal_dread": ("jumpscare_metal_screech_ov", "horror metal screech impact"),
                 "vhs_psx_glitch": ("jumpscare_scream_ov", "horror glitch scream burst"),
             }
             js_slug, js_q = default_js_slugs.get(str(ev["jumpscare"]).lower(), ("jumpscare_shock_stab_ov", "horror jumpscare sting"))
-            _add_need(js_slug, "tension", js_q, f"Real recorded jumpscare ({ev['jumpscare']})", min_s=0.3, max_s=12.0)
+            _add_need(js_slug, "stinger", js_q, f"Real recorded jumpscare ({ev['jumpscare']})", min_s=0.3, max_s=12.0)
 
+    curated: list[str] = []
     fetched: list[str] = []
     skipped: list[str] = []
     failed: list[dict] = []
@@ -935,6 +1165,43 @@ def auto_fetch_for_script(
     for item in needed:
         slug = item["slug"]
         dst_wav = os.path.join(lib_dir, f"{slug}.wav")
+
+        # 1. PRIORITY: Local curated library (`audio/sfx_curated/`) with `history.jsonl` anti-repeat rotation
+        cur_src, cur_grp = find_curated_sfx(
+            slug, category=item["category"], curated_dir=eff_curated_dir, lib_dir=lib_dir, exclude_ids=excl
+        )
+        if cur_src:
+            try:
+                peak_ceil = -4.0 if item["category"] in ("ambience", "dark_drone", "sad_piano") else -2.0
+                hp_hz = 35.0 if item["category"] in ("ambience", "sad_piano") else 0.0
+                cur_max = max(max_dur, 90.0) if item["category"] in ("ambience", "dark_drone", "sad_piano") else max_dur
+                convert_to_library_wav(cur_src, dst_wav, max_dur=cur_max, highpass_hz=hp_hz, peak_ceil_db=peak_ceil)
+                m = inspect_wav_metrics(dst_wav)
+                env = analyze_sfx_envelope(dst_wav)
+                cur_id = f"curated:{cur_grp}:{os.path.basename(cur_src)}"
+                mf_assets[slug] = {
+                    "file": f"{slug}.wav",
+                    "category": item["category"],
+                    "desc": item["desc"],
+                    "dur": m["dur"],
+                    "peak_dbfs": m["peak_dbfs"],
+                    "clips": m["clips"],
+                    "onset_s": env["onset_s"],
+                    "peak_s": env["peak_s"],
+                    "tail_end_s": env["tail_end_s"],
+                    "rms_dbfs": env["rms_dbfs"],
+                    "license": "CURATED-LOCAL",
+                    "source": cur_id,
+                    "attribution": f"Local curated asset ({cur_grp}/{os.path.basename(cur_src)})",
+                }
+                excl.add(cur_id)
+                curated.append(slug)
+                print(f"  [CURATED-SFX] Resolved {slug}.wav ({m['dur']:.2f}s) <- sfx_curated/{cur_grp}/{os.path.basename(cur_src)}")
+                continue
+            except Exception as exc:
+                print(f"  [WARN] Failed to normalize curated SFX {cur_src}: {exc}; falling back to library/Openverse")
+
+        # 2. Existing normalized file in `audio/sfx_library/`
         if os.path.isfile(dst_wav) and os.path.getsize(dst_wav) >= 256:
             if slug not in mf_assets or "onset_s" not in mf_assets[slug]:
                 env = analyze_sfx_envelope(dst_wav)
@@ -944,11 +1211,13 @@ def auto_fetch_for_script(
             skipped.append(slug)
             continue
 
+        # 3. Openverse CC0 search + candidate quality filtering (reject < 0.4s beds/drones, heavy clipping, near-silence)
         queries = [item["query"]]
         toks = item["query"].split()
         if len(toks) > 2:
             queries.append(" ".join(toks[:2]))
-        chosen = None
+        candidates: list[dict] = []
+        seen_ids: set[str] = set()
         for q in queries:
             try:
                 hits = openverse_search(
@@ -961,62 +1230,87 @@ def auto_fetch_for_script(
                     exclude_ids=excl,
                     http_get_fn=http_get_fn,
                 )
-            except Exception as exc:
+            except Exception:
                 hits = []
-                last_err = str(exc)
-            if hits:
-                chosen = hits[0]
+            for h in hits:
+                hid = str(h.get("id") or h.get("url") or "")
+                if hid and hid not in seen_ids:
+                    seen_ids.add(hid)
+                    candidates.append(h)
+            if candidates:
                 break
-        if not chosen:
+
+        if not candidates:
             failed.append({"slug": slug, "query": item["query"], "error": "No commercial-safe Openverse match found"})
             continue
 
-        try:
-            peak_ceil = -4.0 if item["category"] == "ambience" else -3.0
-            hp_hz = 45.0 if item["category"] != "tension" else 0.0
-            with tempfile.TemporaryDirectory(prefix="ov_auto_") as td:
-                ext = os.path.splitext(urllib.parse.urlparse(chosen["url"]).path)[1].lower() or ".wav"
-                tmp_dl = os.path.join(td, f"{slug}{ext}")
-                if download_fn is not None:
-                    download_fn(chosen["url"], tmp_dl)
-                else:
-                    req = urllib.request.Request(chosen["url"], headers={"User-Agent": "HorrorEngineV15-OpenverseSFX/1.0"})
-                    with urllib.request.urlopen(req, timeout=30) as resp, open(tmp_dl, "wb") as fp:
-                        fp.write(resp.read())
-                convert_to_library_wav(tmp_dl, dst_wav, max_dur=max_dur, highpass_hz=hp_hz, peak_ceil_db=peak_ceil)
+        chosen = None
+        last_reject = "No Openverse candidate passed audio quality gate"
+        peak_ceil = -4.0 if item["category"] in ("ambience", "dark_drone", "sad_piano") else -3.0
+        hp_hz = 45.0 if item["category"] not in ("tension", "stinger", "dark_drone") else 0.0
+        eff_max_dur = max(max_dur, 60.0) if item["category"] in ("ambience", "dark_drone", "sad_piano") else max_dur
 
-            m = inspect_wav_metrics(dst_wav)
-            env = analyze_sfx_envelope(dst_wav)
-            mf_assets[slug] = {
-                "file": f"{slug}.wav",
-                "category": item["category"],
-                "desc": item["desc"] or chosen["title"],
-                "dur": m["dur"],
-                "peak_dbfs": m["peak_dbfs"],
-                "clips": m["clips"],
-                "onset_s": env["onset_s"],
-                "peak_s": env["peak_s"],
-                "tail_end_s": env["tail_end_s"],
-                "rms_dbfs": env["rms_dbfs"],
-                "license": chosen["license"].upper(),
-                "source": f"openverse:{chosen['source']}:{chosen['id']}",
-                "openverse_id": chosen["id"],
-                "creator": chosen["creator"],
-                "attribution": chosen["attribution"] or f'"{chosen["title"]}" by {chosen["creator"]} ({chosen["license"].upper()})',
-            }
-            if chosen.get("id"):
-                excl.add(str(chosen["id"]))
-            fetched.append(slug)
-            print(f"  [AUTO-SFX] Fetched {slug}.wav ({m['dur']:.2f}s | {chosen['license'].upper()}) <- '{item['query']}'")
-        except Exception as exc:
-            failed.append({"slug": slug, "query": item["query"], "error": str(exc)})
+        with tempfile.TemporaryDirectory(prefix="ov_auto_") as td:
+            for c_idx, cand in enumerate(candidates[:8]):
+                try:
+                    ext = os.path.splitext(urllib.parse.urlparse(cand["url"]).path)[1].lower() or ".wav"
+                    tmp_dl = os.path.join(td, f"{slug}_{c_idx}{ext}")
+                    if download_fn is not None:
+                        download_fn(cand["url"], tmp_dl)
+                    else:
+                        req = urllib.request.Request(cand["url"], headers={"User-Agent": "HorrorEngineV15-OpenverseSFX/1.0"})
+                        with urllib.request.urlopen(req, timeout=30) as resp, open(tmp_dl, "wb") as fp:
+                            fp.write(resp.read())
+                    ok_qa, reason_qa, _ = validate_sfx_audio_quality(
+                        tmp_dl,
+                        category=item["category"],
+                        min_dur_s=item["min_sec"],
+                    )
+                    if not ok_qa:
+                        last_reject = f"candidate '{cand.get('title') or cand.get('id')}' rejected: {reason_qa}"
+                        print(f"  [SFX FILTER REJECT] {slug}: {last_reject}")
+                        continue
+                    convert_to_library_wav(tmp_dl, dst_wav, max_dur=eff_max_dur, highpass_hz=hp_hz, peak_ceil_db=peak_ceil)
+                    chosen = cand
+                    break
+                except Exception as exc:
+                    last_reject = str(exc)
+                    continue
 
-    mf["version"] = "v15.0-sfx-library"
+        if not chosen:
+            failed.append({"slug": slug, "query": item["query"], "error": last_reject})
+            continue
+
+        m = inspect_wav_metrics(dst_wav)
+        env = analyze_sfx_envelope(dst_wav)
+        mf_assets[slug] = {
+            "file": f"{slug}.wav",
+            "category": item["category"],
+            "desc": item["desc"] or chosen["title"],
+            "dur": m["dur"],
+            "peak_dbfs": m["peak_dbfs"],
+            "clips": m["clips"],
+            "onset_s": env["onset_s"],
+            "peak_s": env["peak_s"],
+            "tail_end_s": env["tail_end_s"],
+            "rms_dbfs": env["rms_dbfs"],
+            "license": chosen["license"].upper(),
+            "source": f"openverse:{chosen['source']}:{chosen['id']}",
+            "openverse_id": chosen["id"],
+            "creator": chosen["creator"],
+            "attribution": chosen["attribution"] or f'"{chosen["title"]}" by {chosen["creator"]} ({chosen["license"].upper()})',
+        }
+        if chosen.get("id"):
+            excl.add(str(chosen["id"]))
+        fetched.append(slug)
+        print(f"  [AUTO-SFX] Fetched {slug}.wav ({m['dur']:.2f}s | {chosen['license'].upper()}) <- '{item['query']}'")
+
+    mf["version"] = "v15.3-sfx-library"
     save_manifest(lib_dir, mf)
     all_credits = [{"slug": k, **v} for k, v in sorted(mf_assets.items())]
     write_credits_file(os.path.join(lib_dir, "credits.txt"), all_credits)
-    print(f"AUTO-FETCH DONE -> fetched={len(fetched)}, cached={len(skipped)}, failed={len(failed)} ({lib_dir})")
-    return {"fetched": fetched, "skipped": skipped, "failed": failed}
+    print(f"AUTO-FETCH DONE -> curated={len(curated)}, fetched={len(fetched)}, cached={len(skipped)}, failed={len(failed)} ({lib_dir})")
+    return {"curated": curated, "fetched": fetched, "skipped": skipped, "failed": failed}
 
 
 def cmd_auto_fetch_for_script(args):
@@ -1027,6 +1321,7 @@ def cmd_auto_fetch_for_script(args):
         fresh=args.fresh,
         sources=args.sources,
         max_dur=args.max_dur,
+        curated_dir=getattr(args, "curated_dir", None),
     )
     if args.strict and res["failed"]:
         for f in res["failed"]:
@@ -1116,9 +1411,10 @@ def build_parser():
     p_exp.add_argument("--out-dir", required=True)
     p_exp.set_defaults(func=cmd_export_sfx_pack)
 
-    p_af = sub.add_parser("auto-fetch-for-script", help="v15.0: Auto-download missing real CC0 SFX referenced in cues.json from Openverse")
+    p_af = sub.add_parser("auto-fetch-for-script", help="v15.3: Resolve curated local SFX first, then auto-fetch + quality-filter missing CC0 SFX from Openverse")
     p_af.add_argument("--cues", required=True, help="Path to cues.json or cues.draft.json")
     p_af.add_argument("--library", default="audio/sfx_library")
+    p_af.add_argument("--curated-dir", default=None, help="Optional local curated SFX folder (default: sibling audio/sfx_curated)")
     p_af.add_argument("--allow-cc-by", action="store_true")
     p_af.add_argument("--sources", default="freesound,jamendo")
     p_af.add_argument("--max-dur", type=float, default=25.0)

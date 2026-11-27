@@ -1192,11 +1192,11 @@ export function createCharacter25D(
           z += cHeadNod * height * 0.015 * wh;
         }
 
-        // 6. Micro lower-jaw vocal articulation / uncanny jaw stretch
+        // 6. Micro lower-jaw vocal articulation (kept subtle to prevent rubbery chin warping on photorealistic sprites!)
         const wj = weights.wJaw[i];
         if (wj > 0.0005 && cJawTalk > 0.001) {
-          y -= cJawTalk * height * 0.012 * wj;
-          z += cJawTalk * height * 0.005 * wj;
+          y -= cJawTalk * height * 0.0032 * wj;
+          z += cJawTalk * height * 0.0015 * wj;
         }
 
         // 7. High-frequency cold-chill shiver across shoulders, arms & neck (`shiver`)
@@ -1403,7 +1403,8 @@ export function createCharacter25D(
         d.armRecoil += actInt * 0.35;
       }
 
-      // Audio RMS-driven live talking cadence (natural head nod + subtle shoulder emphasis + micro jaw!)
+      // Audio RMS-driven live talking cadence (natural head nod + subtle shoulder emphasis + ultra-subtle jaw motion;
+      // primary lip-sync comes from smooth `calm` <-> `talk` dual-texture crossfade below!)
       const talkEnergy = clamp01(opts.talkEnergy ?? 0);
       const isTalking = opts.isTalking ?? talkEnergy >= 0.08;
       if (isTalking && talkEnergy > 0.01) {
@@ -1411,7 +1412,7 @@ export function createCharacter25D(
         d.headNod += talkEnergy * 0.34 * (0.5 + 0.5 * speakWave);
         d.headRoll += speakWave * talkEnergy * 0.032;
         d.shoulderShrug += talkEnergy * 0.26;
-        d.jawTalk = Math.max(d.jawTalk, talkEnergy);
+        d.jawTalk = Math.max(d.jawTalk, talkEnergy * 0.35);
       }
 
       // High-speed horror head/neck twitch — ISOLATED to head & neck around `neckV` (clamped fold-safe!)
@@ -1436,7 +1437,7 @@ export function createCharacter25D(
       actor.lastDeform = d;
       applyDeformInternal(d);
 
-      // Resolve expression & smooth dual-texture crossfade cleanly (`actingCues[].exprTo` > explicit opts > pose map)
+      // Resolve expression & smooth dual-texture crossfade cleanly (`actingCues[].exprTo` > explicit opts > smooth RMS calm<->talk > pose map)
       const targetAction = t >= 0.5 ? to : from;
       const baseTo = opts.spriteExpr ?? mapFaceExprToSpriteExpr(opts.expr, config.role, isTalking, targetAction);
       const baseFrom = opts.spriteExprFrom ?? baseTo;
@@ -1445,7 +1446,18 @@ export function createCharacter25D(
       const desiredTo = cueEval?.exprTransition ? cueEval.exprTransition.to : baseTo;
       const desiredFrom = cueEval?.exprTransition ? (cueEval.exprTransition.from ?? baseTo) : baseFrom;
       const mix = cueEval?.exprTransition ? cueEval.exprTransition.mix : baseMix;
-      if (desiredFrom !== desiredTo) {
+      const canSmoothTalkBlend =
+        !cueEval?.exprTransition &&
+        opts.spriteExprFrom === undefined &&
+        opts.spriteExpr === undefined &&
+        (desiredTo === "talk" || (desiredTo === "calm" && talkEnergy > 0.02)) &&
+        Boolean(texSet.talk);
+      if (canSmoothTalkBlend) {
+        const talkMix = isTalking
+          ? Math.max(0.55, smooth(clamp01((talkEnergy - 0.04) / 0.38)))
+          : smooth(clamp01((talkEnergy - 0.02) / 0.14)) * 0.45;
+        actor.setExprBlend("calm", "talk", talkMix);
+      } else if (desiredFrom !== desiredTo) {
         actor.setExprBlend(desiredFrom, desiredTo, mix);
       } else {
         actor.setExpr(desiredTo);

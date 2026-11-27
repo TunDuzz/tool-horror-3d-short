@@ -1,69 +1,80 @@
-# Công Thức Kịch Bản Kinh Dị Giữ Chân Cao v14.0 (`HORROR_FORMULAS.md` · 1–5s Hook & Khẩu Ngữ 3 Miền)
+# 5 Công Thức Kịch Bản Kinh Dị Triệu View Luân Phiên v15 (`HORROR_FORMULAS.md`)
 
-Mọi công thức dưới đây tuân thủ chuẩn **Engine v14.0**:
-- **Không dạo đầu thời tiết / không chèn `[VISUAL]` im lặng ở `0.0s`:** Thoại và tiếng động thực địa nổ ngay ở **`0.05s – 0.25s`** trên `Shot 1` (`cameraMode: "cold_hook"`), sau đó mới mở rộng sang `Shot 2` (`cameraMode: "master"`).
-- **Nhịp giọng gọn sắc (`2.55–3.05 từ/s` tổng · `3.15–3.45 từ/s` khi nói):** Khẩu ngữ truyền miệng đời thật theo phương ngữ `Bắc – Trung – Nam`, dùng từ cảm thán mạnh đúng tâm lý (`platform_safe_raw`: *"Mẹ kiếp"*, *"Chết tiệt"*, *"Bỏ mẹ rồi"*, *"Má ơi"*, *"Khỉ gió"*), mặc định **`0` Jumpscare**.
-
----
-
-## Công Thức 1: Tâm Linh Dân Gian Truyền Miệng (`dialectRegion: "south"` hoặc `"north"`)
-
-**Chất liệu ăn khách:** Đò ngang mùa nước nổi, nhà ngoại dưới quê, bàn thờ Ông Thiên, tiếng gọi tên ngoài hàng rào dâm bụt sau 1 giờ khuya, lời dặn sống còn của người già.
-**Ánh sáng vật lý:** `warmLamp` (đèn dầu / bàn thờ) → `duskFog` (hiên mưa) → `coldMoon` (đèn tắt / phạm kỵ).
-
-### Khung `viral_short` `60–75s` (~165–185 từ · Mặc định `0` Jumpscare)
-1. **`0.0–4.5s` Cold Hook (`cold_hook`, `mood=tense`, nổ ngay `0.1s`):**
-   *"Má ơi nghĩ lại còn lạnh xương sống tụi bây ơi... Ông Tư gác bến chỉ thẳng mặt tui dặn: Sau một giờ khuya nghe ai kêu tên ngoài mé sông, có là giọng má mày cũng câm cái miệng lại, đừng có thưa!"*
-2. **`4.5–13s` Snap Context (`master`, `mood=calm_omen`):**
-   `1–2` câu gọn khóa lý do kẹt lại (*đường đất ngập lút đầu gối, phải ráng gác hết đêm lấy tiền viện phí*) + toàn cảnh quầy gỗ và sông nước.
-3. **`13–28s` Giao Ca & Vật Chứng Lạ (`ots_same_side` → `pov_interact`, `mood=uneasy`):**
-   Ông Tư dúi vội tờ giấy giao ca ướt nhẹp mùi bùn non rồi lội biến vào mưa, đánh rơi cả cái quẹt gas mà không thèm cúi nhặt.
-4. **`28–45s` Cài Chốt & Âm Lặp Đếm Nhịp (`pov_interact` → `pov_turn`, `mood=curious`):**
-   Nhân vật sập chốt sắt (tiếng mưa ngoài hiên lập tức đục trầm lại `lp=560 Hz`). Tiếng giọt nước dột từ mái tôn gõ đều lên mặt bàn... rồi tiến dần về phía gáy (`mode: "approach"`).
-5. **`45–55s` Đứt Nhịp & Khoảng Lặng Tâm Lý (`[SILENCE_DROP 1.25s]`):**
-   Giọt nước thứ ba mươi bỗng tắt phựt. Cả bến phà im re. Giữa khoảng lặng, một hơi thở lạnh buốt lướt sát vành tai phải (`close_ear`) kèm tiếng gọi khẽ bên kia tấm kính mờ.
-6. **`55–68s` Cú Lật Vật Chứng Sắc Lạnh (`POV_CU`, `mood=cold_twist`, `prox=close`):**
-   *"Chết tiệt... lúc tui cúi xuống nhìn tờ giấy ông Tư đưa hồi nãy, đó không phải biên nhận giao ca... mà là biên bản vớt xác dưới bến phà đêm hôm qua, dòng cuối cùng ghi đúng tên tui còn nhòe nước sông."*
+Mọi công thức dưới đây tuân thủ chuẩn **Engine v15 (`VieNeu-TTS 1.0x` sạch + 3-Act Score + Jumpscare đồng bộ)**:
+- **Quy trình 2 bước:** Viết trọn câu chuyện sạch **0 thẻ kỹ thuật** trước → chốt truyện hay rồi mới chia shot, gắn khoảng nghỉ sạch (`[BEAT Xs]`, `[VISUAL Xs]`, `[SILENCE_DROP 0.5–1.2s]`), tuyệt đối **không dùng `[PACE=... | PITCH=...]`**.
+- **Nhịp kể điềm tĩnh, có độ thở tự nhiên:** **`2.35 từ/s`** tổng (`2.25–3.25 từ/s` khi nói, mục tiêu `2.75 từ/s`) — tương đương **`155–175 từ`** cho một video `65–75s`.
+- **Giọng kể chân thực, không ép chửi thề:** Bỏ quota chửi thề gượng; giữ giọng truyền miệng điềm tĩnh, đối thoại đời thường đúng 3 miền; không ép mọi truyện phải có đồng hồ đứng kim hay sập chốt cửa sắt.
+- **Bắt buộc `1–2` cú Jumpscare đồng bộ AV (`min_jumpscares >= 1`):** Thực thể chính tạo hình **Bậc 4–7**, đặt ngay sau khoảng rút im lặng **`[SILENCE_DROP 0.5–1.2s]`** (`-48 dB`).
 
 ---
 
-## Công Thức 2: Kinh Dị Quy Tắc / Ca Trực Đêm Đô Thị (`dialectRegion: "north"`)
-
-**Chất liệu ăn khách:** Khu nội trú cũ, chung cư sắp giải tỏa, nhà xác bệnh viện, bảo vệ ca đêm, điện thoại nội bộ / thang máy / phòng niêm phong.
-**Ánh sáng vật lý:** `fluorescent` (đèn tuýp xanh xao + đèn bàn chụp sắt) → `coldMoon` / `flashlight`.
-
-### Khung `viral_short` `60–70s` (~160–180 từ · Mặc định `0` Jumpscare)
-1. **`0.0–4.5s` Cold Hook (`cold_hook`, `mood=tense`, kèm tiếng chuông cụt `0.1s`):**
-   *"Mẹ kiếp... cái điện thoại bàn trước mặt tôi vừa đổ chuông, dù sợi dây đồng dưới gầm bàn đã bị cắt đứt từ ba tháng trước."*
-2. **`4.5–13s` Snap Context (`master`, `mood=calm_omen`):**
-   Nhận trực thế ca đêm lấy ba trăm nghìn ở khu nội trú B2 sắp đập bỏ, ngoài hành lang gió mùa rít lạnh buốt.
-3. **`13–28s` Lời Dặn Gắt Của Người Đi Trước (`ots_same_side` → `pov`, `SPEAKER: BÀ HẠNH`):**
-   *"Này, khóa chết cái chốt sắt vào! Máy bàn cắt dây từ đợt niêm phong phòng hai lẻ bốn rồi, khuya nó có chập mạch kêu cạch cái nào thì mặc xác nó, cấm được nhấc!"*
-4. **`28–44s` Khóa Cửa & Đồng Hồ Đứng Kim (`pov_interact` → `pov_turn`, `mood=uneasy`):**
-   Kéo chốt đồng (tiếng gió đục đi ngay lập tức). Tiếng đồng hồ quả lắc trên tường vôi tích tắc chậm dần... rồi khựng chết đứng đúng `02:15`. Máy bàn nảy lên một hồi chuông cụt lủn.
-5. **`44–54s` `[SILENCE_DROP 1.25s]` & Tiếng Thì Thầm Trong Ống Nghe (`fx=phone | prox=close`):**
-   Theo phản xạ nhấc ống nghe áp lên tai giữa khoảng lặng đặc quánh: *"Phòng hai lẻ bốn... đứa nào khóa ngoài rồi anh ơi..."*
-6. **`54–66s` Cú Lật Kép Dưới Sàn & Trên Bảng Khóa (`POV_CU`, `mood=cold_twist`):**
-   *"Bỏ mẹ rồi... tôi nhìn xuống chân tường thì đầu dây đồng đứt lìa đóng dày bụi trắng... còn ngước lên bảng gỗ trước mặt, riêng chiếc thẻ đỏ phòng hai lẻ bốn vẫn đang tự đung đưa."*
+## Mô-Típ 1: Ký Ức / Đồng Dao / Lễ Hội Quen Thuộc Bị Bẻ Cong
+**Chất liệu:** Đêm rước đèn trung thu ngõ cũ, trò trốn tìm sân đình, bài đồng dao ru ngủ quen thuộc bỗng có thêm một câu lạ, mâm cỗ rằm tháng bảy.
+**Ánh sáng vật lý:** `warmLamp` (đèn lồng / bếp cũ) → `duskFog` → `coldMoon`.
+**Khung `65–75s`:**
+1. **`0–5s` Hook sạch (`direct_taboo_question` hoặc `survivor_confession`, không lộ bài):** Chạm ngay vào ký ức trò chơi/bài đồng dao quen thuộc mà ai cũng từng nghe hồi nhỏ.
+2. **`5–18s` Lõi cảm xúc con người:** Kỷ niệm thật với đứa em nhỏ hoặc bạn thơ ấu (chiếc đèn ông sao tự dán, lời hẹn rước đèn trước khi chuyển nhà).
+3. **`18–34s` Tầng 1 (Dấu hiệu mơ hồ bị cười gạt):** Trong nhóm chơi dư ra một bóng trẻ đứng cuối hàng nhưng ai cũng tưởng con nhà hàng xóm mới dọn về.
+4. **`34–50s` Tầng 2 (Xâm lấn vùng an toàn):** Tiếng hát đồng dao vang đều ngay sát tai khi cả xóm đã tắt đèn; đếm lại số bóng dưới ánh đèn đường luôn thừa đúng một người không có bước chân.
+5. **`50–62s` Tầng 3 + `[SILENCE_DROP 0.7–1.1s]` + Jumpscare (Bậc 4–7):** Tiếng hát tắt bặt (nhạc nền & môi trường rút về `-48 dB`) → thực thể quay đầu/bám góc mái hiên lộ diện cùng cú nổ stinger thu thật `-1.0 dBTP`.
+6. **`62–72s` Câu chốt dư âm:** Lật ngược chi tiết bức ảnh hoặc món đồ kỷ niệm ở đầu bằng 1 câu lạnh người.
 
 ---
 
-## Công Thức 3: Chuyện Có Thật / Dị Văn Đường Đèo & Biển Đêm (`dialectRegion: "central"`)
-
-**Chất liệu ăn khách:** Xe tải đường dài qua đèo khuya, trạm kiểm lâm, tàu cá trôi dạt, nhật ký ca trực có mốc giờ cụ thể.
-**Ánh sáng vật lý:** `duskFog` → `flashlight` → `coldMoon`.
-
-### Khung `viral_short` `60–75s` (~165–185 từ)
-1. **`0.0–4.5s` Cold Hook (`cold_hook`, `raw_confession`):**
-   *"Khỉ gió thiệt chớ, tau chạy xe tải Bắc Nam mười hai năm trời, chưa bao giờ gặp cảnh mô lạnh gáy như chuyến qua đèo Hải Vân lúc hai giờ sáng hôm nớ..."*
-2. **`4.5–15s` Snap Context (`master`):** Xe hỏng phanh hơi ngay khúc cua miếu hoang giữa sương mù đặc quánh, sóng điện thoại mất sạch.
-3. **`15–45s` Leo Thang 3 Nhịp (`10s / nhịp`):** Đèn pha quét trúng bóng người vẫy xe không áo mưa → tiếng gõ đều đặn dưới gầm thùng xe (`motifs[]`) → gõ tới nhịp thứ tư bỗng dừng hẳn ngay dưới ghế phụ.
-4. **`45–68s` `[SILENCE_DROP]` & Cú Lật Vật Chứng:** Sáng ra thợ máy chui xuống gầm xe tái mặt đưa lên mảnh vải áo bà ba kẹt cứng trong trục láp — trùng khít tấm ảnh trên bia đá cái miếu đổ nát cách đó hai cây số.
+## Mô-Típ 2: Điều Kiêng Kỵ Dân Gian Đời Thường Ai Cũng Từng Nghe
+**Chất liệu:** Úp ngược dép trước bậu cửa, gõ đũa vào miệng bát, không trả lời khi nghe gọi tên ban đêm, không nhặt tiền lẻ ở ngã ba, không quay đầu khi ai vỗ vai trong ngõ tối.
+**Ánh sáng vật lý:** `warmLamp` (hiên nhà / đèn bàn thờ) → `coldMoon` (tắt đèn / phạm kỵ).
+**Khung `65–75s`:**
+1. **`0–5s` Hook sạch (`direct_taboo_question`):** Hỏi thẳng về điều kiêng kỵ quen thuộc mà người lớn trong nhà hay nhắc nhưng giới trẻ thường cười bỏ qua.
+2. **`5–18s` Lõi cảm xúc con người:** Nhân vật vội về nhà muộn vì một lời hứa đời thường (mang thuốc về cho mẹ, ăn bữa cơm bà ngoại để phần).
+3. **`18–34s` Tầng 1:** Bắt gặp dấu hiệu kiêng kỵ (đôi dép tự úp ngược, bát cơm có sẵn đôi đũa cắm thẳng) nhưng tự trấn an do gió hoặc vô ý.
+4. **`34–50s` Tầng 2:** Vùng an toàn bị bẻ gãy — tiếng gọi từ phòng bên lặp lại đúng một câu với nhịp đều vô cảm, hoặc bóng người phản chiếu trên cửa kính không chuyển động khớp với người thật.
+5. **`50–62s` Tầng 3 + `[SILENCE_DROP]` + Jumpscare:** Toàn bộ không gian rơi vào im lặng `-48 dB` → chạm mặt trực diện thực thể bậc 4–7 trong khung cửa tối.
+6. **`62–72s` Câu chốt dư âm:** Một chi tiết xác thực ngắn gọn (tin nhắn/cuộc gọi/vật chứng) phủ định hoàn toàn điều nhân vật tin ở đầu truyện. *(Xem mẫu đầy đủ tại `examples/script_v15_sample.md`.)*
 
 ---
 
-## Công Thức Đa Chương `deep_story` (`2.5–6 Phút` Short & `8–15 Phút` Series)
+## Mô-Típ 3: Chuyện Có Thật Ở Địa Điểm Bỏ Hoang
+**Chất liệu:** Trường cấp hai giải tỏa, phòng chiếu bóng cũ, khu tập thể mất điện, trạm y tế cũ ven đèo, nhà kho bến tàu.
+**Ánh sáng vật lý:** `duskFog` → `flashlight` (chỉ dùng khi truyện có đèn pin) hoặc `fluorescent` → `coldMoon`.
+**Khung `65–75s`:**
+1. **`0–5s` Hook sạch (`survivor_confession` hoặc `immediate_danger`):** Mở thẳng tại khoảnh khắc nhân vật đứng bên trong địa điểm bỏ hoang và phát hiện một dấu vết còn rất mới (vết phấn ướt trên bảng, ghế xoay còn đung đưa).
+2. **`5–18s` Lõi cảm xúc con người:** Lý do thực tế và nhân bản buộc phải quay lại nơi đó (tìm kỷ vật của bạn cũ, lấy lại đồ nghề mưu sinh, giao nốt chuyến hàng bị nhầm địa chỉ).
+3. **`18–34s` Tầng 1:** Một âm thanh hoặc dòng chữ đời thường còn sót lại khiến nhân vật tưởng vẫn có bảo vệ hoặc người qua đường.
+4. **`34–50s` Tầng 2:** Phát hiện lối ra vừa đi qua đã đổi khác, hoặc thấy dấu tay/vết bước dừng ngay sau lưng mình trong khoảng hành lang không còn lối thoát.
+5. **`50–62s` Tầng 3 + `[SILENCE_DROP]` + Jumpscare:** Không gian tắt lịm `-48 dB` → thực thể bám góc trần hoặc khe cửa (Bậc 4–7) áp sát khung hình.
+6. **`62–72s` Câu chốt dư âm:** Thông tin thực địa sáng hôm sau hé lộ nơi đó đã đóng cửa từ nhiều năm trước và món đồ nhân vật cầm về thuộc về ai.
 
-Xem chi tiết **Đường cong Răng cưa (Sawtooth Dread Curve)** trong `companion-skills/horror-story/references/STORYTELLING_CRAFT.md`:
-- **Chương 1 (`P01`):** Bắt buộc mở bằng **Cold Hook `0.1–5.0s`** (`flash_forward_crisis` hoặc `raw_confession`), sau đó mới lùi lại cài `trappedReason` và manh mối `CL01`.
-- **Chương `P02..PNN`:** Nếu `seamlessStitch: true` (ghép thành 1 phim dài), nối thẳng hành động không lặp lại intro; nếu đăng tách tập TikTok/Reels, mở đầu mỗi tập bằng **Micro-Hook `3 giây`** (*"Ngay giây phút tôi vừa lật tấm ván sàn lên, thứ nằm bên dưới làm tôi cứng đờ..."*) và kết tập ngay trên câu hỏi bỏ lửng!
+---
+
+## Mô-Típ 4: Người Thân Giả Mạo (*Doppelgänger*)
+**Chất liệu:** Tiếng mẹ gọi từ bếp trong khi mẹ đang ở viện, bóng anh trai ngồi quay lưng ngoài ban công, giọng bạn cùng phòng hỏi mượn chìa khóa từ bên ngoài dù người thật đang ngủ trên giường.
+**Ánh sáng vật lý:** `warmLamp` (phòng ngủ / bếp ấm) → `fluorescent` (hành lang lạnh) → `coldMoon`.
+**Khung `65–75s`:**
+1. **`0–5s` Hook sạch (`immediate_danger`):** Đặt ngay vào khoảnh khắc nhân vật vừa nghe tiếng người thân gọi quen thuộc… thì điện thoại trên tay lại đổ chuông đúng tên người đó.
+2. **`5–18s` Lõi cảm xúc con người:** Nết sinh hoạt rất riêng của hai người thân (câu nhắc mặc áo khoác, thói quen pha trà, giọng gọi tên ở nhà) khiến người xem tin ngay mối gắn kết ấm áp.
+3. **`18–34s` Tầng 1:** Một cử chỉ nhỏ lệch nếp quen (gọi bằng tên đầy đủ thay vì tên ở nhà, quên mất thói quen cũ) bị nhân vật bỏ qua vì tưởng người kia mệt.
+4. **`34–50s` Tầng 2:** Người giả cố kéo nhân vật ra khỏi phòng hoặc mở cửa; từng câu đáp lại bắt đầu lặp nguyên văn như học thuộc lòng, khuôn mặt luôn khuất sáng.
+5. **`50–62s` Tầng 3 + `[SILENCE_DROP]` + Jumpscare:** Khoảnh khắc buộc phải nhìn thẳng mặt qua khe cửa / gương sau `[SILENCE_DROP]` → nụ cười kéo dài bất thường hoặc cổ nghiêng gãy (Bậc 5–6).
+6. **`62–72s` Câu chốt dư âm:** Người thân thật trả lời trên điện thoại câu hỏi ở giây cuối — đẩy người xem rợn gáy nhớ lại hành động mình vừa làm ở đầu truyện.
+
+---
+
+## Mô-Típ 5: Bí Mật Gia Đình / Luật Sinh Tồn
+**Chất liệu:** Căn phòng luôn khóa của ông nội, tờ giấy quy tắc nhà mới thuê, quy ước đặt thêm một bát đũa mỗi đêm rằm, điều kiện kỳ lạ khi giữ nhà giúp họ hàng.
+**Ánh sáng vật lý:** `warmLamp` → `fluorescent` → `coldMoon`.
+**Khung `65–75s`:**
+1. **`0–5s` Hook sạch (`immediate_danger` hoặc `direct_taboo_question`):** Đọc thẳng 1 điều luật ngắn, lạ lùng nhưng rất cụ thể mà không tiết lộ vì sao phải tuân theo.
+2. **`5–18s` Lõi cảm xúc con người:** Nhân vật chấp nhận quy tắc đó vì hoàn cảnh thật (tiền thuê rẻ để xoay xở học phí, giữ nhà cho cô ruột nằm viện).
+3. **`18–34s` Tầng 1:** Mọi thứ diễn ra êm ả cho đến khi một tình huống nhỏ khiến nhân vật vô tình lệch khỏi quy tắc vài phút.
+4. **`34–50s` Tầng 2:** Dấu hiệu "người đặt luật" không phải để dọa mà để tự vệ — thứ bên kia bắt đầu thử từng kẽ hở trong căn nhà.
+5. **`50–62s` Tầng 3 + `[SILENCE_DROP]` + Jumpscare:** Vào đúng khoảnh khắc nhân vật tưởng đã kịp sửa sai → `[SILENCE_DROP]` → thực thể bậc 4–7 xuất hiện ngay bên trong vùng từng tưởng là an toàn.
+6. **`62–72s` Câu chốt dư âm:** Lật mặt sau tờ giấy quy tắc hoặc mở bức ảnh gia đình cũ, hé lộ lý do thật sự đằng sau điều luật đầu tiên.
+
+---
+
+## Công Thức Đa Chương `deep_story` (`2.5–6 Phút` Short & `8–16 Phút` Series)
+
+Xem chi tiết kiến trúc đa hồi trong `companion-skills/horror-story/references/STORYTELLING_CRAFT.md`:
+- **Chương 1 (`P01`):** Mở bằng **Hook sạch `0–5s`** (không lộ bài) + **Lõi cảm xúc con người** → cài `trappedReason`, manh mối `CL01` và kết bằng dị biến tầng 2 + 1 cú Jumpscare mở màn.
+- **Chương `P02..PNN`:** Triển khai Đường cong Răng cưa (có khoảng thở giả *False Relief* để khán giả tưởng an toàn trước khi bẻ ngược), mỗi chương tối thiểu `1` cú Jumpscare đồng bộ AV (`min_jumpscares >= 1`). Nếu đăng tách tập, mở đầu bằng Micro-Hook `3 giây` nối thẳng tình huống trước; nếu `seamlessStitch: true`, ghép mượt không lặp intro.

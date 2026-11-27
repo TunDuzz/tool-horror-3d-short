@@ -553,6 +553,593 @@ class TestV15OptionAUpgrade(unittest.TestCase):
             self.assertNotEqual(rb.returncode, 0)
             self.assertIn("ACTING_CUE_ERROR", rb.stdout)
 
+    def test_v153_vieneu_default_priority_ref_audio_and_no_auto_gemini(self):
+        with tempfile.TemporaryDirectory() as td:
+            # 1. Default --tts-engine MUST be `vieneu` (free 1.0x local, never auto-burning Gemini Free Tier)
+            args_def = ghv.build_parser().parse_args(["--script", "dummy.md"])
+            self.assertEqual(args_def.tts_engine, "vieneu")
+
+            # 2. Even when GEMINI_API_KEY is present, `--tts-engine auto` MUST choose VieNeu -> Edge, NEVER Gemini!
+            item = {
+                "kind": "speech",
+                "text": "Đêm về thấy đôi dép úp ngược trước cửa.",
+                "vieneu_text": "Đêm về thấy đôi dép úp ngược trước cửa.",
+                "tts_text": "Đêm về thấy đôi dép úp ngược trước cửa.",
+                "speaker": "NARRATOR",
+                "is_narrator": True,
+                "mood": "calm_omen",
+                "fx": "dry",
+                "ref_audio": None,
+            }
+            args_auto = ghv.build_parser().parse_args([
+                "--script", "dummy.md", "--tts-engine", "auto", "--gemini-api-key", "fake-key-should-not-auto-fire",
+            ])
+            fake_out = (np.zeros(24000, dtype=np.float64), [{"w": "Đêm", "s": 0.0, "e": 0.3}])
+            with mock.patch.object(ghv, "_has_vieneu", return_value=True), \
+                 mock.patch.object(ghv, "synth_vieneu_chunk", return_value=fake_out) as m_vn, \
+                 mock.patch.object(ghv, "synth_gemini_chunk") as m_gem:
+                ghv.synth_line_auto(item, 48000, td, 0, args_auto)
+            m_vn.assert_called_once()
+            m_gem.assert_not_called()
+
+            # 3. Explicit `--ref-audio` (5-8s clean storytelling sample) MUST beat auto `emotion_refs/` and pass straight to VieNeu at 1.0x!
+            emo_dir = os.path.join(td, "emotion_refs")
+            os.makedirs(emo_dir, exist_ok=True)
+            emo_calm = os.path.join(emo_dir, "calm.wav")
+            my_ref = os.path.join(td, "my_storyteller_6s.wav")
+            t = np.arange(24000, dtype=np.float64) / 48000.0
+            ghv.write_wav_mono16(emo_calm, 0.2 * np.sin(2 * np.pi * 150 * t), 48000)
+            ghv.write_wav_mono16(my_ref, 0.2 * np.sin(2 * np.pi * 125 * t), 48000)
+
+            args_ref = ghv.build_parser().parse_args([
+                "--script", "dummy.md", "--tts-engine", "vieneu", "--emotion-refs", emo_dir, "--ref-audio", my_ref,
+            ])
+            self.assertEqual(ghv.resolve_emotion_ref(item, args_ref), my_ref)
+
+            fake_tts = mock.MagicMock()
+            fake_tts.sample_rate = 48000
+            fake_tts.infer.return_value = 0.2 * np.sin(2 * np.pi * 130 * np.arange(48000) / 48000.0)
+            with mock.patch.object(ghv, "_get_vieneu", return_value=fake_tts), \
+                 mock.patch.object(ghv, "apply_clean_tempo") as m_tempo:
+                ghv.synth_vieneu_chunk(item, 48000, args_ref, cache_dir=os.path.join(td, "cache"), tmp_dir=td)
+            fake_tts.infer.assert_called_once()
+            self.assertEqual(fake_tts.infer.call_args.kwargs.get("ref_audio"), my_ref)
+            m_tempo.assert_not_called()
+
+    def test_v153_story_constitution_optional_motif_occlusion_and_sample_script(self):
+        import horror_story as hs
+
+        const = constitution.load_constitution()
+        self.assertEqual(const["speech"]["defaultTtsEngine"], "vieneu")
+        self.assertAlmostEqual(const["speech"]["wordsPerSecondTarget"], 2.35, places=2)
+        self.assertAlmostEqual(const["speech"]["spokenWordsPerSecondMin"], 2.25, places=2)
+        self.assertAlmostEqual(const["speech"]["spokenWordsPerSecondTarget"], 2.75, places=2)
+        self.assertAlmostEqual(const["speech"]["spokenWordsPerSecondMax"], 3.25, places=2)
+        self.assertFalse(const["soundscape"]["requireAcousticMotif"])
+        self.assertFalse(const["soundscape"]["requireOcclusionTrigger"])
+        self.assertEqual(const["soundscape"]["silenceDropFloorDb"], -48.0)
+        self.assertEqual(const["soundscape"]["scoreDuckDbDefault"], -8.5)
+        self.assertGreaterEqual(len(const["retentionAndVoiceStyle"]["storyArchetypes"]), 5)
+
+        with tempfile.TemporaryDirectory() as td:
+            sp = os.path.join(td, "story.json")
+            ns = hs.argparse.Namespace(
+                title="Đôi Dép Úp Trước Bậu Cửa", format="micro", parts=1, total_sec=70, mode="auto",
+                aspect="9:16", pov="first_person_survivor", genre="folklore", adapt_mode="original", out=sp,
+            )
+            hs.cmd_seed(ns)
+            doc = hs.read_json(sp)
+            self.assertAlmostEqual(doc["params"]["wordsPerSecond"], 2.35, places=2)
+            self.assertEqual(doc["narrativeStyle"]["gritLevel"], "clean_folklore")
+            self.assertEqual(doc["soundscapeDesign"]["motifs"], [])
+            self.assertNotIn("occlusionTrigger", doc["soundscapeDesign"]["farBed"])
+            self.assertEqual(doc["soundscapeDesign"]["audioDirection"], "folklore_atmospheric")
+            self.assertNotIn("scoreArc", doc["soundscapeDesign"])
+
+        # Verify new v15 sample script hygiene (Step 1 + Step 2, 0 [PACE|PITCH], 0 forced profanity, fresh story)
+        sample_p = os.path.join(REPO_ROOT, "examples", "script_v15_sample.md")
+        self.assertTrue(os.path.isfile(sample_p), "Missing examples/script_v15_sample.md")
+        with open(sample_p, encoding="utf-8") as fp:
+            s_body = fp.read()
+        self.assertIn("BƯỚC 1", s_body)
+        self.assertIn("BƯỚC 2", s_body)
+        self.assertIn("[SILENCE_DROP", s_body)
+        self.assertIn("[thở dài]", s_body)
+        self.assertNotIn("[PACE=", s_body)
+        self.assertNotIn("PITCH=", s_body)
+        self.assertNotIn("Mẹ kiếp", s_body)
+        self.assertNotIn("Bỏ mẹ rồi", s_body)
+        self.assertNotIn("Máy Nội Bộ 204", s_body)
+
+    def test_v153_3act_score_ducking_hush_48db_and_3beat_jumpscare(self):
+        with tempfile.TemporaryDirectory() as td:
+            audio_root = os.path.join(td, "audio")
+            lib_dir = os.path.join(audio_root, "sfx_library")
+            cur_dir = os.path.join(audio_root, "sfx_curated")
+            for sub in ("dark_drone", "sad_piano", "stinger", "ambience"):
+                os.makedirs(os.path.join(cur_dir, sub), exist_ok=True)
+            os.makedirs(lib_dir, exist_ok=True)
+
+            sr = dsp.SR
+            dur = 12.0
+            t2 = np.arange(dsp.ns(3.0)) / sr
+            # Curated WAV fixtures across the 4 curated folders
+            dsp.write_wav(os.path.join(cur_dir, "sad_piano", "sad_piano_minimal.wav"), dsp.st(0.22 * np.sin(2 * np.pi * 261.6 * t2)))
+            dsp.write_wav(os.path.join(cur_dir, "dark_drone", "dark_drone_pressure.wav"), dsp.st(0.26 * np.sin(2 * np.pi * 65.4 * t2)))
+            dsp.write_wav(os.path.join(cur_dir, "dark_drone", "cold_sub_drone_tail.wav"), dsp.st(0.24 * np.sin(2 * np.pi * 55.0 * t2)))
+            dsp.write_wav(os.path.join(cur_dir, "ambience", "night_rain_indoor.wav"), dsp.st(0.16 * dsp.colored(dsp.ns(3.0), dsp.rng(11), slope=0.4)))
+            t_st = np.arange(dsp.ns(1.5)) / sr
+            st_sig = 0.65 * np.exp(-2.8 * t_st) * (np.sin(2 * np.pi * 2400.0 * t_st) + 0.5 * np.sin(2 * np.pi * 62.0 * t_st))
+            dsp.write_wav(os.path.join(cur_dir, "stinger", "violin_screech_stinger.wav"), dsp.st(st_sig))
+            dsp.write_wav(os.path.join(cur_dir, "stinger", "cinematic_boom.wav"), dsp.st(0.70 * np.exp(-3.2 * t_st) * np.sin(2 * np.pi * 48.0 * t_st)))
+
+            # Build clean voice with spoken spans [0.2..2.4s], gap [2.4..4.4s], spoken [4.4..6.4s], silence_drop [6.8..7.8s], twist [9.2..11.0s]
+            voice_p = os.path.join(td, "voice.wav")
+            words_p = os.path.join(td, "words.json")
+            t_all = np.arange(dsp.ns(dur)) / sr
+            v = np.zeros_like(t_all)
+            for s0, e0 in ((0.2, 2.4), (4.4, 6.4), (9.2, 11.0)):
+                a0, b0 = dsp.ns(s0), dsp.ns(e0)
+                v[a0:b0] = 0.16 * np.sin(2 * np.pi * 165.0 * t_all[a0:b0])
+            dsp.write_wav(voice_p, dsp.st(v))
+            with open(words_p, "w", encoding="utf-8") as fp:
+                json.dump({
+                    "dur": dur,
+                    "words": [
+                        {"w": "Hook", "s": 0.2, "e": 2.4},
+                        {"w": "Căng", "s": 4.4, "e": 6.4},
+                        {"w": "Twist", "s": 9.2, "e": 11.0},
+                    ],
+                    "sentences": [{"sent": 1, "s": 0.2, "e": 2.4, "mood": "calm_omen"}],
+                    "silence_drops": [{"s": 6.8, "e": 7.8}],
+                }, fp)
+
+            cues = {
+                "voice": voice_p,
+                "words": words_p,
+                "library_dir": lib_dir,
+                "curated_dir": cur_dir,
+                "skip_history": True,
+                "beds": [{"sound": "night_rain_indoor", "role": "far", "target_rms_dbfs": -34.0}],
+                "music_arc": {
+                    "act1": {"sound": "sad_piano_minimal", "target_rms_dbfs": -26.0},
+                    "act2": {"sound": "dark_drone_pressure", "target_rms_dbfs": -24.0},
+                    "aftermath": {"sound": "cold_sub_drone_tail", "target_rms_dbfs": -27.0},
+                    "duck_db": -8.5,
+                    "crossfade_s": 1.2,
+                    "silence_drop_floor_db": -48.0,
+                },
+                "events": [
+                    {
+                        "id": "js_climax",
+                        "jumpscare": "cinema_stab",
+                        "sound": "violin_screech_stinger",
+                        "sub_sound": "cinematic_boom",
+                        "pre_swell_sound": "dark_drone_pressure",
+                        "pre_swell_s": 1.2,
+                        "at_silence_drop": 0,
+                        "edge": "end",
+                        "target_peak_dbfs": -1.0,
+                    }
+                ],
+            }
+            cues_p = os.path.join(td, "cues.json")
+            with open(cues_p, "w", encoding="utf-8") as fp:
+                json.dump(cues, fp)
+
+            out_wav = os.path.join(td, "out", "mix.wav")
+            res = mc.render_cues_mix(cues_p, out_wav, library_dir=lib_dir, strict=True)
+            self.assertEqual(res["verdict"], "PASS")
+            self.assertEqual(res["clips"], 0)
+            self.assertLessEqual(res["stats"]["TP"], -0.85)
+            self.assertEqual(len(res["score_beds"]), 3)
+            self.assertAlmostEqual(res["music_duck_db"], -8.5, places=1)
+            self.assertAlmostEqual(res["silence_drop_floor_db"], -48.0, places=1)
+            self.assertTrue(res["silence_drops"][0]["bed_drop_db"] >= 25.0)
+
+            # Verify automatic vocal ducking on rendered music stem (spoken [0.6..2.0s] vs open gap [2.9..3.9s])
+            m_stem, _ = dsp.read_wav(os.path.join(td, "out", "audio", "stem_music.wav"))
+            rms_spoken = mc.rms_db(m_stem[:, dsp.ns(0.6) : dsp.ns(2.0)])
+            rms_gap = mc.rms_db(m_stem[:, dsp.ns(2.9) : dsp.ns(3.9)])
+            self.assertLess(rms_spoken, rms_gap - 5.0, f"Expected smooth -7..-10 dB ducking: spoken={rms_spoken:.1f}, gap={rms_gap:.1f}")
+
+            # Verify procedural `synth:` on music_arc still triggers SYNTH_SFX_FORBIDDEN under --strict
+            bad_ma = json.loads(json.dumps(cues))
+            bad_ma["music_arc"]["act2"] = {"synth": "sub_drone"}
+            bad_p = os.path.join(td, "bad_ma.json")
+            with open(bad_p, "w", encoding="utf-8") as fp:
+                json.dump(bad_ma, fp)
+            with self.assertRaises(RuntimeError) as ctx:
+                mc.render_cues_mix(bad_p, os.path.join(td, "out_bad", "mix.wav"), library_dir=lib_dir, strict=True)
+            self.assertIn("SYNTH_SFX_FORBIDDEN", str(ctx.exception))
+
+    def test_v153_curated_sfx_priority_and_openverse_quality_filter(self):
+        with tempfile.TemporaryDirectory() as td:
+            audio_root = os.path.join(td, "audio")
+            lib_dir = os.path.join(audio_root, "sfx_library")
+            cur_dir = os.path.join(audio_root, "sfx_curated")
+            for sub in ("dark_drone", "sad_piano", "stinger", "ambience"):
+                os.makedirs(os.path.join(cur_dir, sub), exist_ok=True)
+            os.makedirs(lib_dir, exist_ok=True)
+
+            sr = dsp.SR
+            t2 = np.arange(dsp.ns(2.0)) / sr
+            dsp.write_wav(os.path.join(cur_dir, "dark_drone", "my_favorite_drone.wav"), dsp.st(0.25 * np.sin(2 * np.pi * 60.0 * t2)))
+            dsp.write_wav(os.path.join(cur_dir, "stinger", "my_violin_stinger.wav"), dsp.st(0.45 * np.sin(2 * np.pi * 1800.0 * t2)))
+
+            # 1. Unit-test `validate_sfx_audio_quality` directly on 4 cases
+            p_short = os.path.join(td, "short.wav")
+            p_clip = os.path.join(td, "clip.wav")
+            p_silent = os.path.join(td, "silent.wav")
+            p_clean = os.path.join(td, "clean.wav")
+            dsp.write_wav(p_short, dsp.st(0.25 * np.sin(2 * np.pi * 120.0 * np.arange(dsp.ns(0.25)) / sr)))
+            dsp.write_wav(p_clip, dsp.st(np.ones(dsp.ns(1.0), dtype=np.float64)))
+            dsp.write_wav(p_silent, dsp.st(1e-4 * np.sin(2 * np.pi * 120.0 * np.arange(dsp.ns(1.0)) / sr)))
+            dsp.write_wav(p_clean, dsp.st(0.30 * dsp.colored(dsp.ns(1.5), dsp.rng(55), slope=0.3)))
+
+            ok_s, r_s, _ = sm.validate_sfx_audio_quality(p_short, category="dark_drone")
+            self.assertFalse(ok_s)
+            self.assertIn("too_short", r_s)
+
+            ok_c, r_c, _ = sm.validate_sfx_audio_quality(p_clip, category="foley")
+            self.assertFalse(ok_c)
+            self.assertIn("heavily_clipped", r_c)
+
+            ok_z, r_z, _ = sm.validate_sfx_audio_quality(p_silent, category="ambience")
+            self.assertFalse(ok_z)
+            self.assertIn("near_silent", r_z)
+
+            ok_g, _, _ = sm.validate_sfx_audio_quality(p_clean, category="dark_drone")
+            self.assertTrue(ok_g)
+
+            # 2. End-to-end `auto_fetch_for_script`: curated assets MUST NOT hit Openverse; story foley filters bad Openverse hits!
+            p_tiny_foley = os.path.join(td, "tiny_foley.wav")
+            dsp.write_wav(p_tiny_foley, dsp.st(0.25 * np.sin(2 * np.pi * 220.0 * np.arange(dsp.ns(0.08)) / sr)))
+            cues_p = os.path.join(td, "cues.json")
+            with open(cues_p, "w", encoding="utf-8") as fp:
+                json.dump({
+                    "music_arc": {"act2": {"sound": "dark_drone_pressure"}},
+                    "events": [
+                        {"id": "f1", "sound": "wooden_knock_foley", "at": 1.0},
+                        {"id": "js1", "jumpscare": "cinema_stab", "sound": "violin_screech_stinger", "at": 3.0},
+                    ],
+                }, fp)
+
+            searched_queries = []
+
+            def fake_get(url):
+                searched_queries.append(url)
+                return {
+                    "results": [
+                        {"id": "bad-short", "title": "Too Short", "creator": "T", "source": "freesound", "license": "cc0", "duration": 2000, "url": "https://ex.test/short.wav"},
+                        {"id": "bad-clip", "title": "Clipped", "creator": "T", "source": "freesound", "license": "cc0", "duration": 2000, "url": "https://ex.test/clip.wav"},
+                        {"id": "bad-silent", "title": "Silent", "creator": "T", "source": "freesound", "license": "cc0", "duration": 2000, "url": "https://ex.test/silent.wav"},
+                        {"id": "good-clean", "title": "Clean Knock", "creator": "T", "source": "freesound", "license": "cc0", "duration": 2000, "url": "https://ex.test/clean.wav"},
+                    ]
+                }
+
+            def fake_dl(url, dst):
+                src_map = {
+                    "https://ex.test/short.wav": p_tiny_foley,
+                    "https://ex.test/clip.wav": p_clip,
+                    "https://ex.test/silent.wav": p_silent,
+                    "https://ex.test/clean.wav": p_clean,
+                }
+                import shutil
+                shutil.copy2(src_map[url], dst)
+
+            res_af = sm.auto_fetch_for_script(cues_p, lib_dir, curated_dir=cur_dir, http_get_fn=fake_get, download_fn=fake_dl)
+            self.assertEqual(set(res_af["curated"]), {"dark_drone_pressure", "violin_screech_stinger"})
+            self.assertEqual(res_af["fetched"], ["wooden_knock_foley"])
+            self.assertEqual(res_af["failed"], [])
+            # Openverse must ONLY have been queried for the non-curated story foley!
+            self.assertEqual(len(searched_queries), 1)
+            mf_out = sm.load_manifest(lib_dir)["assets"]
+            self.assertEqual(mf_out["wooden_knock_foley"]["openverse_id"], "good-clean")
+            self.assertTrue(mf_out["dark_drone_pressure"]["source"].startswith("curated:"))
+
+    def test_v154_liveportrait_backend_import_and_analog_horror_fallback(self):
+        # 1. Verify `gen_jumpscare_clip.py` completely removed legacy `Image.blend` ghosting!
+        with open(os.path.join(SCRIPTS_DIR, "gen_jumpscare_clip.py"), encoding="utf-8") as fp_gjc:
+            gjc_src = fp_gjc.read()
+        self.assertNotIn("Image.blend", gjc_src, "Legacy Image.blend ghosting must be completely removed!")
+
+        with tempfile.TemporaryDirectory() as td:
+            proj_dir = os.path.join(td, "src", "demo-lp-v154")
+            cast_dir = os.path.join(proj_dir, "assets", "cast")
+            lp_dir = os.path.join(td, "LivePortrait")
+            lp_drv_ex = os.path.join(lp_dir, "assets", "examples", "driving")
+            motions_dir = os.path.join(td, "assets", "liveportrait_motions")
+            for d in (cast_dir, lp_drv_ex, motions_dir):
+                os.makedirs(d, exist_ok=True)
+
+            # Fake official KlingAIResearch/LivePortrait checkout + motion templates
+            with open(os.path.join(lp_dir, "inference.py"), "w", encoding="utf-8") as fp:
+                fp.write("# mock LivePortrait inference.py\n")
+            with open(os.path.join(lp_drv_ex, "d0.pkl"), "wb") as fp:
+                fp.write(b"mock_ex_pkl")
+            with open(os.path.join(motions_dir, "neck_snap_stare.pkl"), "wb") as fp:
+                fp.write(b"mock_neck_snap_pkl")
+
+            # Anchor frame (cool dark blue room) + entity scare cutout (high contrast pale figure)
+            anchor_p = os.path.join(td, "anchor.png")
+            ent_p = os.path.join(cast_dir, "C02_entity_scare.png")
+            Image.fromarray(np.full((640, 360, 3), [22, 28, 38], dtype=np.uint8), mode="RGB").save(anchor_p)
+            ent_rgba = np.zeros((320, 200, 4), dtype=np.uint8)
+            ent_rgba[24:296, 40:160] = [210, 200, 195, 255]
+            ent_rgba[60:80, 75:95] = [12, 12, 14, 255]   # hollow eye left
+            ent_rgba[60:80, 110:130] = [12, 12, 14, 255]  # hollow eye right
+            Image.fromarray(ent_rgba, mode="RGBA").save(ent_p)
+
+            manifest = {
+                "projectId": "demo-lp-v154",
+                "title": "LivePortrait Jumpscare Test",
+                "totalFrames": 300,
+                "aspect": "9:16",
+                "characterMode": "sprite2d",
+                "locations": [],
+                "castBlueprints": [
+                    {
+                        "id": "C02",
+                        "role": "entity",
+                        "scareTier": 6,
+                        "storyDescription": "Tall uncanny apparition tilting its neck sharply",
+                        "spriteAssets": {"entity_scare": "assets/cast/C02_entity_scare.png"},
+                    }
+                ],
+                "beats": [],
+                "jumpscareClips": [
+                    {
+                        "id": "js1",
+                        "src": "assets/jumpscare_js1.mp4",
+                        "a": 150,
+                        "b": 204,  # 1.80s
+                        "anchorFrame": 149,
+                        "transitionStyle": "whip_pan_turn",
+                        "entityId": "C02",
+                    }
+                ],
+            }
+            man_p = os.path.join(proj_dir, "manifest.json")
+            with open(man_p, "w", encoding="utf-8") as fp:
+                json.dump(manifest, fp, ensure_ascii=False, indent=2)
+
+            # Helper to synthesize tiny real MP4s via ffmpeg for mock LivePortrait output & --import-jumpscare
+            def _make_solid_mp4(dst_mp4: str, color_hex: str, dur_s: float = 2.0):
+                subprocess.run(
+                    [
+                        "ffmpeg", "-y", "-v", "error",
+                        "-f", "lavfi", "-i", f"color=c={color_hex}:s=360x640:r=30:d={dur_s:.2f}",
+                        "-c:v", "libx264", "-pix_fmt", "yuv420p", "-an", dst_mp4,
+                    ],
+                    check=True,
+                )
+
+            def _probe_video(mp4_p: str) -> dict:
+                out = subprocess.check_output(
+                    ["ffprobe", "-v", "error", "-show_entries", "format=duration:stream=codec_type,r_frame_rate", "-of", "json", mp4_p],
+                    text=True,
+                )
+                return json.loads(out)
+
+            # 2. Test LivePortrait backend (mock subprocess.run ONLY on inference.py; run REAL ffmpeg post-FX!)
+            captured_lp_cmds = []
+            real_subproc_run = subprocess.run
+
+            def fake_run(cmd, *a, **kw):
+                if isinstance(cmd, (list, tuple)) and len(cmd) >= 2 and str(cmd[1]).endswith("inference.py"):
+                    captured_lp_cmds.append(list(cmd))
+                    out_idx = cmd.index("-o") + 1
+                    lp_out = cmd[out_idx]
+                    os.makedirs(lp_out, exist_ok=True)
+                    primary_mp4 = os.path.join(lp_out, "lp_source--neck_snap_stare.mp4")
+                    concat_mp4 = os.path.join(lp_out, "lp_source--neck_snap_stare_concat.mp4")
+                    _make_solid_mp4(primary_mp4, "0xCC2222", dur_s=2.2)
+                    # Make *_concat.mp4 deliberately larger & newer so a buggy selector would pick it!
+                    _make_solid_mp4(concat_mp4, "0x11DD11", dur_s=3.5)
+                    return subprocess.CompletedProcess(cmd, 0)
+                return real_subproc_run(cmd, *a, **kw)
+
+            with mock.patch.object(gjc.subprocess, "run", side_effect=fake_run):
+                res_lp = gjc.generate_jumpscare_clips(
+                    man_p,
+                    anchor_override=anchor_p,
+                    backend="auto",
+                    liveportrait_dir=lp_dir,
+                    liveportrait_python="/opt/conda/envs/liveportrait/bin/python",
+                    motions_dir=motions_dir,
+                    lp_fp32=True,
+                    overwrite=True,
+                )
+            self.assertEqual(len(captured_lp_cmds), 1)
+            lp_cmd = captured_lp_cmds[0]
+            self.assertEqual(lp_cmd[0], "/opt/conda/envs/liveportrait/bin/python")
+            self.assertIn("--no_flag_use_half_precision", lp_cmd)
+            self.assertNotIn("--flag_do_torch_compile", lp_cmd)
+            self.assertTrue(lp_cmd[lp_cmd.index("-d") + 1].endswith("neck_snap_stare.pkl"))
+            self.assertEqual(res_lp[0]["backend"], "liveportrait:neck_snap_stare.pkl")
+
+            lp_mp4 = res_lp[0]["mp4"]
+            self.assertTrue(os.path.isfile(lp_mp4))
+            info_lp = _probe_video(lp_mp4)
+            dur_lp = float(info_lp["format"]["duration"])
+            self.assertGreaterEqual(dur_lp, 1.15)
+            self.assertLessEqual(dur_lp, 2.25)
+            self.assertFalse(any(s.get("codec_type") == "audio" for s in info_lp["streams"]))
+
+            # Verify post-processed frame came from RED primary video (NOT GREEN *_concat.mp4!)
+            mid_raw = subprocess.check_output(
+                [
+                    "ffmpeg", "-v", "error", "-ss", "0.50", "-i", lp_mp4,
+                    "-frames:v", "1", "-f", "rawvideo", "-pix_fmt", "rgb24", "-",
+                ]
+            )
+            mid_arr = np.frombuffer(mid_raw, dtype=np.uint8).reshape((1920, 1080, 3))
+            self.assertGreater(float(mid_arr[..., 0].mean()), float(mid_arr[..., 1].mean()) + 40.0, "Must use primary LivePortrait MP4, NOT *_concat.mp4!")
+
+            # Verify fallback driving discovery into `LivePortrait/assets/examples/driving/` when motions_dir is empty
+            empty_m = os.path.join(td, "empty_motions")
+            os.makedirs(empty_m, exist_ok=True)
+            ex_drv = gjc.select_liveportrait_driving_motion(5, "first_frame_seamless", empty_m, lp_dir)
+            self.assertTrue(ex_drv.endswith("d0.pkl"))
+
+            # 3. Test `--import-jumpscare <file.mp4>`
+            ext_clip = os.path.join(td, "external_scare.mp4")
+            _make_solid_mp4(ext_clip, "0x445588", dur_s=2.4)
+            res_imp = gjc.generate_jumpscare_clips(man_p, import_jumpscare=ext_clip, overwrite=True)
+            self.assertEqual(res_imp[0]["backend"], "imported_jumpscare")
+            self.assertTrue(os.path.isfile(res_imp[0]["mp4"]))
+            info_imp = _probe_video(res_imp[0]["mp4"])
+            self.assertFalse(any(s.get("codec_type") == "audio" for s in info_imp["streams"]))
+
+            # 4. Test new Analog Horror Hard-Cut local fallback (tight 0.7-1.1s, blackout flash -> RGB-split peak -> hard cut black!)
+            out_local = os.path.join(td, "analog_local.mp4")
+            gjc.render_local_first_frame_jumpscare(
+                anchor_p, out_local, duration_sec=2.0, fps=30, width=360, height=640,
+                transition_style="silence_hard_cut", entity_png_path=ent_p,
+            )
+            info_loc = _probe_video(out_local)
+            dur_loc = float(info_loc["format"]["duration"])
+            self.assertGreaterEqual(dur_loc, 0.68)
+            self.assertLessEqual(dur_loc, 1.15, f"Analog Horror fallback must clamp tightly to 0.7-1.1s, got {dur_loc:.2f}s")
+
+            raw_all = subprocess.check_output(
+                ["ffmpeg", "-v", "error", "-i", out_local, "-f", "rawvideo", "-pix_fmt", "rgb24", "-"]
+            )
+            n_f = len(raw_all) // (640 * 360 * 3)
+            frames = np.frombuffer(raw_all[: n_f * 640 * 360 * 3], dtype=np.uint8).reshape((n_f, 640, 360, 3))
+            # Frame 0 = anchor frame (non-black blue room)
+            self.assertGreater(float(frames[0].mean()), 15.0)
+            # Frames 1 & 2 = 2-frame Blackout Flash
+            self.assertLess(float(frames[1].mean()), 2.0, "Frame 1 must be Blackout Flash")
+            self.assertLess(float(frames[2].mean()), 2.0, "Frame 2 must be Blackout Flash")
+            # Frame 3 = Hard Cut into high-contrast bright flash close-up with strong RGB Chromatic Split
+            self.assertGreater(float(frames[3].mean()), 20.0, "Frame 3 must hard-cut into close-up face flash")
+            rgb_split = float(np.mean(np.abs(frames[4, :, :, 0].astype(np.float32) - frames[4, :, :, 2].astype(np.float32))))
+            self.assertGreater(rgb_split, 1.5, "Expected measurable RGB chromatic aberration split on hard-cut close-up")
+            # Final frame = Hard Cut to Black
+            self.assertLess(float(frames[-1].mean()), 2.0, "Final frame must Hard Cut to Black")
+
+    def test_v155_flexible_audio_direction_curated_rotation_and_4gb_vram(self):
+        # 1. Verify constitution v15.5 flexible audio rules
+        const = constitution.load_constitution()
+        sc = const["soundscape"]
+        self.assertFalse(sc["requireScoreBeds"])
+        self.assertEqual(sc["validAudioDirections"], ["raw_diegetic", "folklore_atmospheric", "cinematic_score"])
+        for st in ("practical_impact", "mic_emf_glitch", "entity_breath_shriek", "cinema_stab", "entity_shriek", "metal_dread", "vhs_psx_glitch"):
+            self.assertIn(st, sc["validJumpscareAudioStyles"])
+
+        with tempfile.TemporaryDirectory() as td:
+            audio_root = os.path.join(td, "audio")
+            lib_dir = os.path.join(audio_root, "sfx_library")
+            cur_dir = os.path.join(audio_root, "sfx_curated")
+            for sub in ("dark_drone", "sad_piano", "stinger", "ambience"):
+                os.makedirs(os.path.join(cur_dir, sub), exist_ok=True)
+            os.makedirs(lib_dir, exist_ok=True)
+
+            sr = dsp.SR
+            dur = 10.0
+            t2 = np.arange(dsp.ns(2.5)) / sr
+            t_hit = np.arange(dsp.ns(1.2)) / sr
+
+            # Create fixtures: room_tone + practical door slam + emf glitch + entity shriek + 2 curated drone variants
+            dsp.write_wav(os.path.join(lib_dir, "room_tone_dark.wav"), dsp.st(0.14 * dsp.colored(dsp.ns(3.0), dsp.rng(7), slope=0.35)))
+            slam_sig = 0.72 * np.exp(-3.8 * t_hit) * (np.sin(2 * np.pi * 88.0 * t_hit) + 0.45 * dsp.colored(len(t_hit), dsp.rng(8), slope=0.1))
+            dsp.write_wav(os.path.join(lib_dir, "heavy_door_slam.wav"), dsp.st(slam_sig))
+            dsp.write_wav(os.path.join(lib_dir, "emf_glitch_buzz.wav"), dsp.st(0.55 * np.exp(-2.5 * t_hit) * np.sin(2 * np.pi * 2100.0 * t_hit)))
+            dsp.write_wav(os.path.join(lib_dir, "jumpscare_entity_shriek_ov.wav"), dsp.st(0.60 * np.exp(-2.2 * t_hit) * np.sin(2 * np.pi * 1750.0 * t_hit)))
+            dsp.write_wav(os.path.join(cur_dir, "dark_drone", "drone_a.wav"), dsp.st(0.24 * np.sin(2 * np.pi * 58.0 * t2)))
+            dsp.write_wav(os.path.join(cur_dir, "dark_drone", "drone_b.wav"), dsp.st(0.24 * np.sin(2 * np.pi * 72.0 * t2)))
+
+            voice_p = os.path.join(td, "voice.wav")
+            words_p = os.path.join(td, "words.json")
+            t_all = np.arange(dsp.ns(dur)) / sr
+            v = np.zeros_like(t_all)
+            for s0, e0 in ((0.2, 4.2), (7.6, 9.4)):
+                v[dsp.ns(s0) : dsp.ns(e0)] = 0.16 * np.sin(2 * np.pi * 160.0 * t_all[dsp.ns(s0) : dsp.ns(e0)])
+            dsp.write_wav(voice_p, dsp.st(v))
+            with open(words_p, "w", encoding="utf-8") as fp:
+                json.dump({
+                    "dur": dur,
+                    "words": [{"w": "Cửa", "s": 0.2, "e": 4.2}, {"w": "Hết", "s": 7.6, "e": 9.4}],
+                    "sentences": [{"sent": 1, "s": 0.2, "e": 4.2, "mood": "calm_omen"}],
+                    "silence_drops": [{"s": 5.2, "e": 6.1}],
+                }, fp)
+
+            # 2. `raw_diegetic` (0% score + `practical_impact`) MUST PASS with score_beds == []
+            cues_raw = {
+                "audioDirection": "raw_diegetic",
+                "voice": voice_p,
+                "words": words_p,
+                "library_dir": lib_dir,
+                "curated_dir": cur_dir,
+                "skip_history": True,
+                "beds": [{"sound": "room_tone_dark", "role": "near", "target_rms_dbfs": -34.0}],
+                "events": [
+                    {
+                        "id": "js_slam",
+                        "jumpscare": "practical_impact",
+                        "sound": "heavy_door_slam",
+                        "at_silence_drop": 0,
+                        "edge": "end",
+                        "target_peak_dbfs": -1.0,
+                    }
+                ],
+            }
+            cues_raw_p = os.path.join(td, "cues_raw.json")
+            with open(cues_raw_p, "w", encoding="utf-8") as fp:
+                json.dump(cues_raw, fp)
+            res_raw = mc.render_cues_mix(cues_raw_p, os.path.join(td, "out_raw", "mix.wav"), library_dir=lib_dir, strict=True)
+            self.assertEqual(res_raw["verdict"], "PASS")
+            self.assertEqual(res_raw["audio_direction"], "raw_diegetic")
+            self.assertEqual(res_raw["score_beds"], [])
+            self.assertEqual(res_raw["jumpscares"][0]["style"], "practical_impact")
+
+            # Adding music_arc under `raw_diegetic` MUST FAIL with RAW_DIEGETIC_SCORE_FORBIDDEN!
+            bad_raw = json.loads(json.dumps(cues_raw))
+            bad_raw["music_arc"] = {"act1": {"sound": "dark_drone_pressure"}}
+            bad_raw_p = os.path.join(td, "bad_raw.json")
+            with open(bad_raw_p, "w", encoding="utf-8") as fp:
+                json.dump(bad_raw, fp)
+            with self.assertRaises(RuntimeError) as ctx_rd:
+                mc.render_cues_mix(bad_raw_p, os.path.join(td, "out_bad_rd", "mix.wav"), library_dir=lib_dir, strict=True)
+            self.assertIn("RAW_DIEGETIC_SCORE_FORBIDDEN", str(ctx_rd.exception))
+
+            # 3. `folklore_atmospheric` (`entity_breath_shriek`) & `cinematic_score` (`mic_emf_glitch`) work cleanly
+            for adir, jstyle, jsnd in (
+                ("folklore_atmospheric", "entity_breath_shriek", "jumpscare_entity_shriek_ov"),
+                ("cinematic_score", "mic_emf_glitch", "emf_glitch_buzz"),
+            ):
+                c_doc = json.loads(json.dumps(cues_raw))
+                c_doc["audioDirection"] = adir
+                c_doc["events"][0]["jumpscare"] = jstyle
+                c_doc["events"][0]["sound"] = jsnd
+                cp = os.path.join(td, f"cues_{adir}.json")
+                with open(cp, "w", encoding="utf-8") as fp:
+                    json.dump(c_doc, fp)
+                r_ok = mc.render_cues_mix(cp, os.path.join(td, f"out_{adir}", "mix.wav"), library_dir=lib_dir, strict=True)
+                self.assertEqual(r_ok["verdict"], "PASS")
+                self.assertEqual(r_ok["audio_direction"], adir)
+                self.assertEqual(r_ok["jumpscares"][0]["style"], jstyle)
+
+            # 4. Curated SFX `history.jsonl` anti-repeat rotation between `drone_a.wav` and `drone_b.wav`
+            p1, g1 = sm.find_curated_sfx("dark_drone_pressure", category="dark_drone", curated_dir=cur_dir, lib_dir=lib_dir, exclude_ids=set())
+            self.assertEqual(g1, "dark_drone")
+            self.assertEqual(os.path.basename(p1), "drone_a.wav")
+            sm.append_history(lib_dir, "proj_prev", [f"curated:{g1}:{os.path.basename(p1)}"])
+            excl_hist = sm.load_recent_history(lib_dir)
+            p2, g2 = sm.find_curated_sfx("dark_drone_pressure", category="dark_drone", curated_dir=cur_dir, lib_dir=lib_dir, exclude_ids=excl_hist)
+            self.assertEqual(g2, "dark_drone")
+            self.assertEqual(os.path.basename(p2), "drone_b.wav", "history.jsonl rotation must pick fresh curated variant!")
+
+            # 5. GTX 960M 4GB VRAM default LivePortrait source frame size = 512x640
+            src_in = os.path.join(td, "src_anchor.png")
+            src_out = os.path.join(td, "src_lp.png")
+            Image.fromarray(np.full((1920, 1080, 3), 40, dtype=np.uint8), mode="RGB").save(src_in)
+            gjc.prepare_liveportrait_source_image(src_in, None, src_out)
+            with Image.open(src_out) as im_lp:
+                self.assertEqual(im_lp.size, (512, 640))
+
 
 if __name__ == "__main__":
     unittest.main()

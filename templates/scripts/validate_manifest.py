@@ -938,8 +938,8 @@ def main():
             if not str(jc.get("src") or "").strip():
                 errors.append(f"jumpscareClips['{jid}'] missing `src` path (e.g. assets/jumpscare_{jid}.mp4)")
             dur_js = (jb - ja) / FPS
-            if not (1.2 <= dur_js <= 4.8):
-                errors.append(f"jumpscareClips['{jid}'] duration {dur_js:.2f}s outside recommended 1.8-4.2s window")
+            if not (0.7 <= dur_js <= 4.8):
+                errors.append(f"jumpscareClips['{jid}'] duration {dur_js:.2f}s outside supported 0.7-4.8s window")
             valid_js_clips.append(jc)
 
     def _resolve_cue_time_s(ev: dict):
